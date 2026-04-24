@@ -1,0 +1,1599 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PropCRM — Plataforma</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#0d1b2a;--navy2:#152236;--navy3:#1e3250;
+  --gold:#b8933a;--gold2:#d4aa50;--gold3:#e8c96a;
+  --cream:#f5f1e8;--cream2:#faf8f3;
+  --muted:#7a94a8;--border:#ddd5c4;--border2:#e8e2d8;
+  --text:#1a2b3c;--green:#2a8c5e;--red:#c0392b;--orange:#d4762a;--blue:#2563a8;
+  --sidebar:80px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Outfit',sans-serif;background:var(--cream);color:var(--text);min-height:100vh;display:flex;}
+
+/* SIDEBAR */
+.sidebar{width:var(--sidebar);background:var(--navy);min-height:100vh;position:fixed;left:0;top:0;display:flex;flex-direction:column;align-items:center;padding:18px 0 14px;z-index:300;box-shadow:3px 0 20px rgba(0,0,0,0.25);}
+.sb-logo{width:44px;height:44px;background:linear-gradient(135deg,var(--gold),var(--gold3));border-radius:11px;display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-size:1.4rem;font-weight:700;color:var(--navy);margin-bottom:28px;flex-shrink:0;}
+.sb-item{width:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;padding:9px 0;border-radius:10px;margin:2px 0;transition:all .2s;color:var(--muted);}
+.sb-item:hover,.sb-item.active{background:rgba(184,147,58,0.16);color:var(--gold2);}
+.sb-item .sb-ico{font-size:1.15rem;line-height:1;}
+.sb-item .sb-lbl{font-size:0.5rem;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:inherit;white-space:nowrap;}
+.sb-sep{width:36px;height:1px;background:rgba(255,255,255,0.08);margin:8px 0;}
+.sb-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--navy3));display:flex;align-items:center;justify-content:center;font-size:0.82rem;font-weight:700;color:white;margin-top:auto;cursor:pointer;flex-shrink:0;}
+
+/* MAIN */
+.main{margin-left:var(--sidebar);flex:1;display:flex;flex-direction:column;min-height:100vh;}
+
+/* TOPBAR */
+.topbar{background:white;border-bottom:1px solid var(--border);padding:0 28px;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200;box-shadow:0 1px 6px rgba(0,0,0,0.05);flex-shrink:0;}
+.tb-left{display:flex;align-items:center;gap:12px;}
+.tb-title{font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:600;color:var(--navy);}
+.tb-count{background:var(--cream);border:1px solid var(--border);border-radius:20px;padding:3px 11px;font-size:0.73rem;font-weight:600;color:var(--muted);}
+.tb-right{display:flex;align-items:center;gap:10px;}
+.tb-role{background:rgba(184,147,58,0.1);border:1px solid rgba(184,147,58,0.25);border-radius:20px;padding:4px 13px;font-size:0.72rem;font-weight:600;color:var(--gold);}
+.btn{padding:8px 16px;border-radius:7px;font-family:'Outfit',sans-serif;font-size:0.81rem;font-weight:600;cursor:pointer;transition:all .2s;border:none;}
+.btn-gold{background:var(--gold);color:white;}.btn-gold:hover{background:var(--gold2);}
+.btn-outline{background:transparent;border:1.5px solid var(--border);color:var(--text);}.btn-outline:hover{border-color:var(--navy);color:var(--navy);}
+.btn-back{background:var(--cream);border:1.5px solid var(--border);color:var(--navy);display:flex;align-items:center;gap:6px;}.btn-back:hover{background:var(--navy);color:white;border-color:var(--navy);}
+.btn-sm{padding:6px 13px;font-size:0.78rem;}
+.btn-xs{padding:5px 11px;font-size:0.74rem;}
+.btn-danger{background:rgba(192,57,43,0.08);border:1px solid rgba(192,57,43,0.2);color:var(--red);border-radius:7px;padding:5px 11px;font-size:0.74rem;font-weight:600;cursor:pointer;}
+
+/* SEARCH VIEW */
+.search-wrap{padding:24px 28px;}
+.search-bar-row{display:flex;gap:10px;margin-bottom:16px;}
+.search-input-wrap{flex:1;position:relative;}
+.search-input-wrap .search-ico{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:0.9rem;pointer-events:none;}
+.search-input{width:100%;border:1.5px solid var(--border);border-radius:9px;padding:10px 14px 10px 38px;font-family:'Outfit',sans-serif;font-size:0.88rem;color:var(--text);background:white;outline:none;transition:all .2s;box-shadow:0 1px 4px rgba(0,0,0,0.04);}
+.search-input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(184,147,58,0.1);}
+.search-input::placeholder{color:var(--muted);}
+
+/* FILTERS */
+.filter-card{background:white;border:1px solid var(--border);border-radius:11px;padding:16px 20px 14px;margin-bottom:18px;box-shadow:0 1px 6px rgba(0,0,0,0.04);}
+.filter-row{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;}
+.fg{display:flex;flex-direction:column;gap:4px;flex:1;min-width:100px;}
+.fg label{font-size:0.61rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);}
+.sw{position:relative;}
+.sw::after{content:'▾';position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:0.68rem;pointer-events:none;}
+.fg select{width:100%;border:1.5px solid var(--border2);border-radius:7px;padding:8px 28px 8px 11px;font-family:'Outfit',sans-serif;font-size:0.83rem;color:var(--text);background:var(--cream2);outline:none;transition:all .2s;appearance:none;cursor:pointer;}
+.fg select:focus{border-color:var(--gold);background:white;}
+.filter-div{width:1px;height:38px;background:var(--border2);align-self:flex-end;flex-shrink:0;}
+.filter-acts{display:flex;gap:8px;align-self:flex-end;flex-shrink:0;}
+.btn-search{background:var(--navy);color:white;border:none;border-radius:7px;padding:8px 20px;font-family:'Outfit',sans-serif;font-size:0.83rem;font-weight:600;cursor:pointer;transition:all .2s;}
+.btn-search:hover{background:var(--gold);}
+.btn-clear{background:transparent;border:1.5px solid var(--border2);border-radius:7px;padding:8px 14px;font-family:'Outfit',sans-serif;font-size:0.8rem;color:var(--muted);cursor:pointer;}
+.btn-clear:hover{border-color:var(--red);color:var(--red);}
+.fav-toggle{display:flex;align-items:center;gap:7px;cursor:pointer;padding:8px 12px;border:1.5px solid var(--border2);border-radius:7px;background:var(--cream2);transition:all .2s;white-space:nowrap;}
+.fav-toggle.on{border-color:var(--gold);background:rgba(184,147,58,0.06);}
+.fav-toggle .fav-star{font-size:0.95rem;opacity:0.3;transition:all .2s;}
+.fav-toggle.on .fav-star{opacity:1;}
+.fav-toggle .fav-lbl{font-size:0.8rem;color:var(--muted);font-weight:500;}
+.fav-toggle.on .fav-lbl{color:var(--gold);}
+
+/* RESULTS BAR */
+.results-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px;padding:0 2px;}
+.results-text{font-size:0.78rem;color:var(--muted);}
+.results-text strong{color:var(--navy);font-weight:600;}
+.sort-controls{display:flex;align-items:center;gap:7px;}
+.sort-lbl{font-size:0.7rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+.sort-pill{padding:4px 12px;border-radius:20px;font-size:0.71rem;font-weight:500;border:1.5px solid var(--border2);background:white;color:var(--muted);cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:3px;white-space:nowrap;}
+.sort-pill:hover{border-color:var(--gold);color:var(--gold);}
+.sort-pill.active{border-color:var(--gold);color:var(--gold);background:rgba(184,147,58,0.06);font-weight:600;}
+
+/* TABLE — added cp column */
+.table-wrap{background:white;border:1px solid var(--border);border-radius:11px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,0.04);}
+.t-cols{display:grid;grid-template-columns:32px 32px 80px 105px 105px 1fr 62px 62px 115px 120px 105px 32px;gap:6px;align-items:center;}
+.t-head{padding:10px 16px;background:var(--navy);}
+.thc{font-size:0.57rem;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:rgba(255,255,255,0.38);cursor:pointer;display:flex;align-items:center;gap:3px;white-space:nowrap;user-select:none;transition:color .15s;}
+.thc:hover{color:rgba(255,255,255,0.75);}
+.thc.sorted{color:var(--gold3);}
+.thc.ns{cursor:default;}.thc.ns:hover{color:rgba(255,255,255,0.38);}
+.t-row{padding:0 16px;border-bottom:1px solid var(--border2);cursor:pointer;transition:background .13s;height:50px;}
+.t-row:last-child{border-bottom:none;}
+.t-row:hover{background:rgba(184,147,58,0.04);}
+.t-row:hover .t-arr{color:var(--gold);}
+.tc{font-size:0.81rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tc.price{font-weight:700;color:var(--gold);font-size:0.85rem;}
+.tc.addr{color:#4a6075;font-size:0.78rem;}
+.tc.sqm{color:var(--muted);font-size:0.79rem;}
+.tc.cp{color:var(--muted);font-size:0.78rem;font-family:monospace;}
+.t-arr{color:var(--border);font-size:1rem;transition:color .13s;display:flex;align-items:center;justify-content:flex-end;}
+.t-chk{width:17px;height:17px;border:2px solid var(--border);border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .18s;background:white;flex-shrink:0;}
+.t-chk:hover{border-color:var(--gold);}
+.t-chk.on{background:var(--navy);border-color:var(--navy);}
+.t-chk.on::after{content:'✓';color:white;font-size:0.6rem;font-weight:700;}
+.t-chk-all{width:17px;height:17px;border:2px solid rgba(255,255,255,0.28);border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .18s;}
+.t-chk-all:hover{border-color:var(--gold3);}
+.t-chk-all.on{background:var(--gold);border-color:var(--gold);}
+.t-chk-all.on::after{content:'✓';color:white;font-size:0.6rem;font-weight:700;}
+.t-fav{font-size:0.95rem;cursor:pointer;transition:all .18s;opacity:0.2;line-height:1;}
+.t-fav:hover{opacity:0.65;transform:scale(1.15);}
+.t-fav.on{opacity:1;}
+
+/* PILLS */
+.pill{display:inline-flex;padding:2px 9px;border-radius:20px;font-size:0.66rem;font-weight:700;letter-spacing:0.3px;white-space:nowrap;}
+.tp-viv{background:rgba(37,99,168,0.1);color:#2563a8;border:1px solid rgba(37,99,168,0.18);}
+.tp-park{background:rgba(90,122,138,0.1);color:#5a7a8a;border:1px solid rgba(90,122,138,0.18);}
+.tp-tras{background:rgba(122,148,168,0.1);color:#7a94a8;border:1px solid rgba(122,148,168,0.15);}
+.tp-local{background:rgba(212,118,42,0.1);color:#d4762a;border:1px solid rgba(212,118,42,0.18);}
+.fp-pub{background:rgba(42,140,94,0.1);color:#2a8c5e;border:1px solid rgba(42,140,94,0.2);}
+.fp-sus{background:rgba(192,57,43,0.08);color:#c0392b;border:1px solid rgba(192,57,43,0.15);}
+.fp-seg{background:rgba(37,99,168,0.1);color:#2563a8;border:1px solid rgba(37,99,168,0.18);}
+.fp-res{background:rgba(212,118,42,0.1);color:#d4762a;border:1px solid rgba(212,118,42,0.18);}
+.fp-nd{background:rgba(122,148,168,0.1);color:#7a94a8;border:1px solid rgba(122,148,168,0.14);}
+
+/* PAGINATION */
+.pagination{display:flex;align-items:center;justify-content:space-between;margin-top:14px;padding:0 2px;}
+.pag-info{font-size:0.76rem;color:var(--muted);}
+.pag-btns{display:flex;gap:5px;}
+.pag-btn{width:30px;height:30px;border-radius:6px;border:1.5px solid var(--border2);background:white;color:var(--muted);font-size:0.78rem;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.pag-btn.active{background:var(--navy);border-color:var(--navy);color:white;font-weight:600;}
+
+/* VERTICAL NAV */
+.vnav-item{display:flex;align-items:center;gap:10px;padding:12px 18px;cursor:pointer;transition:all .18s;color:var(--muted);border-left:3px solid transparent;margin:1px 0;}
+.vnav-item:hover{color:rgba(255,255,255,0.75);background:rgba(255,255,255,0.04);}
+.vnav-item.active{color:var(--gold2);background:rgba(184,147,58,0.12);border-left-color:var(--gold);}
+.vnav-ico{font-size:1rem;line-height:1;flex-shrink:0;}
+.vnav-lbl{font-size:0.78rem;font-weight:600;letter-spacing:0.3px;white-space:nowrap;}
+
+/* PUB TOGGLE */
+.tog{width:42px;height:22px;background:#1e3250;border-radius:11px;cursor:pointer;position:relative;transition:background .2s;border:1px solid rgba(255,255,255,0.08);flex-shrink:0;}
+.tog.on{background:var(--green);}
+.tog::after{content:'';position:absolute;width:16px;height:16px;background:white;border-radius:50%;top:2px;left:2px;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);}
+.tog.on::after{left:22px;}
+.pub-label{font-size:0.82rem;font-weight:600;}
+.pub-label.pub{color:var(--green);}
+.pub-label.sus{color:var(--red);}
+
+/* SECTION CARDS */
+.sc{background:white;border:1px solid var(--border);border-radius:11px;padding:18px 20px;box-shadow:0 1px 5px rgba(0,0,0,0.04);}
+.sc-title{font-size:0.61rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--gold);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.sc-title::after{content:'';flex:1;height:1px;background:linear-gradient(to right,rgba(184,147,58,0.35),transparent);}
+.dp-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
+.dp-grid-3{grid-template-columns:repeat(3,1fr);}
+.dp-grid-4{grid-template-columns:repeat(4,1fr);}
+.dp{background:var(--cream2);border-radius:7px;padding:9px 12px;border-left:3px solid transparent;transition:border-color .14s;}
+.dp:hover{border-left-color:var(--gold);}
+.dp .dl{font-size:0.59rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:2px;}
+.dp .dv{font-size:0.83rem;font-weight:500;color:var(--text);word-break:break-word;line-height:1.4;}
+.dp .dv.mono{font-family:monospace;font-size:0.75rem;color:#456;}
+.gap{margin-bottom:16px;}
+
+/* PRICE CARD */
+.price-card{background:white;border:1px solid var(--border);border-radius:11px;padding:18px 20px;box-shadow:0 1px 5px rgba(0,0,0,0.04);}
+.price-big{font-family:'Cormorant Garamond',serif;font-size:2rem;font-weight:700;color:var(--navy);margin-bottom:3px;}
+.price-lbl{font-size:0.68rem;color:var(--muted);font-weight:500;letter-spacing:0.4px;margin-bottom:16px;}
+.act-btns{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+.ab{padding:11px;border-radius:8px;font-family:'Outfit',sans-serif;font-size:0.8rem;font-weight:600;cursor:pointer;transition:all .2s;border:none;text-align:center;}
+.ab-consult{background:var(--cream);border:2px solid var(--border);color:var(--navy);}
+.ab-consult:hover{border-color:var(--navy);background:var(--navy);color:white;}
+.ab-offer{background:var(--gold);color:white;}
+.ab-offer:hover{background:var(--gold2);}
+
+/* STATUS BLOCK */
+.status-block{background:linear-gradient(135deg,var(--navy),var(--navy3));border-radius:10px;padding:16px 18px;margin-bottom:16px;}
+.sb-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+.sbi .sl{font-size:0.6rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;}
+.sbi .sv{font-size:0.82rem;color:#dce8f0;font-weight:500;line-height:1.4;}
+
+/* DOC */
+.doc-zone{border:2px dashed var(--border);border-radius:10px;padding:28px;text-align:center;background:var(--cream2);cursor:pointer;transition:all .18s;margin-bottom:16px;}
+.doc-zone:hover{border-color:var(--gold);background:rgba(184,147,58,0.04);}
+.doc-list{display:flex;flex-direction:column;gap:7px;}
+.doc-item{background:white;border:1px solid var(--border);border-radius:8px;padding:11px 14px;display:flex;align-items:center;gap:11px;}
+.doc-ico{width:36px;height:36px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;}
+.di-pdf{background:rgba(192,57,43,0.1);color:var(--red);}
+.di-xls{background:rgba(42,140,94,0.1);color:var(--green);}
+.di-img{background:rgba(37,99,168,0.1);color:var(--blue);}
+.doc-name{font-weight:500;font-size:0.83rem;color:var(--navy);}
+.doc-meta{font-size:0.7rem;color:var(--muted);}
+.doc-dl{margin-left:auto;background:var(--cream);border:1px solid var(--border);border-radius:6px;padding:5px 11px;font-size:0.73rem;font-weight:600;color:var(--navy);cursor:pointer;transition:all .18s;white-space:nowrap;flex-shrink:0;}
+.doc-dl:hover{background:var(--navy);color:white;border-color:var(--navy);}
+
+/* NOTES / CHAT */
+.note-card{background:white;border:1px solid var(--border);border-radius:9px;padding:13px 15px;margin-bottom:8px;}
+.nc-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.nc-author{font-size:0.71rem;font-weight:700;color:var(--gold);}
+.nc-date{font-size:0.68rem;color:var(--muted);}
+.nc-text{font-size:0.82rem;color:var(--text);line-height:1.55;}
+.add-btn{border:2px dashed var(--border);border-radius:9px;padding:12px;text-align:center;cursor:pointer;color:var(--muted);font-weight:500;font-size:0.8rem;transition:all .18s;margin-top:8px;}
+.add-btn:hover{border-color:var(--gold);color:var(--gold);}
+
+/* CLIENT CARD */
+.client-card{background:white;border:1px solid var(--border);border-radius:11px;padding:16px 18px;margin-bottom:11px;}
+.cc-hd{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+.cc-av{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:0.95rem;flex-shrink:0;}
+.cc-name{font-weight:600;color:var(--navy);font-size:0.92rem;}
+.cc-sub{font-size:0.69rem;color:var(--muted);}
+.cc-data{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:11px;}
+.cc-opp{background:var(--cream2);border-radius:8px;padding:9px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.co-lbl{font-size:0.66rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:2px;}
+.co-val{font-size:0.8rem;font-weight:500;color:var(--text);}
+
+/* CHAT */
+.chat-box{background:white;border:1px solid var(--border);border-radius:11px;overflow:hidden;}
+.chat-hd{padding:13px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.chat-hd-title{font-size:0.73rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--navy);}
+.msgs{padding:14px;display:flex;flex-direction:column;gap:9px;max-height:220px;overflow-y:auto;}
+.msg{max-width:76%;padding:9px 12px;border-radius:11px;font-size:0.81rem;line-height:1.5;}
+.msg.cli{background:var(--cream);color:var(--text);align-self:flex-start;border-radius:4px 11px 11px 11px;}
+.msg.adm{background:var(--navy);color:white;align-self:flex-end;border-radius:11px 4px 11px 11px;}
+.msg-time{font-size:0.63rem;color:var(--muted);margin-top:2px;}
+.msg.adm .msg-time{color:rgba(255,255,255,0.4);text-align:right;}
+.chat-inp-row{padding:12px 14px;border-top:1px solid var(--border);display:flex;gap:8px;}
+.chat-inp{flex:1;border:1.5px solid var(--border);border-radius:7px;padding:8px 11px;font-family:'Outfit',sans-serif;font-size:0.81rem;outline:none;resize:none;}
+.chat-inp:focus{border-color:var(--gold);}
+.chat-send{background:var(--gold);border:none;border-radius:7px;padding:8px 14px;color:white;font-family:'Outfit',sans-serif;font-weight:600;font-size:0.78rem;cursor:pointer;}
+
+/* MODAL */
+.overlay{display:none;position:fixed;inset:0;background:rgba(13,27,42,0.6);z-index:500;align-items:center;justify-content:center;}
+.overlay.open{display:flex;}
+.modal{background:white;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,0.28);}
+.modal-hd{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.modal-title{font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-weight:600;color:var(--navy);}
+.modal-sub{font-size:0.72rem;color:var(--muted);margin-top:1px;}
+.modal-close{width:28px;height:28px;border-radius:50%;background:var(--cream);border:none;cursor:pointer;font-size:0.9rem;display:flex;align-items:center;justify-content:center;color:var(--muted);}
+.modal-close:hover{background:var(--border);}
+.modal-body{padding:20px 24px;}
+.modal-foot{padding:14px 24px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;}
+.mf{display:flex;flex-direction:column;gap:4px;margin-bottom:13px;}
+.mf label{font-size:0.61rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);}
+.mf input,.mf textarea,.mf select{width:100%;border:1.5px solid var(--border);border-radius:7px;padding:8px 11px;font-family:'Outfit',sans-serif;font-size:0.83rem;color:var(--text);outline:none;transition:border-color .18s;background:var(--cream2);}
+.mf input:focus,.mf textarea:focus,.mf select:focus{border-color:var(--gold);background:white;}
+.mf textarea{min-height:80px;resize:vertical;}
+
+/* TWO COL */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+.full{grid-column:1/-1;}
+
+/* PAGE VIEWS */
+.page-view{display:none;flex:1;}
+.page-view.active{display:block;}
+.page-full{display:none;flex:1;flex-direction:column;}
+.page-full.active{display:flex;}
+
+/* SECTION PAGES */
+.inner-page{padding:32px 36px;max-width:1200px;}
+.page-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;}
+.page-title{font-family:'Cormorant Garamond',serif;font-size:1.6rem;font-weight:700;color:var(--navy);}
+.page-sub{font-size:0.78rem;color:var(--muted);margin-top:2px;}
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;}
+.kpi-card{background:white;border:1px solid var(--border);border-radius:11px;padding:16px 18px;box-shadow:0 1px 5px rgba(0,0,0,0.04);}
+.kpi-val{font-family:'Cormorant Garamond',serif;font-size:1.9rem;font-weight:700;color:var(--navy);}
+.kpi-lbl{font-size:0.68rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-top:2px;}
+.kpi-delta{font-size:0.73rem;color:var(--green);font-weight:600;margin-top:4px;}
+
+/* PHASE SEL */
+.phase-sel{background:var(--cream2);color:var(--text);border:1.5px solid var(--border2);border-radius:7px;width:100%;padding:8px 11px;font-family:'Outfit',sans-serif;font-size:0.83rem;outline:none;cursor:pointer;appearance:none;}
+.phase-sel:focus{border-color:var(--gold);}
+
+/* TABLE COMPACT (compradores/vendedores) */
+.list-table{width:100%;border-collapse:collapse;}
+.list-table th{text-align:left;padding:10px 14px;font-size:0.6rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.5);background:var(--navy);}
+.list-table td{padding:12px 14px;border-bottom:1px solid var(--border2);font-size:0.82rem;vertical-align:middle;}
+.list-table tr:last-child td{border-bottom:none;}
+.list-table tr:hover td{background:rgba(184,147,58,0.04);}
+.list-table .av{width:32px;height:32px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:0.73rem;font-weight:700;color:white;}
+
+/* TASK */
+.task-item{background:white;border:1px solid var(--border);border-radius:9px;padding:13px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px;}
+.task-chk{width:18px;height:18px;border:2px solid var(--border);border-radius:4px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .18s;}
+.task-chk.done{background:var(--green);border-color:var(--green);}
+.task-chk.done::after{content:'✓';color:white;font-size:0.65rem;font-weight:700;}
+.task-title{font-size:0.83rem;font-weight:500;color:var(--text);flex:1;}
+.task-title.done{text-decoration:line-through;color:var(--muted);}
+.task-badge{padding:2px 8px;border-radius:20px;font-size:0.63rem;font-weight:700;}
+.tb-urgent{background:rgba(192,57,43,0.1);color:var(--red);}
+.tb-normal{background:rgba(37,99,168,0.1);color:var(--blue);}
+.tb-low{background:rgba(122,148,168,0.1);color:var(--muted);}
+.task-date{font-size:0.7rem;color:var(--muted);white-space:nowrap;}
+.task-agent{font-size:0.7rem;color:var(--muted);}
+
+/* CONFIG */
+.cfg-section{background:white;border:1px solid var(--border);border-radius:11px;padding:20px 22px;margin-bottom:16px;}
+.cfg-title{font-size:0.62rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--gold);margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.cfg-title::after{content:'';flex:1;height:1px;background:linear-gradient(to right,rgba(184,147,58,0.3),transparent);}
+.cfg-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border2);}
+.cfg-row:last-child{border-bottom:none;}
+.cfg-lbl{font-size:0.83rem;font-weight:500;color:var(--text);}
+.cfg-sub{font-size:0.71rem;color:var(--muted);margin-top:2px;}
+.cfg-tog{width:40px;height:21px;background:#ddd;border-radius:11px;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;}
+.cfg-tog.on{background:var(--green);}
+.cfg-tog::after{content:'';position:absolute;width:15px;height:15px;background:white;border-radius:50%;top:3px;left:3px;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,0.2);}
+.cfg-tog.on::after{left:22px;}
+
+.tab-pane{display:none;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sb-logo">P</div>
+  <div class="sb-item active" onclick="showPage('activos',this)" title="Activos">
+    <div class="sb-ico">🏢</div><div class="sb-lbl">Activos</div>
+  </div>
+  <div class="sb-item" onclick="showPage('compradores',this)" title="Compradores">
+    <div class="sb-ico">🛒</div><div class="sb-lbl">Compradores</div>
+  </div>
+  <div class="sb-item" onclick="showPage('vendedores',this)" title="Vendedores">
+    <div class="sb-ico">🤝</div><div class="sb-lbl">Vendedores</div>
+  </div>
+  <div class="sb-sep"></div>
+  <div class="sb-item" onclick="showPage('tareas',this)" title="Tareas">
+    <div class="sb-ico">✅</div><div class="sb-lbl">Tareas</div>
+  </div>
+  <div class="sb-item" onclick="showPage('informes',this)" title="Informes">
+    <div class="sb-ico">📊</div><div class="sb-lbl">Informes</div>
+  </div>
+  <div class="sb-sep"></div>
+  <div class="sb-item" onclick="showPage('config',this)" title="Configuración">
+    <div class="sb-ico">⚙️</div><div class="sb-lbl">Config</div>
+  </div>
+  <div class="sb-avatar" title="Admin">AD</div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="tb-left">
+      <div class="tb-title" id="tb-title">Propiedades</div>
+      <div class="tb-count" id="tb-count">6 activos</div>
+    </div>
+    <div class="tb-right">
+      <div class="tb-role">Administrador</div>
+      <button class="btn btn-back btn-sm" id="btn-back" style="display:none" onclick="showSearch()">← Volver</button>
+      <button class="btn btn-gold btn-sm" id="btn-nuevo">+ Nuevo Activo</button>
+    </div>
+  </div>
+
+  <!-- ══ PAGE: ACTIVOS ══ -->
+  <div id="page-activos" class="page-view active">
+
+    <!-- SEARCH VIEW -->
+    <div id="view-search">
+      <div class="search-wrap">
+        <div class="search-bar-row">
+          <div class="search-input-wrap">
+            <span class="search-ico">🔍</span>
+            <input class="search-input" id="q" type="text" placeholder="Buscar por cualquier dato — dirección, municipio, referencia, cartera, tipología…" oninput="applyFilters()">
+          </div>
+        </div>
+        <div class="filter-card">
+          <div class="filter-row">
+            <div class="fg"><label>Categoría</label><div class="sw"><select id="f-cat" onchange="applyFilters()"><option value="">Todas</option><option>NPL</option><option>REO</option></select></div></div>
+            <div class="fg"><label>Provincia</label><div class="sw"><select id="f-prov" onchange="applyFilters()"><option value="">Todas</option><option>Barcelona</option><option>Ciudad Real</option><option>Granada</option><option>Málaga</option><option>Murcia</option><option>Tarragona</option></select></div></div>
+            <div class="fg"><label>Población</label><div class="sw"><select id="f-pob" onchange="applyFilters()"><option value="">Todas</option><option>Arriate</option><option>Benalmádena</option><option>Ciudad Real</option><option>Granada</option><option>Puig-Reig</option><option>Torredembarra</option></select></div></div>
+            <div class="fg"><label>Tipología</label><div class="sw"><select id="f-tipo" onchange="applyFilters()"><option value="">Todas</option><option>Vivienda</option><option>Parking</option><option>Trastero</option><option>Local</option></select></div></div>
+            <div class="fg"><label>Situación</label><div class="sw"><select id="f-fase" onchange="applyFilters()"><option value="">Todas</option><option>Publicado</option><option>Suspendido</option></select></div></div>
+            <div class="fg" style="flex:0.7;"><label>Mis Favoritos</label>
+              <div class="fav-toggle" id="fav-tog" onclick="toggleFavFilter()"><span class="fav-star">⭐</span><span class="fav-lbl">Todos</span></div>
+            </div>
+            <div class="filter-div"></div>
+            <div class="filter-acts">
+              <button class="btn-search" onclick="applyFilters()">Buscar</button>
+              <button class="btn-clear" onclick="clearFilters()">✕</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="results-bar">
+          <div class="results-text">Mostrando <strong id="shown-count">6</strong> de <strong>6</strong> activos</div>
+          <div class="sort-controls">
+            <span class="sort-lbl">Ordenar:</span>
+            <div class="sort-pill active" data-col="prov" onclick="sortBy('prov',this)">Provincia <span>↑</span></div>
+            <div class="sort-pill" data-col="pob" onclick="sortBy('pob',this)">Población <span>↕</span></div>
+            <div class="sort-pill" data-col="sqm" onclick="sortBy('sqm',this)">m² <span>↕</span></div>
+            <div class="sort-pill" data-col="precio" onclick="sortBy('precio',this)">Precio <span>↕</span></div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <div class="t-head">
+            <div class="t-cols">
+              <div class="t-chk-all ns" id="chk-all" onclick="toggleChkAll()"></div>
+              <div class="thc ns">⭐</div>
+              <div class="thc" onclick="sortBy('cat',this)">Cat. <span>↕</span></div>
+              <div class="thc" onclick="sortBy('prov',this)">Provincia <span>↕</span></div>
+              <div class="thc" onclick="sortBy('pob',this)">Población <span>↕</span></div>
+              <div class="thc" onclick="sortBy('addr',this)">Dirección <span>↕</span></div>
+              <div class="thc" onclick="sortBy('cp',this)">C.P. <span>↕</span></div>
+              <div class="thc" onclick="sortBy('sqm',this)">m² <span>↕</span></div>
+              <div class="thc" onclick="sortBy('tip',this)">Tipología <span>↕</span></div>
+              <div class="thc" onclick="sortBy('fase',this)">Situación <span>↕</span></div>
+              <div class="thc" onclick="sortBy('precio',this)">Precio <span>↕</span></div>
+              <div class="thc ns"></div>
+            </div>
+          </div>
+          <div id="table-body"></div>
+        </div>
+
+        <div class="pagination">
+          <div class="pag-info">Página 1 de 1</div>
+          <div class="pag-btns">
+            <button class="pag-btn">‹</button>
+            <button class="pag-btn active">1</button>
+            <button class="pag-btn">›</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ASSET DETAIL VIEW -->
+    <div id="view-asset" style="display:none;flex-direction:column;height:calc(100vh - 58px);">
+
+      <!-- ASSET TOPBAR -->
+      <div style="background:white;border-bottom:1px solid var(--border);padding:0 24px;height:50px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 4px rgba(0,0,0,0.04);flex-shrink:0;">
+        <span class="pill" id="at-cat" style="font-size:0.68rem;padding:3px 10px;background:rgba(184,147,58,0.12);color:var(--gold);border:1px solid rgba(184,147,58,0.25);">NPL</span>
+        <span style="font-size:0.88rem;font-weight:600;color:var(--navy);font-family:'Cormorant Garamond',serif;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="at-addr">—</span>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+          <div class="tog on" id="pub-tog" onclick="togglePub()"></div>
+          <span class="pub-label pub" id="pub-lbl">● Publicado</span>
+        </div>
+      </div>
+
+      <!-- BODY -->
+      <div style="display:flex;flex:1;overflow:hidden;">
+        <!-- LEFT NAV -->
+        <div style="width:185px;min-width:185px;background:var(--navy);display:flex;flex-direction:column;padding:16px 0;">
+          <div class="vnav-item active" onclick="switchTab(0)"><span class="vnav-ico">🏠</span><span class="vnav-lbl">Características</span></div>
+          <div class="vnav-item" onclick="switchTab(1)"><span class="vnav-ico">📁</span><span class="vnav-lbl">Documentación</span></div>
+          <div class="vnav-item" onclick="switchTab(2)"><span class="vnav-ico">👔</span><span class="vnav-lbl">Agentes</span></div>
+          <div class="vnav-item" onclick="switchTab(3)"><span class="vnav-ico">👥</span><span class="vnav-lbl">Clientes</span></div>
+          <div class="vnav-item" onclick="switchTab(4)" style="margin-top:auto;border-top:1px solid rgba(255,255,255,0.07);padding-top:14px;"><span class="vnav-ico">🔐</span><span class="vnav-lbl">Administrador</span></div>
+        </div>
+
+        <!-- CONTENT -->
+        <div style="flex:1;overflow-y:auto;padding:26px 30px;background:var(--cream);">
+
+          <!-- TAB 0: CARACTERÍSTICAS -->
+          <div class="tab-pane active" id="tab-0">
+            <!-- Map square right + data left -->
+            <div style="display:grid;grid-template-columns:1fr 260px;gap:16px;margin-bottom:16px;">
+              <!-- LEFT: catastral + localización + precio -->
+              <div style="display:flex;flex-direction:column;gap:14px;">
+                <div class="sc">
+                  <div class="sc-title">Datos Catastrales</div>
+                  <div class="dp-grid dp-grid-4">
+                    <div class="dp"><div class="dl">Referencia</div><div class="dv mono" id="c-ref">—</div></div>
+                    <div class="dp"><div class="dl">Clase</div><div class="dv" id="c-clase">—</div></div>
+                    <div class="dp"><div class="dl">Uso</div><div class="dv" id="c-uso">—</div></div>
+                    <div class="dp"><div class="dl">Bien</div><div class="dv" id="c-bien">—</div></div>
+                    <div class="dp"><div class="dl">Sup. Construida</div><div class="dv" id="c-supc">—</div></div>
+                    <div class="dp"><div class="dl">Sup. Gráfica</div><div class="dv" id="c-supg">—</div></div>
+                    <div class="dp"><div class="dl">Antigüedad</div><div class="dv" id="c-age">—</div></div>
+                    <div class="dp"><div class="dl">Coef. Part.</div><div class="dv" id="c-coef">—</div></div>
+                  </div>
+                </div>
+                <div class="sc">
+                  <div class="sc-title">Localización</div>
+                  <div class="dp-grid dp-grid-3" style="margin-bottom:8px;">
+                    <div class="dp"><div class="dl">Tipo de Vía</div><div class="dv" id="c-tvia">—</div></div>
+                    <div class="dp"><div class="dl">Nombre de Vía</div><div class="dv" id="c-nvia">—</div></div>
+                    <div class="dp"><div class="dl">Número</div><div class="dv" id="c-num">—</div></div>
+                    <div class="dp"><div class="dl">Escalera</div><div class="dv" id="c-esc">—</div></div>
+                    <div class="dp"><div class="dl">Planta</div><div class="dv" id="c-pla">—</div></div>
+                    <div class="dp"><div class="dl">Puerta</div><div class="dv" id="c-pta">—</div></div>
+                  </div>
+                  <div class="dp-grid dp-grid-4">
+                    <div class="dp"><div class="dl">Municipio</div><div class="dv" id="c-mun">—</div></div>
+                    <div class="dp"><div class="dl">Provincia</div><div class="dv" id="c-prov">—</div></div>
+                    <div class="dp"><div class="dl">C.P.</div><div class="dv" id="c-cp">—</div></div>
+                    <div class="dp"><div class="dl">CCAA</div><div class="dv" id="c-ccaa">—</div></div>
+                    <div class="dp" style="grid-column:1/-1;"><div class="dl">Dirección Completa</div><div class="dv" id="c-addr">—</div></div>
+                  </div>
+                </div>
+              </div>
+              <!-- RIGHT: map square + precio -->
+              <div style="display:flex;flex-direction:column;gap:14px;">
+                <img id="asset-map" src="" style="width:260px;height:260px;object-fit:cover;border-radius:11px;border:1px solid var(--border);flex-shrink:0;" alt="Mapa">
+                <div class="price-card">
+                  <div class="price-big" id="c-price">—</div>
+                  <div class="price-lbl">Precio estimado</div>
+                  <div class="act-btns">
+                    <button class="ab ab-consult" onclick="openModal('chat')">💬 Consultar</button>
+                    <button class="ab ab-offer" onclick="openModal('offer')">📋 Oferta</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="sc">
+              <div class="sc-title">Descripción del Activo</div>
+              <p style="font-size:0.83rem;line-height:1.7;color:var(--text);" id="c-desc">—</p>
+            </div>
+            <div class="sc" style="margin-top:14px;">
+              <div class="sc-title">Notas del activo</div>
+              <textarea style="width:100%;border:1.5px solid var(--border2);border-radius:7px;padding:9px 12px;font-family:'Outfit',sans-serif;font-size:0.82rem;color:var(--text);min-height:90px;resize:vertical;outline:none;background:var(--cream2);" placeholder="Añade notas generales sobre el activo…"></textarea>
+              <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+                <button class="btn btn-gold btn-xs">💾 Guardar nota</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 1: DOCUMENTACIÓN + NOTAS -->
+          <div class="tab-pane" id="tab-1">
+            <!-- Sub-tabs -->
+            <div style="display:flex;gap:0;margin-bottom:18px;border-bottom:2px solid var(--border2);">
+              <div class="doc-subtab active" onclick="switchDocTab(0)" style="padding:8px 18px;cursor:pointer;font-size:0.8rem;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s;">📄 Documentos</div>
+              <div class="doc-subtab" onclick="switchDocTab(1)" style="padding:8px 18px;cursor:pointer;font-size:0.8rem;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s;">📝 Notas</div>
+            </div>
+            <div id="doc-sub-0">
+              <div class="doc-zone" onclick="alert('Seleccionar archivo')">
+                <div style="font-size:1.8rem;margin-bottom:7px;opacity:0.45;">📂</div>
+                <div style="font-size:0.83rem;color:var(--muted);"><strong>Arrastra archivos aquí</strong> o haz clic para seleccionar<br><span style="font-size:0.73rem;">PDF, Excel, imágenes — Máx. 50MB</span></div>
+              </div>
+              <div class="doc-list">
+                <div class="doc-item"><div class="doc-ico di-pdf">📄</div><div><div class="doc-name">Nota_Simple_Registral.pdf</div><div class="doc-meta">Admin · 1.2 MB · 28 Feb 2026</div></div><button class="doc-dl">⬇ Descargar</button></div>
+                <div class="doc-item"><div class="doc-ico di-img">🖼</div><div><div class="doc-name">Fotos_activo.zip</div><div class="doc-meta">Admin · 8.4 MB · 15 Feb 2026</div></div><button class="doc-dl">⬇ Descargar</button></div>
+                <div class="doc-item"><div class="doc-ico di-xls">📊</div><div><div class="doc-name">Valoracion_tasacion.xlsx</div><div class="doc-meta">Admin · 245 KB · 10 Feb 2026</div></div><button class="doc-dl">⬇ Descargar</button></div>
+                <div class="doc-item"><div class="doc-ico di-pdf">📄</div><div><div class="doc-name">Certificado_deudas_comunidad.pdf</div><div class="doc-meta">Carlos Martínez · 980 KB · 05 Feb 2026</div></div><button class="doc-dl">⬇ Descargar</button></div>
+              </div>
+            </div>
+            <div id="doc-sub-1" style="display:none;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                <div style="font-size:0.7rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);">Notas y aclaraciones sobre el activo</div>
+                <button class="btn btn-outline btn-xs" onclick="openModal('note-agent')">+ Nueva nota</button>
+              </div>
+              <div class="note-card"><div class="nc-hd"><span class="nc-author">Admin</span><span class="nc-date">01 Mar 2026</span></div><div class="nc-text">El acceso al inmueble requiere coordinación previa con el administrador de fincas. Contactar a Gestiones Rivas S.L. al menos 48h antes de cualquier visita.</div></div>
+              <div class="note-card"><div class="nc-hd"><span class="nc-author">Carlos Martínez</span><span class="nc-date">15 Feb 2026</span></div><div class="nc-text">La nota simple muestra una hipoteca adicional no reflejada en el sistema. Se ha solicitado aclaración al proveedor. Pendiente respuesta.</div></div>
+              <div class="note-card"><div class="nc-hd"><span class="nc-author">Ana López</span><span class="nc-date">10 Feb 2026</span></div><div class="nc-text">Fotodocumentación completada. El inmueble se encuentra en estado de abandono parcial. Se recomiendan obras de adecuación antes de la comercialización.</div></div>
+              <div class="add-btn" onclick="openModal('note-agent')">+ Añadir aclaración o nota</div>
+            </div>
+          </div>
+
+          <!-- TAB 2: AGENTES -->
+          <div class="tab-pane" id="tab-2">
+            <div class="status-block gap">
+              <div class="sc-title" style="color:rgba(184,147,58,0.45);margin-bottom:12px;">Resumen del Activo</div>
+              <div class="sb-grid" style="grid-template-columns:repeat(3,1fr);">
+                <div class="sbi"><div class="sl">Categoría</div><div class="sv" id="ag-cat">NPL</div></div>
+                <div class="sbi"><div class="sl">Fase Judicial</div><div class="sv" id="ag-fjud">—</div></div>
+                <div class="sbi"><div class="sl">Deuda / Precio</div><div class="sv" id="ag-deu">—</div></div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:11px;">
+              <div style="font-size:0.7rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);">Notas del agente</div>
+              <button class="btn btn-outline btn-xs" onclick="openModal('note-agent')">+ Añadir nota</button>
+            </div>
+            <div class="note-card"><div class="nc-hd"><span class="nc-author">Carlos Martínez</span><span class="nc-date">02 Mar 2026</span></div><div class="nc-text">Propietario contactado el lunes. Muestra interés pero solicita 30 días para responder. Pendiente llamada de seguimiento el 10 de marzo.</div></div>
+            <div class="note-card"><div class="nc-hd"><span class="nc-author">Ana López</span><span class="nc-date">18 Feb 2026</span></div><div class="nc-text">Visita realizada. Inmueble en buen estado general. Necesita reforma en cocina y baños. Informe fotográfico enviado al administrador.</div></div>
+            <div class="note-card"><div class="nc-hd"><span class="nc-author">Carlos Martínez</span><span class="nc-date">10 Feb 2026</span></div><div class="nc-text">Primera toma de contacto. Verificados datos registrales. Ref. catastral confirmada. Sin cargas ocultas detectadas.</div></div>
+            <div class="add-btn" onclick="openModal('note-agent')">+ Añadir nueva nota de agente</div>
+          </div>
+
+          <!-- TAB 3: CLIENTES -->
+          <div class="tab-pane" id="tab-3">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+              <div style="font-size:0.7rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);">Clientes interesados</div>
+              <button class="btn btn-gold btn-xs" onclick="openModal('add-client')">+ Añadir cliente</button>
+            </div>
+            <div class="client-card">
+              <div class="cc-hd"><div class="cc-av" style="background:linear-gradient(135deg,#2563a8,#0d2a4a);">JR</div><div><div class="cc-name">Juan Rodríguez García</div><div class="cc-sub">🔵 Cliente Privado · NDA firmada · ID: CLI-0041</div></div><div style="margin-left:auto;"><span class="pill fp-seg">Seguimiento</span></div></div>
+              <div class="cc-data">
+                <div class="dp"><div class="dl">Teléfono</div><div class="dv">+34 612 345 678</div></div>
+                <div class="dp"><div class="dl">Email</div><div class="dv"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="167c38647972647f7163736c56737b777f7a3875797b">[email&#160;protected]</a></div></div>
+                <div class="dp"><div class="dl">Intereses</div><div class="dv">Residencial, Andalucía</div></div>
+                <div class="dp"><div class="dl">Presupuesto</div><div class="dv">Hasta 130.000 €</div></div>
+                <div class="dp"><div class="dl">Superficie mín.</div><div class="dv">80 m²</div></div>
+                <div class="dp"><div class="dl">Financiación</div><div class="dv">Sí — Banco Santander</div></div>
+              </div>
+              <div class="cc-opp"><div><div class="co-lbl">Última oportunidad</div><div class="co-val">Oferta presentada: 95.000 € · 28 Feb 2026</div></div><button class="btn btn-outline btn-xs" onclick="openModal('chat')">💬 Conversación</button></div>
+            </div>
+            <div class="client-card">
+              <div class="cc-hd"><div class="cc-av" style="background:linear-gradient(135deg,#2a8c5e,#0d3a22);">ML</div><div><div class="cc-name">María Luisa Fernández Soto</div><div class="cc-sub">🔵 Cliente Privado · NDA firmada · ID: CLI-0038</div></div><div style="margin-left:auto;"><span class="pill fp-pub">Contactada</span></div></div>
+              <div class="cc-data">
+                <div class="dp"><div class="dl">Teléfono</div><div class="dv">+34 698 765 432</div></div>
+                <div class="dp"><div class="dl">Email</div><div class="dv"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="7b16170e12081a3b1e160b091e081a551e08">[email&#160;protected]</a></div></div>
+                <div class="dp"><div class="dl">Intereses</div><div class="dv">Inversión, Costa</div></div>
+                <div class="dp"><div class="dl">Presupuesto</div><div class="dv">Hasta 280.000 €</div></div>
+                <div class="dp"><div class="dl">Superficie mín.</div><div class="dv">100 m²</div></div>
+                <div class="dp"><div class="dl">Financiación</div><div class="dv">No — Contado</div></div>
+              </div>
+              <div class="cc-opp"><div><div class="co-lbl">Última oportunidad</div><div class="co-val">Solicitud de información · 15 Feb 2026</div></div><button class="btn btn-outline btn-xs" onclick="openModal('chat')">💬 Conversación</button></div>
+            </div>
+            <div class="add-btn" onclick="openModal('add-client')">+ Vincular nuevo cliente</div>
+          </div>
+
+          <!-- TAB 4: ADMINISTRADOR -->
+          <div class="tab-pane" id="tab-4">
+            <div class="two-col" style="margin-bottom:16px;">
+              <div class="sc">
+                <div class="sc-title">Estado de publicación</div>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+                  <div class="tog on" id="pub-tog2" onclick="togglePubSync()"></div>
+                  <span class="pub-label pub" id="pub-lbl2">● Publicado</span>
+                </div>
+                <div style="font-size:0.62rem;color:var(--muted);margin-bottom:5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">Fase interna</div>
+                <select class="phase-sel"><option>Seguimiento</option><option>Info. Solicitada</option><option>Reservado</option><option>No Disponible</option></select>
+              </div>
+              <div class="sc">
+                <div class="sc-title">Propietario / Vendedor</div>
+                <div class="dp-grid" style="margin-bottom:12px;">
+                  <div class="dp"><div class="dl">Nombre</div><div class="dv" id="ow-name">—</div></div>
+                  <div class="dp"><div class="dl">Teléfono</div><div class="dv" id="ow-tel">—</div></div>
+                  <div class="dp" style="grid-column:1/-1;"><div class="dl">Email</div><div class="dv" id="ow-mail">—</div></div>
+                </div>
+                <button onclick="openModal('mail')" style="width:100%;background:var(--gold);color:white;border:none;border-radius:7px;padding:9px;font-family:Outfit,sans-serif;font-size:0.8rem;font-weight:600;cursor:pointer;">✉️ Enviar correo al propietario</button>
+              </div>
+            </div>
+
+            <!-- DATOS COMPLETOS PROVEEDOR -->
+            <div class="sc gap">
+              <div class="sc-title">Datos Completos del Proveedor</div>
+              <div class="dp-grid dp-grid-4">
+                <div class="dp"><div class="dl">ID Pipedrive</div><div class="dv" id="adm-pip">—</div></div>
+                <div class="dp"><div class="dl">ID LinkedIn</div><div class="dv" id="adm-lin">—</div></div>
+                <div class="dp"><div class="dl">Categoría</div><div class="dv" id="adm-cat">—</div></div>
+                <div class="dp"><div class="dl">Cartera</div><div class="dv" id="adm-car">—</div></div>
+                <div class="dp"><div class="dl">Cliente</div><div class="dv" id="adm-cli">—</div></div>
+                <div class="dp"><div class="dl">ID1</div><div class="dv mono" id="adm-id1">—</div></div>
+                <div class="dp"><div class="dl">Contract ID</div><div class="dv mono" id="adm-con">—</div></div>
+                <div class="dp"><div class="dl">Asset ID</div><div class="dv" id="adm-aid">—</div></div>
+                <div class="dp"><div class="dl">Nº Loans</div><div class="dv" id="adm-loans">—</div></div>
+                <div class="dp"><div class="dl">Type of Collateral</div><div class="dv" id="adm-tcol">—</div></div>
+                <div class="dp"><div class="dl">Subtype Collateral</div><div class="dv" id="adm-scol">—</div></div>
+                <div class="dp"><div class="dl">CCAA</div><div class="dv" id="adm-ccaa">—</div></div>
+                <div class="dp"><div class="dl">Provincia</div><div class="dv" id="adm-prov">—</div></div>
+                <div class="dp"><div class="dl">Municipio</div><div class="dv" id="adm-city">—</div></div>
+                <div class="dp"><div class="dl">ZIP Code</div><div class="dv mono" id="adm-zip">—</div></div>
+                <div class="dp"><div class="dl">Nº Finca</div><div class="dv" id="adm-finca">—</div></div>
+                <div class="dp"><div class="dl">Nº Registro</div><div class="dv" id="adm-reg">—</div></div>
+                <div class="dp"><div class="dl">Ref. Catastral</div><div class="dv mono" id="adm-cref">—</div></div>
+                <div class="dp" style="grid-column:span 2;"><div class="dl">Asset Address</div><div class="dv" id="adm-addr">—</div></div>
+                <div class="dp"><div class="dl">Estado Judicial</div><div class="dv" id="adm-ejud">—</div></div>
+                <div class="dp"><div class="dl">Estado Jud. Mapeo</div><div class="dv" id="adm-ejmap">—</div></div>
+                <div class="dp"><div class="dl">Estado Negociación</div><div class="dv" id="adm-eneg">—</div></div>
+                <div class="dp"><div class="dl">OB</div><div class="dv" id="adm-ob">—</div></div>
+                <div class="dp"><div class="dl">Tipo Subasta</div><div class="dv" id="adm-sub">—</div></div>
+                <div class="dp"><div class="dl">DEU_TOT</div><div class="dv" id="adm-deu">—</div></div>
+                <div class="dp"><div class="dl">Cargas Previas</div><div class="dv" id="adm-cprev">—</div></div>
+                <div class="dp"><div class="dl">Cargas Post.</div><div class="dv" id="adm-cpost">—</div></div>
+                <div class="dp"><div class="dl">Deuda Total</div><div class="dv" id="adm-dtot">—</div></div>
+                <div class="dp"><div class="dl">Precio Estimado</div><div class="dv" id="adm-pest">—</div></div>
+                <div class="dp"><div class="dl">Main Strategy</div><div class="dv" id="adm-str">—</div></div>
+                <div class="dp"><div class="dl">Liquidez</div><div class="dv" id="adm-liq">—</div></div>
+                <div class="dp"><div class="dl">Avance Judicial</div><div class="dv" id="adm-avj">—</div></div>
+                <div class="dp"><div class="dl">Mapeo Municipios</div><div class="dv" id="adm-mmap">—</div></div>
+                <div class="dp"><div class="dl">Bucket Liquidez</div><div class="dv" id="adm-buck">—</div></div>
+                <div class="dp"><div class="dl">Localiz. Buckets</div><div class="dv" id="adm-lbuck">—</div></div>
+                <div class="dp"><div class="dl">Status MF</div><div class="dv" id="adm-smf">—</div></div>
+                <div class="dp"><div class="dl">Resultado Subasta</div><div class="dv" id="adm-rsub">—</div></div>
+                <div class="dp" style="grid-column:span 2;"><div class="dl">Contact — Asset</div><div class="dv mono" id="adm-conn">—</div></div>
+                <div class="dp" style="grid-column:span 2;"><div class="dl">Conn — Contract — Asset</div><div class="dv mono" id="adm-conn2">—</div></div>
+              </div>
+            </div>
+
+            <div class="sc gap">
+              <div class="sc-title">Notas privadas del administrador</div>
+              <textarea style="width:100%;border:1.5px solid var(--border2);border-radius:7px;padding:9px 12px;font-family:'Outfit',sans-serif;font-size:0.82rem;color:var(--text);min-height:76px;resize:vertical;outline:none;background:var(--cream2);">Revisar situación judicial el 15/03. Hablar con el banco sobre cargas previas. Cliente JR tiene interés real — priorizar visita.</textarea>
+              <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">
+                <button class="btn btn-outline btn-xs" onclick="openModal('note-admin')">+ Añadir nota</button>
+                <button class="btn btn-gold btn-xs">💾 Guardar</button>
+              </div>
+              <div style="margin-top:12px;">
+                <div class="note-card"><div class="nc-hd"><span class="nc-author">Admin</span><span class="nc-date">28 Feb 2026</span></div><div class="nc-text">Llamada con el banco: confirman que las cargas previas son ejecutables. Plazo máximo de negociación: 60 días.</div></div>
+                <div class="note-card"><div class="nc-hd"><span class="nc-author">Admin</span><span class="nc-date">20 Feb 2026</span></div><div class="nc-text">Activo marcado como prioritario. Incluir en el próximo envío a clientes inversores de Andalucía.</div></div>
+              </div>
+            </div>
+
+            <div class="chat-box">
+              <div class="chat-hd"><div class="chat-hd-title">💬 Conversaciones con clientes</div><span style="font-size:0.73rem;color:var(--muted);">3 activas</span></div>
+              <div class="msgs">
+                <div class="msg cli">¿Podría obtener más información sobre el estado registral?<div class="msg-time">Juan R. · 27 Feb, 10:32h</div></div>
+                <div class="msg adm">Hola Juan, el activo tiene cargas previas de 110.741 €. Le enviamos la nota simple.<div class="msg-time">Admin · 27 Feb, 14:15h</div></div>
+                <div class="msg cli">¿Cuál sería el precio mínimo negociable?<div class="msg-time">Juan R. · 28 Feb, 09:10h</div></div>
+                <div class="msg adm">Podemos valorar a partir de 98.000 €. ¿Le interesa concretar visita?<div class="msg-time">Admin · 28 Feb, 11:30h</div></div>
+                <div class="msg cli">Perfecto, el jueves 6 a las 11h.<div class="msg-time">Juan R. · 28 Feb, 12:05h</div></div>
+              </div>
+              <div class="chat-inp-row">
+                <textarea class="chat-inp" rows="1" placeholder="Escribe una respuesta…"></textarea>
+                <button class="chat-send">Enviar</button>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- content -->
+      </div><!-- body flex -->
+    </div><!-- view-asset -->
+  </div><!-- page-activos -->
+
+  <!-- ══ PAGE: COMPRADORES ══ -->
+  <div id="page-compradores" class="page-view">
+    <!-- LIST VIEW -->
+    <div id="comp-list">
+      <div class="search-wrap">
+        <div class="page-hd" style="margin-bottom:16px;">
+          <div><div class="page-title">Compradores</div><div class="page-sub">Clientes interesados en adquirir activos</div></div>
+          <button class="btn btn-gold btn-sm" onclick="openCompDetail('new')">+ Nuevo Comprador</button>
+        </div>
+        <div class="kpi-row" style="margin-bottom:18px;">
+          <div class="kpi-card"><div class="kpi-val">24</div><div class="kpi-lbl">Total compradores</div><div class="kpi-delta">↑ 3 este mes</div></div>
+          <div class="kpi-card"><div class="kpi-val">8</div><div class="kpi-lbl">Con NDA firmada</div><div class="kpi-delta">↑ 2 este mes</div></div>
+          <div class="kpi-card"><div class="kpi-val">5</div><div class="kpi-lbl">Ofertas activas</div><div class="kpi-delta">= Sin cambios</div></div>
+          <div class="kpi-card"><div class="kpi-val">2</div><div class="kpi-lbl">Operaciones cerradas</div><div class="kpi-delta">↑ 1 este mes</div></div>
+        </div>
+        <!-- Buscador -->
+        <div class="search-bar-row">
+          <div class="search-input-wrap">
+            <span class="search-ico">🔍</span>
+            <input class="search-input" id="q-comp" type="text" placeholder="Buscar por nombre, email, teléfono, agente, estado…" oninput="filterComp()">
+          </div>
+        </div>
+        <div class="filter-card">
+          <div class="filter-row">
+            <div class="fg"><label>Tipo</label><div class="sw"><select id="fc-tipo" onchange="filterComp()"><option value="">Todos</option><option>Privado</option><option>Free</option></select></div></div>
+            <div class="fg"><label>Estado</label><div class="sw"><select id="fc-estado" onchange="filterComp()"><option value="">Todos</option><option>Nuevo</option><option>Seguimiento</option><option>Negociación</option><option>Contactado</option><option>Oferta enviada</option></select></div></div>
+            <div class="fg"><label>Agente</label><div class="sw"><select id="fc-agente" onchange="filterComp()"><option value="">Todos</option><option>Carlos Martínez</option><option>Ana López</option><option>Admin</option></select></div></div>
+            <div class="fg"><label>NDA</label><div class="sw"><select id="fc-nda" onchange="filterComp()"><option value="">Todos</option><option>Firmada</option><option>Pendiente</option></select></div></div>
+            <div class="filter-div"></div>
+            <div class="filter-acts">
+              <button class="btn-search" onclick="filterComp()">Buscar</button>
+              <button class="btn-clear" onclick="clearCompFilters()">✕</button>
+            </div>
+          </div>
+        </div>
+        <div class="results-bar">
+          <div class="results-text">Mostrando <strong id="comp-count">5</strong> compradores</div>
+        </div>
+        <div class="table-wrap">
+          <div class="t-head">
+            <div style="display:grid;grid-template-columns:2fr 80px 130px 110px 110px 120px 110px 80px 36px;gap:8px;align-items:center;padding:10px 16px;">
+              <div class="thc">Cliente</div><div class="thc">Tipo</div><div class="thc">Agente</div><div class="thc">Intereses</div><div class="thc">Presupuesto</div><div class="thc">Últ. actividad</div><div class="thc">Estado</div><div class="thc">NDA</div><div class="thc ns"></div>
+            </div>
+          </div>
+          <div id="comp-table-body"></div>
+        </div>
+      </div>
+    </div>
+    <!-- DETAIL VIEW -->
+    <div id="comp-detail" style="display:none;">
+      <div style="background:white;border-bottom:1px solid var(--border);padding:0 24px;height:50px;display:flex;align-items:center;gap:12px;flex-shrink:0;">
+        <button class="btn btn-back btn-sm" onclick="closeCompDetail()">← Compradores</button>
+        <span style="font-size:0.9rem;font-weight:600;color:var(--navy);font-family:'Cormorant Garamond',serif;" id="comp-detail-title">Juan Rodríguez García</span>
+        <span class="pill fp-seg" style="margin-left:4px;" id="comp-detail-estado">Seguimiento</span>
+      </div>
+      <div style="display:flex;height:calc(100vh - 58px - 50px);">
+        <!-- LEFT NAV -->
+        <div style="width:185px;min-width:185px;background:var(--navy);display:flex;flex-direction:column;padding:16px 0;">
+          <div class="vnav-item active" onclick="switchCompTab(0)"><span class="vnav-ico">👤</span><span class="vnav-lbl">Datos</span></div>
+          <div class="vnav-item" onclick="switchCompTab(1)"><span class="vnav-ico">📁</span><span class="vnav-lbl">Documentos</span></div>
+          <div class="vnav-item" onclick="switchCompTab(2)"><span class="vnav-ico">💬</span><span class="vnav-lbl">Conversación</span></div>
+        </div>
+        <!-- CONTENT -->
+        <div style="flex:1;overflow-y:auto;padding:26px 30px;background:var(--cream);">
+          <!-- TAB DATOS -->
+          <div class="ctab active" id="ctab-0">
+            <div class="two-col" style="margin-bottom:14px;">
+              <div class="sc">
+                <div class="sc-title">Datos personales</div>
+                <div class="dp-grid">
+                  <div class="dp"><div class="dl">Nombre completo</div><div class="dv">Juan Rodríguez García</div></div>
+                  <div class="dp"><div class="dl">Teléfono</div><div class="dv">+34 612 345 678</div></div>
+                  <div class="dp"><div class="dl">Email</div><div class="dv">j.rodriguez@email.com</div></div>
+                  <div class="dp"><div class="dl">Tipo cliente</div><div class="dv">Privado</div></div>
+                  <div class="dp"><div class="dl">NDA</div><div class="dv" style="color:var(--green);font-weight:600;">✓ Firmada · 10 Ene 2026</div></div>
+                  <div class="dp"><div class="dl">Estado</div><div class="dv">Seguimiento</div></div>
+                </div>
+              </div>
+              <div class="sc">
+                <div class="sc-title">Agente asignado</div>
+                <div class="dp-grid">
+                  <div class="dp" style="grid-column:1/-1;"><div class="dl">Agente</div>
+                    <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+                      <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#2563a8,#0d2a4a);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;color:white;flex-shrink:0;">CM</div>
+                      <div><div style="font-weight:600;font-size:0.84rem;color:var(--navy);">Carlos Martínez</div><div style="font-size:0.7rem;color:var(--muted);">carlos.m@procrm.es</div></div>
+                    </div>
+                  </div>
+                  <div class="dp" style="grid-column:1/-1;"><div class="dl">Cambiar agente</div><select class="phase-sel" style="margin-top:4px;"><option>Carlos Martínez</option><option>Ana López</option><option>Admin</option></select></div>
+                </div>
+              </div>
+            </div>
+            <div class="sc" style="margin-bottom:14px;">
+              <div class="sc-title">Criterios de búsqueda</div>
+              <div class="dp-grid dp-grid-3">
+                <div class="dp"><div class="dl">Intereses</div><div class="dv">Residencial, Andalucía</div></div>
+                <div class="dp"><div class="dl">Presupuesto máx.</div><div class="dv">130.000 €</div></div>
+                <div class="dp"><div class="dl">Superficie mín.</div><div class="dv">80 m²</div></div>
+                <div class="dp"><div class="dl">Financiación</div><div class="dv">Sí — Banco Santander</div></div>
+                <div class="dp"><div class="dl">Activos vinculados</div><div class="dv">3 activos</div></div>
+                <div class="dp"><div class="dl">Última actividad</div><div class="dv">28 Feb 2026</div></div>
+              </div>
+            </div>
+            <div class="sc">
+              <div class="sc-title">Notas del comprador</div>
+              <div class="note-card"><div class="nc-hd"><span class="nc-author">Carlos Martínez</span><span class="nc-date">02 Mar 2026</span></div><div class="nc-text">Cliente muy interesado en zona Málaga. Ha visitado dos activos. Pendiente respuesta a oferta presentada el 28 Feb.</div></div>
+              <textarea style="width:100%;border:1.5px solid var(--border2);border-radius:7px;padding:9px 12px;font-family:'Outfit',sans-serif;font-size:0.82rem;min-height:76px;resize:vertical;outline:none;background:var(--cream2);margin-top:8px;" placeholder="Añadir nueva nota…"></textarea>
+              <div style="display:flex;justify-content:flex-end;margin-top:6px;"><button class="btn btn-gold btn-xs">💾 Guardar</button></div>
+            </div>
+          </div>
+          <!-- TAB DOCUMENTOS -->
+          <div class="ctab" id="ctab-1" style="display:none;">
+            <div class="sc" style="margin-bottom:16px;">
+              <div class="sc-title">Documentos del comprador</div>
+              <div class="doc-zone" onclick="alert('Seleccionar archivo')">
+                <div style="font-size:1.8rem;margin-bottom:7px;opacity:0.45;">📂</div>
+                <div style="font-size:0.83rem;color:var(--muted);"><strong>Arrastra archivos aquí</strong> o haz clic para seleccionar<br><span style="font-size:0.73rem;">PDF, Excel, imágenes — Máx. 50MB</span></div>
+              </div>
+              <div class="doc-list">
+                <div class="doc-item"><div class="doc-ico di-pdf">📄</div><div><div class="doc-name">NDA_firmada_JRodriguez.pdf</div><div class="doc-meta">Admin · 350 KB · 10 Ene 2026</div></div><button class="doc-dl">⬇ Descargar</button></div>
+                <div class="doc-item"><div class="doc-ico di-pdf">📄</div><div><div class="doc-name">DNI_JRodriguez.pdf</div><div class="doc-meta">Carlos Martínez · 1.1 MB · 10 Ene 2026</div></div><button class="doc-dl">⬇ Descargar</button></div>
+                <div class="doc-item"><div class="doc-ico di-xls">📊</div><div><div class="doc-name">Oferta_activo_20257589.pdf</div><div class="doc-meta">Admin · 420 KB · 28 Feb 2026</div></div><button class="doc-dl">⬇ Descargar</button></div>
+              </div>
+            </div>
+          </div>
+          <!-- TAB CONVERSACIÓN -->
+          <div class="ctab" id="ctab-2" style="display:none;">
+            <div class="chat-box">
+              <div class="chat-hd"><div class="chat-hd-title">💬 Conversación con Juan Rodríguez</div></div>
+              <div class="msgs" style="max-height:340px;">
+                <div class="msg cli">¿Podría obtener más información sobre el estado registral?<div class="msg-time">Juan R. · 27 Feb, 10:32h</div></div>
+                <div class="msg adm">Hola Juan, el activo tiene cargas previas de 110.741 €. Le enviamos la nota simple.<div class="msg-time">Carlos M. · 27 Feb, 14:15h</div></div>
+                <div class="msg cli">¿Cuál sería el precio mínimo negociable?<div class="msg-time">Juan R. · 28 Feb, 09:10h</div></div>
+                <div class="msg adm">Podemos valorar a partir de 98.000 €. ¿Le interesa concretar visita?<div class="msg-time">Carlos M. · 28 Feb, 11:30h</div></div>
+                <div class="msg cli">Perfecto, el jueves 6 a las 11h.<div class="msg-time">Juan R. · 28 Feb, 12:05h</div></div>
+              </div>
+              <div class="chat-inp-row"><textarea class="chat-inp" rows="1" placeholder="Escribe una respuesta…"></textarea><button class="chat-send">Enviar</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PAGE: VENDEDORES ══ -->
+  <div id="page-vendedores" class="page-view">
+    <!-- LIST VIEW -->
+    <div id="vend-list">
+      <div class="search-wrap">
+        <div class="page-hd" style="margin-bottom:16px;">
+          <div><div class="page-title">Vendedores / Propietarios</div><div class="page-sub">Titulares de los activos gestionados</div></div>
+          <button class="btn btn-gold btn-sm" onclick="openVendDetail('new')">+ Nuevo Vendedor</button>
+        </div>
+        <div class="kpi-row" style="margin-bottom:18px;">
+          <div class="kpi-card"><div class="kpi-val">18</div><div class="kpi-lbl">Total vendedores</div></div>
+          <div class="kpi-card"><div class="kpi-val">11</div><div class="kpi-lbl">Activos en proceso</div></div>
+          <div class="kpi-card"><div class="kpi-val">4</div><div class="kpi-lbl">Colaboran activamente</div></div>
+          <div class="kpi-card"><div class="kpi-val">3</div><div class="kpi-lbl">Sin respuesta</div></div>
+        </div>
+        <!-- Buscador -->
+        <div class="search-bar-row">
+          <div class="search-input-wrap">
+            <span class="search-ico">🔍</span>
+            <input class="search-input" id="q-vend" type="text" placeholder="Buscar por nombre, email, cartera, agente, estado…" oninput="filterVend()">
+          </div>
+        </div>
+        <div class="filter-card">
+          <div class="filter-row">
+            <div class="fg"><label>Cartera</label><div class="sw"><select id="fv-cart" onchange="filterVend()"><option value="">Todas</option><option>ALOE</option><option>OMEGA</option><option>HERCULES</option><option>ROCK</option></select></div></div>
+            <div class="fg"><label>Estado negociación</label><div class="sw"><select id="fv-estado" onchange="filterVend()"><option value="">Todos</option><option>En proceso</option><option>Cash oferta</option><option>No colabora</option><option>Sin respuesta</option></select></div></div>
+            <div class="fg"><label>Agente</label><div class="sw"><select id="fv-agente" onchange="filterVend()"><option value="">Todos</option><option>Carlos Martínez</option><option>Ana López</option><option>Admin</option></select></div></div>
+            <div class="filter-div"></div>
+            <div class="filter-acts">
+              <button class="btn-search" onclick="filterVend()">Buscar</button>
+              <button class="btn-clear" onclick="clearVendFilters()">✕</button>
+            </div>
+          </div>
+        </div>
+        <div class="results-bar">
+          <div class="results-text">Mostrando <strong id="vend-count">5</strong> vendedores</div>
+        </div>
+        <div class="table-wrap">
+          <div class="t-head">
+            <div style="display:grid;grid-template-columns:2fr 100px 100px 120px 110px 120px 110px 36px;gap:8px;align-items:center;padding:10px 16px;">
+              <div class="thc">Propietario</div><div class="thc">Cartera</div><div class="thc">Activos</div><div class="thc">Agente</div><div class="thc">Contacto</div><div class="thc">Últ. contacto</div><div class="thc">Estado</div><div class="thc ns"></div>
+            </div>
+          </div>
+          <div id="vend-table-body"></div>
+        </div>
+      </div>
+    </div>
+    <!-- DETAIL VIEW -->
+    <div id="vend-detail" style="display:none;">
+      <div style="background:white;border-bottom:1px solid var(--border);padding:0 24px;height:50px;display:flex;align-items:center;gap:12px;flex-shrink:0;">
+        <button class="btn btn-back btn-sm" onclick="closeVendDetail()">← Vendedores</button>
+        <span style="font-size:0.9rem;font-weight:600;color:var(--navy);font-family:'Cormorant Garamond',serif;" id="vend-detail-title">Martín González Ruiz</span>
+        <span class="pill fp-nd" style="margin-left:4px;" id="vend-detail-estado">No colabora</span>
+      </div>
+      <div style="display:flex;height:calc(100vh - 58px - 50px);">
+        <!-- LEFT NAV -->
+        <div style="width:185px;min-width:185px;background:var(--navy);display:flex;flex-direction:column;padding:16px 0;">
+          <div class="vnav-item active" onclick="switchVendTab(0)"><span class="vnav-ico">👤</span><span class="vnav-lbl">Datos</span></div>
+          <div class="vnav-item" onclick="switchVendTab(1)"><span class="vnav-ico">📁</span><span class="vnav-lbl">Documentos</span></div>
+          <div class="vnav-item" onclick="switchVendTab(2)"><span class="vnav-ico">💬</span><span class="vnav-lbl">Conversación</span></div>
+        </div>
+        <!-- CONTENT -->
+        <div style="flex:1;overflow-y:auto;padding:26px 30px;background:var(--cream);">
+          <!-- TAB DATOS -->
+          <div class="vtab active" id="vtab-0">
+            <div class="two-col" style="margin-bottom:14px;">
+              <div class="sc">
+                <div class="sc-title">Datos personales</div>
+                <div class="dp-grid">
+                  <div class="dp"><div class="dl">Nombre completo</div><div class="dv">Martín González Ruiz</div></div>
+                  <div class="dp"><div class="dl">Teléfono</div><div class="dv">+34 612 444 888</div></div>
+                  <div class="dp"><div class="dl">Email</div><div class="dv">m.gonzalez@correo.es</div></div>
+                  <div class="dp"><div class="dl">Cartera</div><div class="dv">ALOE</div></div>
+                  <div class="dp"><div class="dl">Activo vinculado</div><div class="dv">ID 20257589 · Arriate</div></div>
+                  <div class="dp"><div class="dl">Estado</div><div class="dv" style="color:var(--muted);">No colabora</div></div>
+                </div>
+              </div>
+              <div class="sc">
+                <div class="sc-title">Agente asignado</div>
+                <div class="dp-grid">
+                  <div class="dp" style="grid-column:1/-1;"><div class="dl">Agente</div>
+                    <div style="display:flex;align-items:center;gap:10px;margin-top:4px;">
+                      <div style="width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#2563a8,#0d2a4a);display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;color:white;flex-shrink:0;">CM</div>
+                      <div><div style="font-weight:600;font-size:0.84rem;color:var(--navy);">Carlos Martínez</div><div style="font-size:0.7rem;color:var(--muted);">carlos.m@procrm.es</div></div>
+                    </div>
+                  </div>
+                  <div class="dp" style="grid-column:1/-1;"><div class="dl">Cambiar agente</div><select class="phase-sel" style="margin-top:4px;"><option>Carlos Martínez</option><option>Ana López</option><option>Admin</option></select></div>
+                </div>
+              </div>
+            </div>
+            <div class="sc">
+              <div class="sc-title">Notas del vendedor</div>
+              <div class="note-card"><div class="nc-hd"><span class="nc-author">Carlos Martínez</span><span class="nc-date">02 Mar 2026</span></div><div class="nc-text">Propietario contactado. No muestra interés en colaborar activamente. Pendiente llamada de seguimiento el 15 de marzo.</div></div>
+              <textarea style="width:100%;border:1.5px solid var(--border2);border-radius:7px;padding:9px 12px;font-family:'Outfit',sans-serif;font-size:0.82rem;min-height:76px;resize:vertical;outline:none;background:var(--cream2);margin-top:8px;" placeholder="Añadir nueva nota…"></textarea>
+              <div style="display:flex;justify-content:flex-end;margin-top:6px;"><button class="btn btn-gold btn-xs">💾 Guardar</button></div>
+            </div>
+          </div>
+          <!-- TAB DOCUMENTOS -->
+          <div class="vtab" id="vtab-1" style="display:none;">
+            <div class="sc">
+              <div class="sc-title">Documentos del vendedor / propietario</div>
+              <div class="doc-zone" onclick="alert('Seleccionar archivo')">
+                <div style="font-size:1.8rem;margin-bottom:7px;opacity:0.45;">📂</div>
+                <div style="font-size:0.83rem;color:var(--muted);"><strong>Arrastra archivos aquí</strong> o haz clic para seleccionar<br><span style="font-size:0.73rem;">PDF, Excel, imágenes — Máx. 50MB</span></div>
+              </div>
+              <div class="doc-list">
+                <div class="doc-item"><div class="doc-ico di-pdf">📄</div><div><div class="doc-name">DNI_MGonzalez.pdf</div><div class="doc-meta">Admin · 980 KB · 05 Ene 2026</div></div><button class="doc-dl">⬇ Descargar</button></div>
+                <div class="doc-item"><div class="doc-ico di-pdf">📄</div><div><div class="doc-name">Escritura_propiedad_20257589.pdf</div><div class="doc-meta">Carlos Martínez · 2.3 MB · 12 Ene 2026</div></div><button class="doc-dl">⬇ Descargar</button></div>
+                <div class="doc-item"><div class="doc-ico di-pdf">📄</div><div><div class="doc-name">Comunicacion_propietario_01Mar.pdf</div><div class="doc-meta">Admin · 145 KB · 01 Mar 2026</div></div><button class="doc-dl">⬇ Descargar</button></div>
+              </div>
+            </div>
+          </div>
+          <!-- TAB CONVERSACIÓN -->
+          <div class="vtab" id="vtab-2" style="display:none;">
+            <div class="chat-box">
+              <div class="chat-hd"><div class="chat-hd-title">💬 Conversación con Martín González</div></div>
+              <div class="msgs" style="max-height:340px;">
+                <div class="msg adm">Buenos días Martín, le contactamos en relación al inmueble en Arriate.<div class="msg-time">Carlos M. · 20 Feb, 10:00h</div></div>
+                <div class="msg cli">Recibido, ahora mismo no tengo interés en vender.<div class="msg-time">Martín G. · 20 Feb, 15:30h</div></div>
+                <div class="msg adm">De acuerdo, le mantendremos informado de las condiciones del mercado.<div class="msg-time">Carlos M. · 21 Feb, 09:15h</div></div>
+              </div>
+              <div class="chat-inp-row"><textarea class="chat-inp" rows="1" placeholder="Escribe un mensaje…"></textarea><button class="chat-send">Enviar</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PAGE: TAREAS ══ -->
+  <div id="page-tareas" class="page-view">
+    <div class="inner-page">
+      <div class="page-hd">
+        <div><div class="page-title">Tareas</div><div class="page-sub">Seguimiento de acciones pendientes</div></div>
+        <button class="btn btn-gold btn-sm">+ Nueva Tarea</button>
+      </div>
+      <div class="kpi-row">
+        <div class="kpi-card"><div class="kpi-val">12</div><div class="kpi-lbl">Pendientes</div><div class="kpi-delta" style="color:var(--red);">3 urgentes</div></div>
+        <div class="kpi-card"><div class="kpi-val">5</div><div class="kpi-lbl">En progreso</div></div>
+        <div class="kpi-card"><div class="kpi-val">28</div><div class="kpi-lbl">Completadas (mes)</div></div>
+        <div class="kpi-card"><div class="kpi-val">2</div><div class="kpi-lbl">Vencidas</div><div class="kpi-delta" style="color:var(--red);">Requieren atención</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="sc">
+          <div class="sc-title">Urgentes / Esta semana</div>
+          <div class="task-item"><div class="task-chk"></div><div><div class="task-title">Llamada de seguimiento propietario — Activo 20257589</div><div class="task-agent" style="font-size:0.7rem;color:var(--muted);margin-top:2px;">Carlos Martínez · Activo: Arriate, Málaga</div></div><span class="task-badge tb-urgent">Urgente</span><div class="task-date">06 Mar</div></div>
+          <div class="task-item"><div class="task-chk"></div><div><div class="task-title">Enviar documentación NDA a cliente Alejandro Castro</div><div class="task-agent" style="font-size:0.7rem;color:var(--muted);margin-top:2px;">Admin · Cliente: CLI-0060</div></div><span class="task-badge tb-urgent">Urgente</span><div class="task-date">07 Mar</div></div>
+          <div class="task-item"><div class="task-chk"></div><div><div class="task-title">Revisar tasación actualizada — Activo BROK00826</div><div class="task-agent" style="font-size:0.7rem;color:var(--muted);margin-top:2px;">Ana López · Activo: Ciudad Real</div></div><span class="task-badge tb-normal">Normal</span><div class="task-date">10 Mar</div></div>
+          <div class="task-item"><div class="task-chk"></div><div><div class="task-title">Solicitar nota simple actualizada — Activo UF40346</div><div class="task-agent" style="font-size:0.7rem;color:var(--muted);margin-top:2px;">Carlos Martínez · Activo: Puig-Reig</div></div><span class="task-badge tb-normal">Normal</span><div class="task-date">11 Mar</div></div>
+          <div class="task-item"><div class="task-chk"></div><div><div class="task-title">Preparar informe mensual de cartera para dirección</div><div class="task-agent" style="font-size:0.7rem;color:var(--muted);margin-top:2px;">Admin</div></div><span class="task-badge tb-low">Baja</span><div class="task-date">15 Mar</div></div>
+        </div>
+        <div class="sc">
+          <div class="sc-title">Completadas recientemente</div>
+          <div class="task-item"><div class="task-chk done"></div><div><div class="task-title done">Visita al activo 4374518 — Benalmádena</div><div class="task-agent" style="font-size:0.7rem;color:var(--muted);margin-top:2px;">Ana López · 28 Feb 2026</div></div><span class="task-badge tb-low">Completada</span></div>
+          <div class="task-item"><div class="task-chk done"></div><div><div class="task-title done">Envío de oferta formal a Juan Rodríguez</div><div class="task-agent" style="font-size:0.7rem;color:var(--muted);margin-top:2px;">Admin · 26 Feb 2026</div></div><span class="task-badge tb-low">Completada</span></div>
+          <div class="task-item"><div class="task-chk done"></div><div><div class="task-title done">Publicar activo 20257589 en plataforma</div><div class="task-agent" style="font-size:0.7rem;color:var(--muted);margin-top:2px;">Admin · 20 Feb 2026</div></div><span class="task-badge tb-low">Completada</span></div>
+          <div class="task-item"><div class="task-chk done"></div><div><div class="task-title done">Actualizar datos catastrales — BROK00792</div><div class="task-agent" style="font-size:0.7rem;color:var(--muted);margin-top:2px;">Carlos Martínez · 15 Feb 2026</div></div><span class="task-badge tb-low">Completada</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PAGE: INFORMES ══ -->
+  <div id="page-informes" class="page-view">
+    <div class="inner-page">
+      <div class="page-hd">
+        <div><div class="page-title">Informes</div><div class="page-sub">Análisis y métricas de la cartera</div></div>
+        <button class="btn btn-outline btn-sm">⬇ Exportar PDF</button>
+      </div>
+      <div class="kpi-row">
+        <div class="kpi-card"><div class="kpi-val">6</div><div class="kpi-lbl">Activos en cartera</div><div class="kpi-delta">4 proveedores</div></div>
+        <div class="kpi-card"><div class="kpi-val">576K€</div><div class="kpi-lbl">Valor total estimado</div><div class="kpi-delta">↑ +12% vs mes ant.</div></div>
+        <div class="kpi-card"><div class="kpi-val">3</div><div class="kpi-lbl">Activos publicados</div><div class="kpi-delta">3 suspendidos/seg.</div></div>
+        <div class="kpi-card"><div class="kpi-val">8</div><div class="kpi-lbl">Ofertas recibidas</div><div class="kpi-delta">↑ 3 este mes</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+        <div class="sc">
+          <div class="sc-title">Distribución por Cartera</div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px;">
+            <div><div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px;"><span style="font-weight:600;">ALOE</span><span style="color:var(--muted);">1 activo · 108.296 €</span></div><div style="height:7px;background:var(--border2);border-radius:4px;"><div style="height:100%;width:19%;background:var(--gold);border-radius:4px;"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px;"><span style="font-weight:600;">OMEGA</span><span style="color:var(--muted);">1 activo · 247.674 €</span></div><div style="height:7px;background:var(--border2);border-radius:4px;"><div style="height:100%;width:43%;background:var(--blue);border-radius:4px;"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px;"><span style="font-weight:600;">HERCULES</span><span style="color:var(--muted);">2 activos · 72.015 €</span></div><div style="height:7px;background:var(--border2);border-radius:4px;"><div style="height:100%;width:13%;background:var(--green);border-radius:4px;"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px;"><span style="font-weight:600;">ROCK</span><span style="color:var(--muted);">2 activos · 148.562 €</span></div><div style="height:7px;background:var(--border2);border-radius:4px;"><div style="height:100%;width:26%;background:var(--orange);border-radius:4px;"></div></div></div>
+          </div>
+        </div>
+        <div class="sc">
+          <div class="sc-title">Distribución por Tipología</div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px;">
+            <div><div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px;"><span style="font-weight:600;">Vivienda</span><span style="color:var(--muted);">4 activos</span></div><div style="height:7px;background:var(--border2);border-radius:4px;"><div style="height:100%;width:67%;background:var(--blue);border-radius:4px;"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px;"><span style="font-weight:600;">Parking</span><span style="color:var(--muted);">1 activo</span></div><div style="height:7px;background:var(--border2);border-radius:4px;"><div style="height:100%;width:17%;background:var(--muted);border-radius:4px;"></div></div></div>
+            <div><div style="display:flex;justify-content:space-between;font-size:0.8rem;margin-bottom:4px;"><span style="font-weight:600;">Trastero</span><span style="color:var(--muted);">1 activo</span></div><div style="height:7px;background:var(--border2);border-radius:4px;"><div style="height:100%;width:17%;background:var(--border);border-radius:4px;"></div></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="sc">
+        <div class="sc-title">Actividad reciente</div>
+        <table class="list-table" style="width:100%;">
+          <thead><tr><th>Fecha</th><th>Evento</th><th>Activo / Cliente</th><th>Agente</th></tr></thead>
+          <tbody>
+            <tr><td>03 Mar 2026</td><td>📋 Oferta presentada</td><td>20257589 — Juan Rodríguez</td><td>Admin</td></tr>
+            <tr><td>01 Mar 2026</td><td>🆕 Nuevo cliente registrado</td><td>Roberto Palacios (CLI-0055)</td><td>—</td></tr>
+            <tr><td>28 Feb 2026</td><td>📞 Contacto propietario</td><td>4374518 — Sofía Reina</td><td>Carlos Martínez</td></tr>
+            <tr><td>25 Feb 2026</td><td>✅ Activo publicado</td><td>4374518 — Benalmádena</td><td>Admin</td></tr>
+            <tr><td>20 Feb 2026</td><td>🔒 NDA firmada</td><td>María Luisa Fernández (CLI-0038)</td><td>Admin</td></tr>
+            <tr><td>15 Feb 2026</td><td>🏠 Visita realizada</td><td>20257589 — Ana López</td><td>Ana López</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PAGE: CONFIGURACIÓN ══ -->
+  <div id="page-config" class="page-view">
+    <div class="inner-page" style="max-width:800px;">
+      <div class="page-hd"><div><div class="page-title">Configuración</div><div class="page-sub">Ajustes de la plataforma y usuarios</div></div></div>
+      <div class="cfg-section">
+        <div class="cfg-title">Cuenta y perfil</div>
+        <div class="cfg-row"><div><div class="cfg-lbl">Nombre del administrador</div><div class="cfg-sub">Admin Principal</div></div><button class="btn btn-outline btn-xs">Editar</button></div>
+        <div class="cfg-row"><div><div class="cfg-lbl">Email</div><div class="cfg-sub"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="8eefeae3e7e0cefefce1edfce3a0ebfd">[email&#160;protected]</a></div></div><button class="btn btn-outline btn-xs">Cambiar</button></div>
+        <div class="cfg-row"><div><div class="cfg-lbl">Contraseña</div><div class="cfg-sub">Última modificación: 01 Ene 2026</div></div><button class="btn btn-outline btn-xs">Cambiar</button></div>
+      </div>
+      <div class="cfg-section">
+        <div class="cfg-title">Usuarios y roles</div>
+        <div class="cfg-row"><div><div class="cfg-lbl">Carlos Martínez</div><div class="cfg-sub">Agente · <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="fc9f9d8e90938fd291bc8c8e939f8e91d2998f">[email&#160;protected]</a></div></div><div style="display:flex;gap:8px;"><span class="pill fp-seg">Agente</span><button class="btn btn-outline btn-xs">Editar</button></div></div>
+        <div class="cfg-row"><div><div class="cfg-lbl">Ana López</div><div class="cfg-sub">Agente · <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="f9989798d795b9898b969a8b94d79c8a">[email&#160;protected]</a></div></div><div style="display:flex;gap:8px;"><span class="pill fp-seg">Agente</span><button class="btn btn-outline btn-xs">Editar</button></div></div>
+        <div class="cfg-row"><div><div class="cfg-lbl">Invitar nuevo usuario</div><div class="cfg-sub">Asignar rol y acceso personalizado</div></div><button class="btn btn-gold btn-xs">+ Invitar</button></div>
+      </div>
+      <div class="cfg-section">
+        <div class="cfg-title">Notificaciones</div>
+        <div class="cfg-row"><div><div class="cfg-lbl">Nuevas ofertas recibidas</div><div class="cfg-sub">Recibir email cuando un cliente presenta oferta</div></div><div class="cfg-tog on" onclick="this.classList.toggle('on')"></div></div>
+        <div class="cfg-row"><div><div class="cfg-lbl">Nuevos clientes registrados</div><div class="cfg-sub">Notificar al registrarse un nuevo cliente free</div></div><div class="cfg-tog on" onclick="this.classList.toggle('on')"></div></div>
+        <div class="cfg-row"><div><div class="cfg-lbl">Recordatorio de tareas</div><div class="cfg-sub">Avisar 24h antes del vencimiento</div></div><div class="cfg-tog on" onclick="this.classList.toggle('on')"></div></div>
+        <div class="cfg-row"><div><div class="cfg-lbl">Resumen semanal</div><div class="cfg-sub">Email los lunes con actividad de la semana</div></div><div class="cfg-tog" onclick="this.classList.toggle('on')"></div></div>
+      </div>
+      <div class="cfg-section">
+        <div class="cfg-title">Importación de datos</div>
+        <div class="cfg-row"><div><div class="cfg-lbl">Importar activos desde Excel</div><div class="cfg-sub">Estructura fija compatible con catastro y proveedores</div></div><button class="btn btn-gold btn-xs">⬆ Importar</button></div>
+        <div class="cfg-row"><div><div class="cfg-lbl">Exportar cartera completa</div><div class="cfg-sub">Descargar todos los activos en formato Excel</div></div><button class="btn btn-outline btn-xs">⬇ Exportar</button></div>
+        <div class="cfg-row"><div><div class="cfg-lbl">Última importación</div><div class="cfg-sub">28 Feb 2026 · 6 activos · Sin errores</div></div></div>
+      </div>
+      <div class="cfg-section">
+        <div class="cfg-title">Plataforma</div>
+        <div class="cfg-row"><div><div class="cfg-lbl">Modo mantenimiento</div><div class="cfg-sub">Ocultar la web pública temporalmente</div></div><div class="cfg-tog" onclick="this.classList.toggle('on')"></div></div>
+        <div class="cfg-row"><div><div class="cfg-lbl">Firma digital NDA</div><div class="cfg-sub">Requerir NDA antes de mostrar datos sensibles</div></div><div class="cfg-tog on" onclick="this.classList.toggle('on')"></div></div>
+        <div class="cfg-row"><div><div class="cfg-lbl">Versión del sistema</div><div class="cfg-sub">PropCRM v1.0.0 — Build 2026.03</div></div></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- main -->
+
+<!-- MODALS -->
+<div class="overlay" id="m-chat" onclick="if(event.target===this)closeModal('chat')">
+  <div class="modal" style="width:500px;max-height:78vh;display:flex;flex-direction:column;">
+    <div class="modal-hd"><div><div class="modal-title">💬 Consulta sobre el activo</div><div class="modal-sub">Historial de conversación</div></div><button class="modal-close" onclick="closeModal('chat')">✕</button></div>
+    <div class="msgs" style="flex:1;max-height:none;padding:16px 20px;">
+      <div class="msg cli">Hola, me gustaría saber el estado registral.<div class="msg-time">Juan R. · 27 Feb</div></div>
+      <div class="msg adm">Buenos días. El activo tiene cargas previas de 110.741 €.<div class="msg-time">Admin · 27 Feb</div></div>
+      <div class="msg cli">¿Cuál es el precio mínimo?<div class="msg-time">Juan R. · 28 Feb</div></div>
+      <div class="msg adm">A partir de 98.000 €. ¿Le interesa visita?<div class="msg-time">Admin · 28 Feb</div></div>
+    </div>
+    <div class="chat-inp-row" style="border-top:1px solid var(--border);">
+      <textarea class="chat-inp" rows="2" placeholder="Escribe tu mensaje…"></textarea>
+      <button class="chat-send">Enviar</button>
+    </div>
+  </div>
+</div>
+<div class="overlay" id="m-offer" onclick="if(event.target===this)closeModal('offer')">
+  <div class="modal" style="width:440px;">
+    <div class="modal-hd"><div><div class="modal-title">📋 Presentar Oferta</div></div><button class="modal-close" onclick="closeModal('offer')">✕</button></div>
+    <div class="modal-body">
+      <div class="mf"><label>Nombre</label><input type="text" placeholder="Tu nombre y apellidos"></div>
+      <div class="mf"><label>Importe (€)</label><input type="number" placeholder="ej. 95.000"></div>
+      <div class="mf"><label>Condiciones de pago</label><select><option>Contado</option><option>Financiado</option><option>Aplazado</option></select></div>
+      <div class="mf"><label>Comentarios</label><textarea placeholder="Condiciones especiales…"></textarea></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-outline btn-sm" onclick="closeModal('offer')">Cancelar</button><button class="btn btn-gold btn-sm" onclick="alert('Oferta enviada');closeModal('offer')">Enviar Oferta</button></div>
+  </div>
+</div>
+<div class="overlay" id="m-note-agent" onclick="if(event.target===this)closeModal('note-agent')">
+  <div class="modal" style="width:440px;">
+    <div class="modal-hd"><div class="modal-title">📝 Añadir nota</div><button class="modal-close" onclick="closeModal('note-agent')">✕</button></div>
+    <div class="modal-body">
+      <div class="mf"><label>Nota</label><textarea style="min-height:120px;" placeholder="Escribe tu anotación…"></textarea></div>
+      <div class="mf"><label>Visibilidad</label><select><option>Agentes y Administrador</option><option>Solo Administrador</option></select></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-outline btn-sm" onclick="closeModal('note-agent')">Cancelar</button><button class="btn btn-gold btn-sm" onclick="alert('Nota guardada');closeModal('note-agent')">💾 Guardar</button></div>
+  </div>
+</div>
+<div class="overlay" id="m-note-admin" onclick="if(event.target===this)closeModal('note-admin')">
+  <div class="modal" style="width:440px;">
+    <div class="modal-hd"><div class="modal-title">🔐 Nota privada</div><button class="modal-close" onclick="closeModal('note-admin')">✕</button></div>
+    <div class="modal-body"><div class="mf"><label>Nota privada</label><textarea style="min-height:120px;" placeholder="Solo visible para ti…"></textarea></div></div>
+    <div class="modal-foot"><button class="btn btn-outline btn-sm" onclick="closeModal('note-admin')">Cancelar</button><button class="btn btn-gold btn-sm" onclick="alert('Nota guardada');closeModal('note-admin')">💾 Guardar</button></div>
+  </div>
+</div>
+<div class="overlay" id="m-add-client" onclick="if(event.target===this)closeModal('add-client')">
+  <div class="modal" style="width:480px;">
+    <div class="modal-hd"><div><div class="modal-title">👥 Vincular cliente</div></div><button class="modal-close" onclick="closeModal('add-client')">✕</button></div>
+    <div class="modal-body">
+      <div class="mf"><label>Buscar cliente existente</label><input type="text" placeholder="Nombre, email o ID…"></div>
+      <div style="text-align:center;font-size:0.78rem;color:var(--muted);margin:8px 0;">— o crear nuevo —</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="mf"><label>Nombre</label><input type="text"></div>
+        <div class="mf"><label>Apellidos</label><input type="text"></div>
+        <div class="mf"><label>Teléfono</label><input type="tel"></div>
+        <div class="mf"><label>Email</label><input type="email"></div>
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-outline btn-sm" onclick="closeModal('add-client')">Cancelar</button><button class="btn btn-gold btn-sm" onclick="alert('Cliente vinculado');closeModal('add-client')">Vincular</button></div>
+  </div>
+</div>
+<div class="overlay" id="m-mail" onclick="if(event.target===this)closeModal('mail')">
+  <div class="modal" style="width:520px;">
+    <div class="modal-hd"><div><div class="modal-title">✉️ Correo al Propietario</div></div><button class="modal-close" onclick="closeModal('mail')">✕</button></div>
+    <div class="modal-body">
+      <div class="mf"><label>Para</label><input type="email" id="mail-to" readonly style="background:#f0ece0;color:#888;"></div>
+      <div class="mf"><label>Asunto</label><input type="text" id="mail-subj"></div>
+      <div class="mf"><label>Plantilla</label><select onchange="fillTpl(this.value)"><option value="">— Seleccionar —</option><option value="info">Solicitud información</option><option value="docs">Solicitud documentación</option><option value="visit">Solicitud visita</option></select></div>
+      <div class="mf"><label>Mensaje</label><textarea id="mail-body" style="min-height:150px;"></textarea></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-outline btn-sm" onclick="closeModal('mail')">Cancelar</button><button class="btn btn-gold btn-sm" onclick="alert('Correo enviado');closeModal('mail')">✉️ Enviar</button></div>
+  </div>
+</div>
+
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+// ── DATA ──
+const assets = [
+  {
+    id:'UF34938', cat:'—', prov:'Tarragona', pob:'Torredembarra', cp:'43830',
+    addr:'CALLE CAMI DE L ERA DEL 35 S-1 T2 TORREDEMBARRA',
+    tip:'Trastero', tipC:'tp-tras', fase:'Suspendido', faseC:'fp-sus', precio:null, fav:false, chk:false, sqm:null,
+    tvia:'CALLE', nvia:'CAMÍ DE L ERA DEL', num:'35', esc:'S-1', pla:'—', pta:'T2',
+    map:'https://maps.geoapify.com/v1/staticmap?center=lonlat:1.399,41.148&zoom=15&width=600&height=600&style=osm-bright&apiKey=f49f352595844e8e96f5222bc7370726',
+    catRef:'5764401CF6556D0029AH', clase:'URBANO', uso:'—', bien:'TRASTERO', supC:'—', supG:'—', coef:'—', ccaa:'Cataluña',
+    fullAddr:'CALLE CAMI DE L ERA DEL, 35, S-1 T2, TORREDEMBARRA',
+    desc:'Trastero en planta sótano. Sin datos adicionales disponibles.',
+    ownerName:'Sin datos', ownerTel:'—', ownerMail:'—',
+    adm:{pip:'—',lin:'—',cat:'—',car:'HERCULES',cli:'—',id1:'—',con:'—',aid:'UF34938',loans:'—',tcol:'—',scol:'—',ccaa:'CATALUÑA',prov:'TARRAGONA',city:'Torredembarra',zip:'43830',addr:'CALLE CAMI DE L ERA DEL 35',finca:'—',reg:'—',cref:'5764401CF6556D0029AH',ejud:'—',ejmap:'—',eneg:'—',ob:'—',sub:'—',deu:'—',cprev:'—',cpost:'—',dtot:'—',pest:'—',str:'—',liq:'—',avj:'—',mmap:'Torredembarra',buck:'—',lbuck:'—',smf:'—',rsub:'—',conn:'—',conn2:'—'},
+    pub:false
+  },
+  {
+    id:'UF40346', cat:'NPL', prov:'Barcelona', pob:'Puig-Reig', cp:'08692',
+    addr:"CALLE JARDI-COLONIA PRAT 1 S-1 1ª PUIG-REIG",
+    tip:'Parking', tipC:'tp-park', fase:'Publicado', faseC:'fp-pub', precio:72015, fav:false, chk:false, sqm:null,
+    tvia:'CALLE', nvia:'JARDÍ-COLONIA PRAT', num:'1', esc:'—', pla:'S-1', pta:'1ª',
+    map:'https://maps.geoapify.com/v1/staticmap?center=lonlat:1.887,42.051&zoom=15&width=600&height=600&style=osm-bright&apiKey=f49f352595844e8e96f5222bc7370726',
+    catRef:'7992002DG0479S0001KP', clase:'URBANO', uso:'—', bien:'PARKING', supC:'—', supG:'—', coef:'—', ccaa:'Cataluña',
+    fullAddr:'CALLE JARDÍ-COLONIA PRAT, 1, S-1 1ª, PUIG-REIG',
+    desc:'Parking en planta sótano. Fase demanda presentada.',
+    ownerName:'Laura Soler Camps', ownerTel:'+34 934 221 890', ownerMail:'l.soler@email.es',
+    adm:{pip:'—',lin:'—',cat:'NPL',car:'HERCULES',cli:'—',id1:'—',con:'—',aid:'UF40346',loans:'1',tcol:'Residential',scol:'Garage',ccaa:'CATALUÑA',prov:'BARCELONA',city:'Puig-Reig',zip:'08692',addr:'CALLE JARDI-COLONIA PRAT 1',finca:'—',reg:'—',cref:'7992002DG0479S0001KP',ejud:'Demanda Presentada',ejmap:'Fase Avanzada',eneg:'En proceso',ob:'—',sub:'—',deu:'72.015 €',cprev:'—',cpost:'—',dtot:'72.015 €',pest:'60.000 €',str:'—',liq:'—',avj:'—',mmap:'Puig-Reig',buck:'—',lbuck:'—',smf:'—',rsub:'—',conn:'—',conn2:'—'},
+    pub:true
+  },
+  {
+    id:'20257589', cat:'NPL', prov:'Málaga', pob:'Arriate', cp:'29350',
+    addr:'CL LUIS BUÑUEL 1 Es:1 Pl:00 Pt:01',
+    tip:'Vivienda', tipC:'tp-viv', fase:'Publicado', faseC:'fp-pub', precio:108296, fav:true, chk:false, sqm:134,
+    tvia:'CALLE', nvia:'LUIS BUÑUEL', num:'1', esc:'Es:1', pla:'Pl:00', pta:'Pt:01',
+    map:'https://maps.geoapify.com/v1/staticmap?center=lonlat:-5.179,36.807&zoom=15&width=600&height=600&style=osm-bright&apiKey=f49f352595844e8e96f5222bc7370726',
+    catRef:'9247125UF0794N0001GZ', clase:'URBANO', uso:'Residencial', bien:'VIVIENDA UNIFAMILIAR', supC:'134 m²', supG:'97 m²', coef:'100%', ccaa:'Andalucía',
+    fullAddr:'CL LUIS BUÑUEL 1, Es:1, Pl:00, Pt:01, 29350 ARRIATE',
+    desc:'VIVIENDA - 67 m² (VIVIENDA UNIFAMILIAR) · ALMACEN - 67 m² (ANEJOS DE VIVIENDA Y LOCALES EN ESTRUCTURA)',
+    ownerName:'Martín González Ruiz', ownerTel:'+34 612 444 888', ownerMail:'m.gonzalez@correo.es',
+    adm:{pip:'1459',lin:'VI_1',cat:'NPL',car:'ALOE',cli:'CES',id1:'ALO_366',con:'1090500021772',aid:'20257589',loans:'1',tcol:'Residential',scol:'Flat',ccaa:'ANDALUCIA',prov:'MALAGA',city:'Arriate',zip:'29350',addr:'CL LUIS BUÑUEL 1 Es:1 Pl:00 Pt:01',finca:'2590',reg:'1',cref:'9247125UF0794N0001GZ',ejud:'HIPOTECARIO-300_Subasta/Solicitada fecha',ejmap:'Fase Avanzada',eneg:'Contactado no colabora',ob:'73.896 €',sub:'110.741 €',deu:'108.296 €',cprev:'0 €',cpost:'52.718 €',dtot:'108.296 €',pest:'35.698 €',str:'FRC',liq:'Iliquido',avj:'1',mmap:'Arriate',buck:'5',lbuck:'LOW PRIORITY',smf:'COLLATERAL',rsub:'0',conn:'01090500021772-0020257589',conn2:'ALO_366-01090500021772-0020257589'},
+    pub:true
+  },
+  {
+    id:'4374518', cat:'NPL', prov:'Málaga', pob:'Benalmádena', cp:'29631',
+    addr:'DE LA LIBERTAD A 18 29631 BENALMÁDENA',
+    tip:'Vivienda', tipC:'tp-viv', fase:'Publicado', faseC:'fp-pub', precio:247674, fav:true, chk:false, sqm:92,
+    tvia:'CALLE', nvia:'DE LA LIBERTAD', num:'18', esc:'—', pla:'—', pta:'A',
+    map:'https://maps.geoapify.com/v1/staticmap?center=lonlat:-4.517,36.598&zoom=15&width=600&height=600&style=osm-bright&apiKey=f49f352595844e8e96f5222bc7370726',
+    catRef:'000100100ED29C0001GH', clase:'URBANO', uso:'Residencial', bien:'VIVIENDA UNIFAMILIAR', supC:'92 m²', supG:'143 m²', coef:'100%', ccaa:'Andalucía',
+    fullAddr:'DE LA LIBERTAD A 18, 29631 BENALMÁDENA',
+    desc:'VIVIENDA - 92 m² (VIVIENDA UNIFAMILIAR). Alta liquidez. No judicializado.',
+    ownerName:'Sofía Reina Morales', ownerTel:'+34 689 100 234', ownerMail:'s.reina@gmail.com',
+    adm:{pip:'1502',lin:'VI_2',cat:'NPL',car:'OMEGA',cli:'OMG',id1:'OMG_211',con:'1090500034821',aid:'4374518',loans:'1',tcol:'Residential',scol:'Flat',ccaa:'ANDALUCIA',prov:'MALAGA',city:'Benalmádena',zip:'29631',addr:'DE LA LIBERTAD A 18',finca:'8821',reg:'3',cref:'000100100ED29C0001GH',ejud:'No judicializado',ejmap:'Sin proceso',eneg:'Cash Pendiente Oferta',ob:'210.000 €',sub:'—',deu:'247.674 €',cprev:'—',cpost:'—',dtot:'247.674 €',pest:'185.000 €',str:'FRC',liq:'Muy Líquido',avj:'—',mmap:'Benalmádena',buck:'1',lbuck:'HIGH PRIORITY',smf:'COLLATERAL',rsub:'—',conn:'01090500034821-0004374518',conn2:'OMG_211-01090500034821-0004374518'},
+    pub:true
+  },
+  {
+    id:'BROK00792', cat:'—', prov:'Granada', pob:'Granada', cp:'18119',
+    addr:'REAL DE BEZNAR 18 18119 GRANADA',
+    tip:'Vivienda', tipC:'tp-viv', fase:'Suspendido', faseC:'fp-sus', precio:50740, fav:false, chk:false, sqm:156,
+    tvia:'CALLE', nvia:'REAL DE BEZNAR', num:'18', esc:'—', pla:'—', pta:'—',
+    map:'https://maps.geoapify.com/v1/staticmap?center=lonlat:-3.702,37.176&zoom=15&width=600&height=600&style=osm-bright&apiKey=f49f352595844e8e96f5222bc7370726',
+    catRef:'000100100XG66F0001GP', clase:'URBANO', uso:'Residencial', bien:'VIVIENDA UNIFAMILIAR', supC:'80 m²', supG:'80 m²', coef:'100%', ccaa:'Andalucía',
+    fullAddr:'CALLE REAL DE BEZNAR 18, 18119 GRANADA',
+    desc:'VIVIENDA - 80 m² (VIVIENDA UNIFAMILIAR). Pendiente fase legal.',
+    ownerName:'Pedro Alarcón Vega', ownerTel:'+34 650 333 111', ownerMail:'p.alarcon@hotmail.com',
+    adm:{pip:'—',lin:'—',cat:'—',car:'ROCK',cli:'—',id1:'—',con:'—',aid:'BROK00792',loans:'—',tcol:'Residential',scol:'House',ccaa:'ANDALUCIA',prov:'GRANADA',city:'Granada',zip:'18119',addr:'REAL DE BEZNAR 18',finca:'—',reg:'—',cref:'000100100XG66F0001GP',ejud:'Pendiente',ejmap:'Pendiente',eneg:'Pendiente',ob:'—',sub:'—',deu:'50.740 €',cprev:'—',cpost:'—',dtot:'50.740 €',pest:'—',str:'—',liq:'—',avj:'—',mmap:'Granada',buck:'—',lbuck:'—',smf:'—',rsub:'—',conn:'—',conn2:'—'},
+    pub:false
+  },
+  {
+    id:'BROK00826', cat:'—', prov:'Ciudad Real', pob:'Ciudad Real', cp:'13040',
+    addr:'CALLE REAL 15 13040 CIUDAD REAL',
+    tip:'Vivienda', tipC:'tp-viv', fase:'Suspendido', faseC:'fp-sus', precio:97822, fav:false, chk:false, sqm:231,
+    tvia:'CALLE', nvia:'REAL', num:'15', esc:'—', pla:'—', pta:'—',
+    map:'https://maps.geoapify.com/v1/staticmap?center=lonlat:-3.929,38.986&zoom=15&width=600&height=600&style=osm-bright&apiKey=f49f352595844e8e96f5222bc7370726',
+    catRef:'2212305VJ2321S0001ZR', clase:'URBANO', uso:'Residencial', bien:'VIVIENDA UNIFAMILIAR', supC:'231 m²', supG:'—', coef:'100%', ccaa:'Castilla-La Mancha',
+    fullAddr:'CALLE REAL 15, 13040 CIUDAD REAL',
+    desc:'VIVIENDA - 231 m² (VIVIENDA UNIFAMILIAR). Fase subasta convocatoria.',
+    ownerName:'Isabel Fuentes Díaz', ownerTel:'+34 670 888 456', ownerMail:'i.fuentes@correo.com',
+    adm:{pip:'—',lin:'—',cat:'—',car:'ROCK',cli:'—',id1:'—',con:'—',aid:'BROK00826',loans:'—',tcol:'Residential',scol:'House',ccaa:'CASTILLA-LA MANCHA',prov:'CIUDAD REAL',city:'Ciudad Real',zip:'13040',addr:'CALLE REAL 15',finca:'—',reg:'—',cref:'2212305VJ2321S0001ZR',ejud:'Subasta Convocatoria',ejmap:'Fase Avanzada',eneg:'En proceso',ob:'—',sub:'—',deu:'97.822 €',cprev:'—',cpost:'—',dtot:'97.822 €',pest:'—',str:'—',liq:'—',avj:'—',mmap:'Ciudad Real',buck:'—',lbuck:'—',smf:'—',rsub:'—',conn:'—',conn2:'—'},
+    pub:true
+  }
+];
+
+let filtered=[...assets], sortCol='prov', sortDir=1, favOnly=false;
+const fmt=n=>n?n.toLocaleString('es-ES')+' €':'—';
+const fmtM=n=>n?n+' m²':'—';
+
+function renderTable(){
+  const body=document.getElementById('table-body');
+  if(!filtered.length){body.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted);font-size:0.86rem;">No se encontraron activos.</div>';upd();return;}
+  body.innerHTML=filtered.map(a=>`
+    <div class="t-row" data-id="${a.id}">
+      <div class="t-cols">
+        <div class="t-chk${a.chk?' on':''}" onclick="toggleChk(event,'${a.id}')"></div>
+        <div class="t-fav${a.fav?' on':''}" onclick="toggleFav(event,'${a.id}')">⭐</div>
+        <div class="tc">${a.cat}</div>
+        <div class="tc">${a.prov}</div>
+        <div class="tc">${a.pob}</div>
+        <div class="tc addr">${a.addr}</div>
+        <div class="tc cp">${a.cp}</div>
+        <div class="tc sqm">${fmtM(a.sqm)}</div>
+        <div class="tc"><span class="pill ${a.tipC}">${a.tip}</span></div>
+        <div class="tc"><span class="pill ${a.faseC}">${a.fase}</span></div>
+        <div class="tc price">${fmt(a.precio)}</div>
+        <div class="t-arr">›</div>
+      </div>
+    </div>`).join('');
+  body.querySelectorAll('.t-row').forEach(r=>r.addEventListener('click',e=>{
+    if(e.target.classList.contains('t-chk')||e.target.classList.contains('t-fav'))return;
+    openAsset(r.dataset.id);
+  }));
+  upd();
+}
+
+function upd(){
+  const n=filtered.length;
+  document.getElementById('shown-count').textContent=n;
+  const all=document.getElementById('chk-all');
+  if(all)all.classList.toggle('on',n>0&&filtered.every(a=>a.chk));
+}
+
+function toggleChk(e,id){e.stopPropagation();const a=assets.find(x=>x.id===id);if(a){a.chk=!a.chk;renderTable();}}
+function toggleFav(e,id){e.stopPropagation();const a=assets.find(x=>x.id===id);if(a){a.fav=!a.fav;if(favOnly)applyFilters();else renderTable();}}
+function toggleChkAll(){const all=filtered.every(a=>a.chk);filtered.forEach(a=>a.chk=!all);renderTable();}
+function toggleFavFilter(){favOnly=!favOnly;const t=document.getElementById('fav-tog');t.classList.toggle('on',favOnly);t.querySelector('.fav-lbl').textContent=favOnly?'Solo favoritos':'Todos';applyFilters();}
+
+function applyFilters(){
+  const q=(document.getElementById('q').value||'').toLowerCase().trim();
+  const cat=document.getElementById('f-cat').value;
+  const prov=document.getElementById('f-prov').value;
+  const pob=document.getElementById('f-pob').value;
+  const tipo=document.getElementById('f-tipo').value;
+  const fase=document.getElementById('f-fase').value;
+  filtered=assets.filter(a=>{
+    if(cat&&a.cat!==cat)return false;
+    if(prov&&a.prov!==prov)return false;
+    if(pob&&a.pob!==pob)return false;
+    if(tipo&&a.tip!==tipo)return false;
+    if(fase&&a.fase!==fase)return false;
+    if(favOnly&&!a.fav)return false;
+    if(q){const blob=[a.id,a.cat,a.prov,a.pob,a.addr,a.tip,a.fase,a.cp,a.adm.car,a.catRef||'',String(a.precio||''),String(a.sqm||'')].join(' ').toLowerCase();if(!blob.includes(q))return false;}
+    return true;
+  });
+  doSort();renderTable();
+renderCompTable();
+renderVendTable();
+}
+
+function clearFilters(){document.getElementById('q').value='';['f-cat','f-prov','f-pob','f-tipo','f-fase'].forEach(id=>document.getElementById(id).value='');if(favOnly)toggleFavFilter();else{filtered=[...assets];doSort();renderTable();
+renderCompTable();
+renderVendTable();}}
+
+function sortBy(col,el){
+  if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=1;}
+  document.querySelectorAll('.sort-pill').forEach(p=>{p.classList.toggle('active',p.dataset.col===col);if(p.querySelector('span'))p.querySelector('span').textContent=p.dataset.col===col?(sortDir===1?'↑':'↓'):'↕';});
+  document.querySelectorAll('.thc').forEach(c=>c.classList.remove('sorted'));
+  if(el&&el.classList.contains('thc'))el.classList.add('sorted');
+  doSort();renderTable();
+renderCompTable();
+renderVendTable();
+}
+function doSort(){filtered.sort((a,b)=>{let va=a[sortCol],vb=b[sortCol];if(va===null||va===undefined)va=sortDir===1?Infinity:'zzz';if(vb===null||vb===undefined)vb=sortDir===1?Infinity:'zzz';if(typeof va==='string')return va.localeCompare(vb)*sortDir;return(va-vb)*sortDir;});}
+
+// ── ASSET DETAIL ──
+function openAsset(id){
+  const a=assets.find(x=>x.id===id);if(!a)return;
+  // topbar
+  document.getElementById('at-cat').textContent=a.cat&&a.cat!=='—'?a.cat:'Activo';
+  document.getElementById('at-addr').textContent=a.addr+' · '+a.pob+', '+a.prov;
+  setPub(a.pub);
+  // tab 0
+  document.getElementById('asset-map').src=a.map;
+  document.getElementById('c-ref').textContent=a.catRef||'—';
+  document.getElementById('c-clase').textContent=a.clase||'—';
+  document.getElementById('c-uso').textContent=a.uso||'—';
+  document.getElementById('c-bien').textContent=a.bien||'—';
+  document.getElementById('c-supc').textContent=a.supC||'—';
+  document.getElementById('c-supg').textContent=a.supG||'—';
+  document.getElementById('c-age').textContent=a.age||'—';
+  document.getElementById('c-coef').textContent=a.coef||'—';
+  document.getElementById('c-tvia').textContent=a.tvia||'—';
+  document.getElementById('c-nvia').textContent=a.nvia||'—';
+  document.getElementById('c-num').textContent=a.num||'—';
+  document.getElementById('c-esc').textContent=a.esc||'—';
+  document.getElementById('c-pla').textContent=a.pla||'—';
+  document.getElementById('c-pta').textContent=a.pta||'—';
+  document.getElementById('c-mun').textContent=a.pob;
+  document.getElementById('c-prov').textContent=a.prov;
+  document.getElementById('c-cp').textContent=a.cp||'—';
+  document.getElementById('c-ccaa').textContent=a.ccaa||'—';
+  document.getElementById('c-addr').textContent=a.fullAddr||'—';
+  document.getElementById('c-desc').textContent=a.desc||'—';
+  document.getElementById('c-price').textContent=fmt(a.precio);
+  // tab 2 agente
+  document.getElementById('ag-cat').textContent=a.cat||'—';
+  document.getElementById('ag-fjud').textContent=a.adm.ejmap||'—';
+  document.getElementById('ag-deu').textContent=a.adm.deu||'—';
+  // tab 4 admin - owner
+  document.getElementById('ow-name').textContent=a.ownerName;
+  document.getElementById('ow-tel').textContent=a.ownerTel;
+  document.getElementById('ow-mail').textContent=a.ownerMail;
+  document.getElementById('mail-to').value=a.ownerMail;
+  document.getElementById('mail-subj').value='Solicitud de información — Activo '+a.id;
+  // tab 4 admin - all fields
+  const d=a.adm;
+  ['pip','lin','cat','car','cli','id1','con','aid','loans','tcol','scol','ccaa','prov','city','zip','finca','reg','cref','ejud','ejmap','eneg','ob','sub','deu','cprev','cpost','dtot','pest','str','liq','avj','mmap','buck','lbuck','smf','rsub','conn','conn2'].forEach(k=>{
+    const el=document.getElementById('adm-'+k);if(el)el.textContent=d[k]||'—';
+  });
+  document.getElementById('adm-addr').textContent=d.addr||'—';
+  // sync pub toggles
+  const t2=document.getElementById('pub-tog2'),l2=document.getElementById('pub-lbl2');
+  if(t2){t2.classList.toggle('on',a.pub);l2.textContent=a.pub?'● Publicado':'● Suspendido';l2.className='pub-label '+(a.pub?'pub':'sus');}
+  // global topbar
+  document.getElementById('tb-title').textContent=a.pob+', '+a.prov;
+  document.getElementById('tb-count').textContent=a.addr;
+  document.getElementById('view-search').style.display='none';
+  const va=document.getElementById('view-asset');
+  va.style.display='flex';va.style.flexDirection='column';
+  document.getElementById('btn-back').style.display='flex';
+  document.getElementById('btn-nuevo').style.display='none';
+  switchTab(0);
+}
+
+function showSearch(){
+  document.getElementById('view-asset').style.display='none';
+  document.getElementById('view-search').style.display='block';
+  document.getElementById('btn-back').style.display='none';
+  document.getElementById('btn-nuevo').style.display='block';
+  document.getElementById('tb-title').textContent='Propiedades';
+  document.getElementById('tb-count').textContent=filtered.length+' activos';
+}
+
+function setPub(on){
+  const tog=document.getElementById('pub-tog'),lbl=document.getElementById('pub-lbl');
+  tog.classList.toggle('on',on);lbl.textContent=on?'● Publicado':'● Suspendido';lbl.className='pub-label '+(on?'pub':'sus');
+  const t2=document.getElementById('pub-tog2'),l2=document.getElementById('pub-lbl2');
+  if(t2){t2.classList.toggle('on',on);l2.textContent=on?'● Publicado':'● Suspendido';l2.className='pub-label '+(on?'pub':'sus');}
+}
+function togglePub(){setPub(!document.getElementById('pub-tog').classList.contains('on'));}
+function togglePubSync(){setPub(!document.getElementById('pub-tog2').classList.contains('on'));}
+
+function switchTab(i){
+  // Use explicit IDs — no querySelectorAll scope issues
+  ['tab-0','tab-1','tab-2','tab-3','tab-4'].forEach((id,j)=>{
+    const el=document.getElementById(id);
+    if(el){ el.style.display=(j===i)?'block':'none'; }
+  });
+  document.querySelectorAll('#view-asset .vnav-item').forEach((t,j)=>t.classList.toggle('active',j===i));
+}
+
+// DOC SUBTABS
+function switchDocTab(i){
+  document.querySelectorAll('.doc-subtab').forEach((t,j)=>{
+    t.classList.toggle('active',j===i);
+    t.style.color=j===i?'var(--gold)':'var(--muted)';
+    t.style.borderBottomColor=j===i?'var(--gold)':'transparent';
+  });
+  document.getElementById('doc-sub-0').style.display=i===0?'block':'none';
+  document.getElementById('doc-sub-1').style.display=i===1?'block':'none';
+}
+
+// PAGE NAVIGATION
+function showPage(name,el){
+  document.querySelectorAll('.page-view').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));
+  if(el)el.classList.add('active');
+  const titles={activos:'Propiedades',compradores:'Compradores',vendedores:'Vendedores',tareas:'Tareas',informes:'Informes',config:'Configuración'};
+  document.getElementById('tb-title').textContent=titles[name]||name;
+  const counts={activos:assets.length+' activos',compradores:'24 compradores',vendedores:'18 vendedores',tareas:'12 pendientes',informes:'Mar 2026',config:''};
+  document.getElementById('tb-count').textContent=counts[name]||'';
+  document.getElementById('btn-back').style.display='none';
+  document.getElementById('btn-nuevo').style.display=name==='activos'?'block':'none';
+  if(name==='activos'){document.getElementById('view-search').style.display='block';document.getElementById('view-asset').style.display='none';}
+}
+
+// MODALS
+function openModal(k){document.getElementById('m-'+k).classList.add('open');}
+function closeModal(k){document.getElementById('m-'+k).classList.remove('open');}
+function fillTpl(v){
+  const T={info:'Estimado/a propietario/a,\n\nNos gustaría obtener información sobre el estado del inmueble.\n\nUn cordial saludo,\nAdministrador',docs:'Estimado/a propietario/a,\n\nLe solicitamos la siguiente documentación:\n- Nota simple registral\n- Últimos recibos del IBI\n- Certificado de deudas\n\nGracias.\n\nAdministrador',visit:'Estimado/a propietario/a,\n\nNos gustaría concertar una visita.\n\nUn cordial saludo,\nAdministrador'};
+  if(T[v])document.getElementById('mail-body').value=T[v];
+}
+
+
+// ── COMPRADORES DATA ──
+const compradores = [
+  {id:'CLI-0041',nombre:'Juan Rodríguez García',   ini:'JR',col:'#2563a8,#0d2a4a',tipo:'Privado',agente:'Carlos Martínez',email:'j.rodriguez@email.com',   tel:'+34 612 345 678',intereses:'Residencial, Andalucía',  presupuesto:'130.000 €',activos:'3',actividad:'28 Feb 2026',estado:'Seguimiento',estadoC:'fp-seg',nda:'Firmada'},
+  {id:'CLI-0038',nombre:'María Luisa Fernández Soto',ini:'ML',col:'#2a8c5e,#0d3a22',tipo:'Privado',agente:'Ana López',     email:'mluisa@empresa.es',         tel:'+34 698 765 432',intereses:'Inversión, Costa',       presupuesto:'280.000 €',activos:'2',actividad:'15 Feb 2026',estado:'Contactada',estadoC:'fp-pub',nda:'Firmada'},
+  {id:'CLI-0055',nombre:'Roberto Palacios Vega',   ini:'RP',col:'#d4762a,#6a3510',tipo:'Free',   agente:'Admin',          email:'roberto.p@gmail.com',        tel:'+34 633 211 987',intereses:'Primera vivienda',       presupuesto:'120.000 €',activos:'1',actividad:'01 Mar 2026',estado:'Nuevo',estadoC:'fp-nd',nda:'Pendiente'},
+  {id:'CLI-0060',nombre:'Alejandro Castro Mora',   ini:'AC',col:'#6a5acd,#2d1b69',tipo:'Privado',agente:'Admin',          email:'a.castro@fondoinversor.com', tel:'+34 655 100 200',intereses:'Cartera NPL, nacional',  presupuesto:'500.000 €',activos:'7',actividad:'03 Mar 2026',estado:'Negociación',estadoC:'fp-res',nda:'Firmada'},
+  {id:'CLI-0033',nombre:'Beatriz Vargas Iglesias', ini:'BV',col:'#c0392b,#5a0f0f',tipo:'Privado',agente:'Carlos Martínez',email:'b.vargas@patrimonial.es',    tel:'+34 610 444 555',intereses:'Residencial, Cataluña', presupuesto:'200.000 €',activos:'2',actividad:'22 Feb 2026',estado:'Oferta enviada',estadoC:'fp-pub',nda:'Firmada'},
+];
+
+let filteredComp = [...compradores];
+
+function renderCompTable(){
+  const body = document.getElementById('comp-table-body');
+  if(!body) return;
+  if(!filteredComp.length){body.innerHTML='<div style="padding:36px;text-align:center;color:var(--muted);font-size:0.86rem;">No se encontraron compradores.</div>';document.getElementById('comp-count').textContent='0';return;}
+  body.innerHTML = filteredComp.map(p=>`
+    <div style="display:grid;grid-template-columns:2fr 80px 130px 110px 110px 120px 110px 80px 36px;gap:8px;align-items:center;padding:0 16px;height:52px;border-bottom:1px solid var(--border2);cursor:pointer;transition:background .13s;" onmouseenter="this.style.background='rgba(184,147,58,0.04)'" onmouseleave="this.style.background=''" onclick="openCompDetail('${p.id}')">
+      <div style="display:flex;align-items:center;gap:9px;overflow:hidden;">
+        <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,${p.col});display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:700;color:white;flex-shrink:0;">${p.ini}</div>
+        <div style="overflow:hidden;"><div style="font-weight:600;font-size:0.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.nombre}</div><div style="font-size:0.69rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.email}</div></div>
+      </div>
+      <div><span class="pill ${p.tipo==='Privado'?'fp-seg':'fp-nd'}">${p.tipo}</span></div>
+      <div style="font-size:0.8rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.agente}</div>
+      <div style="font-size:0.79rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.intereses}</div>
+      <div style="font-size:0.82rem;font-weight:600;color:var(--gold);">${p.presupuesto}</div>
+      <div style="font-size:0.78rem;color:var(--muted);">${p.actividad}</div>
+      <div><span class="pill ${p.estadoC}">${p.estado}</span></div>
+      <div><span class="pill ${p.nda==='Firmada'?'fp-pub':'fp-nd'}" style="font-size:0.62rem;">${p.nda}</span></div>
+      <div style="color:var(--border);text-align:right;">›</div>
+    </div>`).join('');
+  document.getElementById('comp-count').textContent = filteredComp.length;
+}
+
+function filterComp(){
+  const q=(document.getElementById('q-comp').value||'').toLowerCase();
+  const tipo=document.getElementById('fc-tipo').value;
+  const estado=document.getElementById('fc-estado').value;
+  const agente=document.getElementById('fc-agente').value;
+  const nda=document.getElementById('fc-nda').value;
+  filteredComp=compradores.filter(p=>{
+    if(tipo&&p.tipo!==tipo)return false;
+    if(estado&&p.estado!==estado)return false;
+    if(agente&&p.agente!==agente)return false;
+    if(nda&&p.nda!==nda)return false;
+    if(q){const blob=[p.nombre,p.email,p.tel,p.agente,p.estado,p.intereses].join(' ').toLowerCase();if(!blob.includes(q))return false;}
+    return true;
+  });
+  renderCompTable();
+}
+function clearCompFilters(){document.getElementById('q-comp').value='';['fc-tipo','fc-estado','fc-agente','fc-nda'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});filteredComp=[...compradores];renderCompTable();}
+
+function openCompDetail(id){
+  document.getElementById('comp-list').style.display='none';
+  document.getElementById('comp-detail').style.display='block';
+  const p=compradores.find(x=>x.id===id);
+  if(p){document.getElementById('comp-detail-title').textContent=p.nombre;document.getElementById('comp-detail-estado').textContent=p.estado;document.getElementById('comp-detail-estado').className='pill '+p.estadoC;}
+  switchCompTab(0);
+}
+function closeCompDetail(){document.getElementById('comp-detail').style.display='none';document.getElementById('comp-list').style.display='block';}
+function switchCompTab(i){
+  ['ctab-0','ctab-1','ctab-2'].forEach((id,j)=>{const el=document.getElementById(id);if(el)el.style.display=(j===i)?'block':'none';});
+  document.querySelectorAll('#comp-detail .vnav-item').forEach((t,j)=>t.classList.toggle('active',j===i));
+}
+
+// ── VENDEDORES DATA ──
+const vendedores = [
+  {id:'VEND-001',nombre:'Martín González Ruiz',   ini:'MG',col:'#2563a8,#0d2a4a',cartera:'ALOE',   activo:'20257589 · Arriate',   agente:'Carlos Martínez',tel:'+34 612 444 888',email:'m.gonzalez@correo.es', ultimo:'02 Mar 2026',estado:'No colabora',estadoC:'fp-nd'},
+  {id:'VEND-002',nombre:'Sofía Reina Morales',    ini:'SR',col:'#2a8c5e,#0d3a22',cartera:'OMEGA',  activo:'4374518 · Benalmádena',agente:'Ana López',      tel:'+34 689 100 234',email:'s.reina@gmail.com',    ultimo:'28 Feb 2026',estado:'Cash oferta',estadoC:'fp-pub'},
+  {id:'VEND-003',nombre:'Laura Soler Camps',      ini:'LS',col:'#d4762a,#6a3510',cartera:'HERCULES',activo:'UF40346 · Puig-Reig', agente:'Carlos Martínez',tel:'+34 934 221 890',email:'l.soler@email.es',     ultimo:'20 Feb 2026',estado:'En proceso',estadoC:'fp-seg'},
+  {id:'VEND-004',nombre:'Pedro Alarcón Vega',     ini:'PA',col:'#7a94a8,#2d4a5a',cartera:'ROCK',   activo:'BROK00792 · Granada',  agente:'Ana López',      tel:'+34 650 333 111',email:'p.alarcon@hotmail.com',ultimo:'05 Feb 2026',estado:'Sin respuesta',estadoC:'fp-nd'},
+  {id:'VEND-005',nombre:'Isabel Fuentes Díaz',    ini:'IF',col:'#c0392b,#5a0f0f',cartera:'ROCK',   activo:'BROK00826 · C. Real',  agente:'Carlos Martínez',tel:'+34 670 888 456',email:'i.fuentes@correo.com', ultimo:'01 Mar 2026',estado:'En proceso',estadoC:'fp-seg'},
+];
+
+let filteredVend = [...vendedores];
+
+function renderVendTable(){
+  const body = document.getElementById('vend-table-body');
+  if(!body) return;
+  if(!filteredVend.length){body.innerHTML='<div style="padding:36px;text-align:center;color:var(--muted);font-size:0.86rem;">No se encontraron vendedores.</div>';document.getElementById('vend-count').textContent='0';return;}
+  body.innerHTML = filteredVend.map(p=>`
+    <div style="display:grid;grid-template-columns:2fr 100px 100px 120px 110px 120px 110px 36px;gap:8px;align-items:center;padding:0 16px;height:52px;border-bottom:1px solid var(--border2);cursor:pointer;transition:background .13s;" onmouseenter="this.style.background='rgba(184,147,58,0.04)'" onmouseleave="this.style.background=''" onclick="openVendDetail('${p.id}')">
+      <div style="display:flex;align-items:center;gap:9px;overflow:hidden;">
+        <div style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,${p.col});display:flex;align-items:center;justify-content:center;font-size:0.68rem;font-weight:700;color:white;flex-shrink:0;">${p.ini}</div>
+        <div style="overflow:hidden;"><div style="font-weight:600;font-size:0.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.nombre}</div><div style="font-size:0.69rem;color:var(--muted);">${p.email}</div></div>
+      </div>
+      <div><span class="pill" style="background:rgba(184,147,58,0.12);color:var(--gold);border:1px solid rgba(184,147,58,0.25);font-size:0.63rem;">${p.cartera}</span></div>
+      <div style="font-size:0.78rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.activo}</div>
+      <div style="font-size:0.8rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.agente}</div>
+      <div style="font-size:0.78rem;color:var(--muted);">${p.tel}</div>
+      <div style="font-size:0.78rem;color:var(--muted);">${p.ultimo}</div>
+      <div><span class="pill ${p.estadoC}">${p.estado}</span></div>
+      <div style="color:var(--border);text-align:right;">›</div>
+    </div>`).join('');
+  document.getElementById('vend-count').textContent = filteredVend.length;
+}
+
+function filterVend(){
+  const q=(document.getElementById('q-vend').value||'').toLowerCase();
+  const cart=document.getElementById('fv-cart').value;
+  const estado=document.getElementById('fv-estado').value;
+  const agente=document.getElementById('fv-agente').value;
+  filteredVend=vendedores.filter(p=>{
+    if(cart&&p.cartera!==cart)return false;
+    if(estado&&p.estado!==estado)return false;
+    if(agente&&p.agente!==agente)return false;
+    if(q){const blob=[p.nombre,p.email,p.tel,p.agente,p.estado,p.cartera,p.activo].join(' ').toLowerCase();if(!blob.includes(q))return false;}
+    return true;
+  });
+  renderVendTable();
+}
+function clearVendFilters(){document.getElementById('q-vend').value='';['fv-cart','fv-estado','fv-agente'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});filteredVend=[...vendedores];renderVendTable();}
+
+function openVendDetail(id){
+  document.getElementById('vend-list').style.display='none';
+  document.getElementById('vend-detail').style.display='block';
+  const p=vendedores.find(x=>x.id===id);
+  if(p){document.getElementById('vend-detail-title').textContent=p.nombre;document.getElementById('vend-detail-estado').textContent=p.estado;document.getElementById('vend-detail-estado').className='pill '+p.estadoC;}
+  switchVendTab(0);
+}
+function closeVendDetail(){document.getElementById('vend-detail').style.display='none';document.getElementById('vend-list').style.display='block';}
+function switchVendTab(i){
+  ['vtab-0','vtab-1','vtab-2'].forEach((id,j)=>{const el=document.getElementById(id);if(el)el.style.display=(j===i)?'block':'none';});
+  document.querySelectorAll('#vend-detail .vnav-item').forEach((t,j)=>t.classList.toggle('active',j===i));
+}
+
+// INIT
+// Hide all tab panes on load - switchTab will show the right one
+['tab-0','tab-1','tab-2','tab-3','tab-4'].forEach(id=>{
+  const el=document.getElementById(id);
+  if(el) el.style.display='none';
+});
+doSort();renderTable();
+renderCompTable();
+renderVendTable();
+</script>
+</body>
+</html>
