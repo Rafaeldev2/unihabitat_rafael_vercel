@@ -80,7 +80,7 @@ export default function HomePage() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
           <Link href="/" className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center">
-            <img src="/logoAzul.svg" alt="Unihabitat" width={28} height={28} className="h-7 w-auto" />
+            <img src="/LogoAzul.svg" alt="Unihabitat" width={28} height={28} className="h-7 w-auto" />
             </div>
             <span className="text-lg font-bold text-navy tracking-tight">Unihabitat<span className="text-gold">*</span></span>
           </Link>

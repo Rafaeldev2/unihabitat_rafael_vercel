@@ -12,7 +12,7 @@ export function SiteFooter() {
           {/* Col 1: Brand */}
           <div>
             <div className="mb-4 flex items-center gap-2.5">
-              <Image src="/logo branco.svg" alt="Unihabitat" width={28} height={28} className="h-7 w-auto" />
+              <Image src="/Logo branco.svg" alt="Unihabitat" width={28} height={28} className="h-7 w-auto" />
               <span className="text-sm font-bold text-white">Unihabitat</span>
             </div>
             <p className="mb-5 text-xs leading-relaxed text-white/50">

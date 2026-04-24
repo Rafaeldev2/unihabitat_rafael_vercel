@@ -27,7 +27,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       <header className="sticky top-0 z-50 border-b border-border bg-white shadow-sm">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
           <Link href="/" className="flex items-center gap-2.5">
-            <Image src="/logo.jpg" alt="Unihabitat" width={32} height={32} className="h-8 w-auto" priority />
+            <Image src="/LogoAzul.svg" alt="Unihabitat" width={32} height={32} className="h-8 w-auto" priority />
             <span className="text-base font-bold tracking-tight text-navy">Unihabitat</span>
           </Link>
 
