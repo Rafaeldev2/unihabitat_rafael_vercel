@@ -31,6 +31,12 @@ export function mergeExcelRawMaps(
 /*  Row ↔ Model mappers (snake_case DB ↔ camelCase App)               */
 /* ------------------------------------------------------------------ */
 
+function finiteOrNull(v: unknown): number | null {
+  if (v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function rowToAsset(r: any): Asset {
   const adm: AssetAdmin = {
@@ -63,8 +69,8 @@ export function rowToAsset(r: any): Asset {
     ccaa: r.ccaa ?? "—", fullAddr: r.full_addr ?? "—", desc: r.descr ?? "—",
     ownerName: r.owner_name ?? "—", ownerTel: r.owner_tel ?? "—",
     ownerMail: r.owner_mail ?? "—", adm, pub: r.pub ?? false, age: r.age,
-    lat: r.lat != null ? Number(r.lat) : null,
-    lng: r.lng != null ? Number(r.lng) : null,
+    lat: finiteOrNull(r.lat),
+    lng: finiteOrNull(r.lng),
     ...(r.excel_raw && typeof r.excel_raw === "object" && !Array.isArray(r.excel_raw)
       ? { excelRaw: r.excel_raw as Record<string, Record<string, string>> }
       : {}),

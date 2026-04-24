@@ -37,6 +37,7 @@ export default function PortalPrivadoDetailPage({ params }: { params: Promise<{ 
         <div className="grid grid-cols-[1fr_280px] gap-6">
           <div>
             <InteractiveMap
+              key={`map-${asset.id}-${asset.lat ?? "x"}-${asset.lng ?? "x"}`}
               lat={asset.lat}
               lng={asset.lng}
               mapImageUrl={asset.map}

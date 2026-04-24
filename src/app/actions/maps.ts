@@ -1,7 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/supabase/server";
-import { geocodeAddressLine, buildStaticMapUrl } from "@/lib/catastro/geoapify";
+import { geocodeAssetStub, buildStaticMapUrl } from "@/lib/catastro/geoapify";
 
 const CONCURRENCY = 4;
 const DELAY_MS = 200;
@@ -35,12 +35,12 @@ export async function backfillMissingMaps(
     const batch = stubs.slice(i, i + CONCURRENCY);
     const settled = await Promise.all(
       batch.map(async (s) => {
-        const query = [s.addr, s.cp, s.pob, s.prov]
-          .filter(p => p && p !== "—")
-          .join(", ");
-        if (!query) return null;
-
-        const geo = await geocodeAddressLine(query);
+        const geo = await geocodeAssetStub({
+          addr: s.addr,
+          cp: s.cp,
+          pob: s.pob,
+          prov: s.prov,
+        });
         if (!geo) return null;
 
         const url = buildStaticMapUrl(geo.lon, geo.lat);

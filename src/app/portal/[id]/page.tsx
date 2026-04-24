@@ -155,6 +155,7 @@ export default function PortalDetailPage({ params }: { params: Promise<{ id: str
             {/* Description section */}
             <section id="descripcion" ref={el => { sectionRefs.current.descripcion = el; }}>
               <InteractiveMap
+                key={`map-${asset.id}-${asset.lat ?? "x"}-${asset.lng ?? "x"}`}
                 lat={asset.lat}
                 lng={asset.lng}
                 mapImageUrl={asset.map}
@@ -253,6 +254,7 @@ export default function PortalDetailPage({ params }: { params: Promise<{ id: str
                         className="group flex gap-4 rounded-lg border border-border p-3 transition-all hover:border-gold/40 hover:shadow-sm"
                       >
                         <InteractiveMap
+                          key={`map-${s.id}-${s.lat ?? "x"}-${s.lng ?? "x"}`}
                           lat={s.lat}
                           lng={s.lng}
                           mapImageUrl={s.map}

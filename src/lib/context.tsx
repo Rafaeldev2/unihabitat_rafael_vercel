@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react";
 import type { Asset, Comprador, Vendedor, Tarea } from "./types";
 import type { VendorPermission, UserSession } from "./permissions";
 import { assets as initialAssets, compradores as initialComp, vendedores as initialVend, tareasData } from "./mock-data";
@@ -34,6 +34,8 @@ interface AppContextType extends AppState {
   getComprador: (id: string) => Comprador | undefined;
   getVendedor: (id: string) => Vendedor | undefined;
   refreshAssignments: () => Promise<void>;
+  /** Recarga activos desde Supabase y aplica geocodificación en lotes (tras import / evento). */
+  refreshAssets: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -51,49 +53,68 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [assignedAssetIds, setAssignedAssetIds] = useState<string[]>([]);
   const [assignedCompradorIds, setAssignedCompradorIds] = useState<string[]>([]);
 
+  const assetsLoadTokenRef = useRef(0);
+  const BACKFILL_CHUNK = 100;
+
+  const loadAssetsFromServer = useCallback(async () => {
+    const token = ++assetsLoadTokenRef.current;
+    try {
+      let rows = await fetchAssets();
+      if (token !== assetsLoadTokenRef.current) return;
+      if (rows.length === 0) return;
+
+      const GEOAPIFY_KEY = process.env.NEXT_PUBLIC_GEOAPIFY_KEY;
+      if (GEOAPIFY_KEY) {
+        const needMap = rows.filter((a) => shouldBackfillMapFromAddress(a));
+        for (let i = 0; i < needMap.length; i += BACKFILL_CHUNK) {
+          if (token !== assetsLoadTokenRef.current) return;
+          const chunk = needMap.slice(i, i + BACKFILL_CHUNK);
+          const stubs = chunk.map((a) => ({
+            id: a.id,
+            addr: a.addr,
+            pob: a.pob,
+            prov: a.prov,
+            cp: a.cp,
+          }));
+          try {
+            const hits = await backfillMissingMaps(stubs);
+            rows = rows.map((a) => {
+              const h = hits[a.id];
+              if (!h) return a;
+              return { ...a, map: h.map, lat: h.lat, lng: h.lng };
+            });
+          } catch {
+            /* chunk sin backfill */
+          }
+        }
+      }
+
+      if (token !== assetsLoadTokenRef.current) return;
+      setState((prev) => ({ ...prev, assets: rows }));
+    } catch {
+      /* mantener estado (p. ej. mocks) */
+    }
+  }, []);
+
+  const refreshAssets = useCallback(() => loadAssetsFromServer(), [loadAssetsFromServer]);
+
   useEffect(() => {
     const s = getDevAuthFromDocument();
     setSession(s);
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
+    void loadAssetsFromServer();
+  }, [loadAssetsFromServer]);
 
-    (async () => {
-      try {
-        const rows = await fetchAssets();
-        if (cancelled || rows.length === 0) return;
-        // backfillMissingMaps: misma lógica que /portal/privado — un solo setState
-        // con map + lat + lng (evita parpadeo Madrid → ciudad correcta).
-        const GEOAPIFY_KEY = process.env.NEXT_PUBLIC_GEOAPIFY_KEY;
-        let nextAssets = rows;
-        if (GEOAPIFY_KEY) {
-          const needMap = rows.filter((a) => shouldBackfillMapFromAddress(a));
-          if (needMap.length > 0 && needMap.length <= 200) {
-            const stubs = needMap.map((a) => ({
-              id: a.id,
-              addr: a.addr,
-              pob: a.pob,
-              prov: a.prov,
-              cp: a.cp,
-            }));
-            try {
-              const hits = await backfillMissingMaps(stubs);
-              nextAssets = rows.map((a) => {
-                const h = hits[a.id];
-                if (!h) return a;
-                return { ...a, map: h.map, lat: h.lat, lng: h.lng };
-              });
-            } catch { /* quedan rows */ }
-          }
-        }
-        if (cancelled) return;
-        setState((prev) => ({ ...prev, assets: nextAssets }));
-      } catch { /* keep mocks */ }
-    })();
+  useEffect(() => {
+    const onAssetsUpdated = () => {
+      void loadAssetsFromServer();
+    };
+    window.addEventListener("propcrm-assets-updated", onAssetsUpdated);
+    return () => window.removeEventListener("propcrm-assets-updated", onAssetsUpdated);
+  }, [loadAssetsFromServer]);
 
-    return () => { cancelled = true; };
-  }, []);
 
   useEffect(() => {
     if (!session) return;
@@ -199,7 +220,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       assignedCompradorIds,
       togglePub, toggleFav, toggleChk, toggleChkAll, toggleTaskDone,
       addAssets, clearAssets, removeAssetsByIds, getAsset, getComprador, getVendedor,
-      refreshAssignments,
+      refreshAssignments, refreshAssets,
     }}>
       {children}
     </AppContext.Provider>

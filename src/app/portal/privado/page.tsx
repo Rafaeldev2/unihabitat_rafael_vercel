@@ -99,6 +99,7 @@ export default function PortalPrivadoPage() {
     <Link href={`/portal/privado/${a.id}`} className="group overflow-hidden rounded-xl border border-border bg-white shadow-sm transition-all hover:shadow-md">
       <div className="relative">
         <InteractiveMap
+          key={`map-${a.id}-${a.lat ?? "x"}-${a.lng ?? "x"}`}
           lat={a.lat}
           lng={a.lng}
           mapImageUrl={a.map}

@@ -371,6 +371,7 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
         </div>
         <div className="flex flex-col gap-3">
           <InteractiveMap
+            key={`map-${asset.id}-${asset.lat ?? "x"}-${asset.lng ?? "x"}`}
             lat={asset.lat}
             lng={asset.lng}
             mapImageUrl={asset.map}

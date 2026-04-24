@@ -235,6 +235,7 @@ function PortalContent() {
               {/* Image + badges */}
               <div className="relative">
                 <InteractiveMap
+                  key={`map-${a.id}-${a.lat ?? "x"}-${a.lng ?? "x"}`}
                   lat={a.lat}
                   lng={a.lng}
                   mapImageUrl={a.map}

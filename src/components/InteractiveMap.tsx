@@ -4,6 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { MapPin } from "lucide-react";
 import { isPlaceholderMapUrl } from "@/lib/map-default";
 
+function toCoord(v: unknown): number | null {
+  if (v == null) return null;
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const n = parseFloat(v.replace(",", ".").trim());
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
 function extractCoordsFromUrl(url?: string | null): { lat: number; lng: number } | null {
   if (!url) return null;
   const m = url.match(/center=lonlat:([-\d.]+),([-\d.]+)/);
@@ -31,20 +41,27 @@ interface InteractiveMapProps {
 
 export function InteractiveMap({ lat: rawLat, lng: rawLng, mapImageUrl, label, className = "" }: InteractiveMapProps) {
   /** Nunca extraer el centro de una URL "España/Madrid" (placeholder): eso fijaba Malina en el primer paint. */
+  const parsedLat = toCoord(rawLat);
+  const parsedLng = toCoord(rawLng);
   const fromUrl =
-    rawLat != null && rawLng != null
+    parsedLat != null && parsedLng != null
       ? null
       : mapImageUrl && !isPlaceholderMapUrl(mapImageUrl)
         ? extractCoordsFromUrl(mapImageUrl)
         : null;
-  const lat = rawLat ?? fromUrl?.lat ?? null;
-  const lng = rawLng ?? fromUrl?.lng ?? null;
+  const lat = parsedLat ?? fromUrl?.lat ?? null;
+  const lng = parsedLng ?? fromUrl?.lng ?? null;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState(false);
 
   const hasCoords = typeof lat === "number" && typeof lng === "number" && !isNaN(lat) && !isNaN(lng);
+
+  useEffect(() => {
+    setLoaded(false);
+    setError(false);
+  }, [lat, lng, hasCoords]);
 
   useEffect(() => {
     if (!hasCoords || !containerRef.current) return;
@@ -113,9 +130,11 @@ export function InteractiveMap({ lat: rawLat, lng: rawLng, mapImageUrl, label, c
     if (m && isPlaceholderMapUrl(m)) {
       return (
         <div className={`flex items-center justify-center bg-gradient-to-br from-cream to-cream2 ${className}`}>
-          <div className="flex flex-col items-center gap-2 text-muted/50">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-gold border-t-transparent" />
-            <span className="text-[10px] font-medium">Cargando mapa…</span>
+          <div className="flex max-w-[200px] flex-col items-center gap-2 px-3 text-center text-muted/60">
+            <MapPin size={24} strokeWidth={1.5} className="shrink-0 opacity-50" />
+            <span className="text-[10px] font-medium leading-snug">
+              Pendiente de geocodificación (sin coordenadas aún)
+            </span>
           </div>
         </div>
       );
@@ -131,7 +150,7 @@ export function InteractiveMap({ lat: rawLat, lng: rawLng, mapImageUrl, label, c
   }
 
   return (
-    <div className={`relative overflow-hidden ${className}`}>
+    <div className={`sticky overflow-hidden ${className}`}>
       <div ref={containerRef} className="h-full w-full" />
       {!loaded && !error && (
         <div className="absolute inset-0 flex items-center justify-center bg-cream2">

@@ -138,7 +138,7 @@ function SubProgress({ done, total, label }: { done: number; total: number; labe
 }
 
 export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
-  const { addAssets, assets: existing } = useApp();
+  const { addAssets, assets: existing, refreshAssets } = useApp();
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
   const [steps, setSteps] = useState<PipelineStep[]>(INITIAL_STEPS);
@@ -247,7 +247,9 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
           updateStep("db-raw", { status: "active", detail: `${rawSaved}/${parsed.length} activos guardados…` });
         }, DB_CONCURRENCY);
 
-        addAssets(parsed);
+        if (rawSaved > 0) {
+          await refreshAssets();
+        }
 
         if (dbErrors.length > 0) {
           updateStep("db-raw", {
