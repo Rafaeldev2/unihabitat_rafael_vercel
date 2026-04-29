@@ -7,7 +7,6 @@ import Link from "next/link";
 import type { Asset } from "@/lib/types";
 import { Search, Star, X, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Trash2 } from "lucide-react";
 import { UploadActivosModal } from "./UploadActivosModal";
-import { DashboardVendedor } from "./DashboardVendedor";
 import { FilterSelect } from "@/components/FilterSelect";
 import { deleteAllAssets, deleteAssetsByIds } from "@/app/actions/assets";
 
@@ -28,7 +27,6 @@ const pillClass: Record<string, string> = {
 export default function ActivosPage() {
   const { assets, toggleFav, toggleChk, toggleChkAll, session, clearAssets, removeAssetsByIds } = useApp();
 
-  if (session?.role === "vendedor") return <DashboardVendedor />;
   const [uploadOpen, setUploadOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [q, setQ] = useState("");

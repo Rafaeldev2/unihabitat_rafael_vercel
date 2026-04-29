@@ -423,6 +423,187 @@ function mergeAssetsSameId(prev: Asset, curr: Asset): Asset {
 
 type SheetFormat = "prov1" | "prov2" | "prov3" | "enriquecido" | "unknown";
 
+/**
+ * Heurística de columnas: dado el header crudo de una hoja, devuelve un mapa
+ * { campoAsset → índiceColumna }. Cubre los nombres de cabecera más comunes
+ * en español e inglés (UF, NDG, Asset ID, Provincia, Municipio, CP, Dirección,
+ * Tipo, Precio, Referencia Catastral, Cartera, Cliente, etc.).
+ *
+ * No reemplaza al parser estructurado — se usa como red de seguridad para
+ * rellenar campos que quedaron en "—" cuando el archivo trae columnas
+ * reordenadas o con nombres ligeramente distintos.
+ */
+type HeaderField =
+  | "id" | "addr" | "fullAddr" | "prov" | "pob" | "cp" | "ccaa"
+  | "tip" | "fase" | "precio" | "sqm" | "catRef" | "clase" | "uso" | "bien"
+  | "ownerName" | "ownerTel" | "ownerMail"
+  | "car" | "cli" | "pip" | "pub" | "ejud" | "eneg" | "cat";
+
+function inferHeaderColumns(headerRow: unknown[]): Partial<Record<HeaderField, number>> {
+  const cols: Partial<Record<HeaderField, number>> = {};
+  const set = (k: HeaderField, idx: number) => { if (cols[k] === undefined) cols[k] = idx; };
+
+  for (let c = 0; c < headerRow.length; c++) {
+    const h = String(headerRow[c] ?? "").toUpperCase().trim();
+    if (!h) continue;
+
+    if (cols.id === undefined && /\b(UF|NDG|ASSET ID|ID PRINEX|ID ACTIVO|REFERENCIA(?! CATASTRAL)|CONTRACT ID|DATA REF|^ID$|^ID\s|CODIGO ACTIVO)\b/.test(h)) {
+      set("id", c);
+      continue;
+    }
+    if (/(REFERENCIA CATASTRAL|CAT\.? ?REF|CD REFERENCIA|CADASTRAL)/.test(h)) set("catRef", c);
+    else if (/(DIRECCION COMPLETA|DIRECCIÓN COMPLETA|DIR\. COMPLETA|FULL ADDRESS)/.test(h)) set("fullAddr", c);
+    else if (/^DIRECCION$|^DIRECCIÓN$|^ADDR(ESS)?$|^DOMICILIO$|^ADRESS$|^DIRECCION_/.test(h)) set("addr", c);
+    else if (/^PROV(INCIA|INCE)?$|ASSET PROVINCE|^PROV\s/.test(h)) set("prov", c);
+    else if (/^MUNICIPIO$|^POBLACION$|^POBLACIÓN$|^CIUDAD$|^LOCALIDAD$|^CITY$|^TOWN$|MUNICIPI/.test(h)) set("pob", c);
+    else if (/(CODIGO POSTAL|CÓDIGO POSTAL|^CP$|POSTAL CODE|^ZIP$|C\.P\.|^CP\s)/.test(h)) set("cp", c);
+    else if (/^CCAA$|COMUNIDAD AUTONOMA|COMUNIDAD AUTÓNOMA/.test(h)) set("ccaa", c);
+    else if (/^TIPO( INMUEBLE)?$|TIPOLOGIA|TIPOLOGÍA|^TYPE$|PROPERTY TYPE/.test(h)) set("tip", c);
+    else if (/(^FASE$|ESTADO PROCESO|PROCEDIMIENTO|ULTIMA FASE|ÚLTIMA FASE|FASE JUDICIAL|^STATUS$)/.test(h)) set("fase", c);
+    else if (/(PRECIO|IMPORTE|VALOR|^PRICE$|TASACI[OÓ]N|SUBASTA|VALOR ESTIMADO)/.test(h)) set("precio", c);
+    else if (/(M2|M²|SUPERFICIE|^SQM$|AREA(?! BASE)|METROS)/.test(h)) set("sqm", c);
+    else if (/^CLASE$|^CLASS$/.test(h)) set("clase", c);
+    else if (/^USO$|^USE$/.test(h)) set("uso", c);
+    else if (/^BIEN$|^GOOD$|^PROPERTY$/.test(h)) set("bien", c);
+    else if (/(PROPIETARIO|OWNER NAME|^OWNER$|^NOMBRE$|TITULAR)/.test(h)) set("ownerName", c);
+    else if (/(TELEFONO|TELÉFONO|^TEL$|^PHONE$|MOVIL|MÓVIL)/.test(h)) set("ownerTel", c);
+    else if (/(EMAIL|CORREO|MAIL)/.test(h)) set("ownerMail", c);
+    else if (/(CARTERA|PORTFOLIO)/.test(h)) set("car", c);
+    else if (/(CLIENTE|^CLIENT$)/.test(h)) set("cli", c);
+    else if (/(PIPEDRIVE)/.test(h)) set("pip", c);
+    else if (/(PUBLICAR|PUBLICADO|PUBLISH)/.test(h)) set("pub", c);
+    else if (/(JUZGADO|JUDICIAL|EJECUCION|EJECUCIÓN)/.test(h)) set("ejud", c);
+    else if (/(NEGOCIACION|NEGOCIACIÓN|NEGOTIATION)/.test(h)) set("eneg", c);
+    else if (/(CATEGORIA|CATEGORY|^CAT$|^NPL$|^REO$)/.test(h)) set("cat", c);
+  }
+  return cols;
+}
+
+/**
+ * Rellena (sin sobrescribir) los campos del Asset que quedaron en "—" usando
+ * los valores que aparecen en la fila bajo la columna inferida por header.
+ * Conservador: nunca pisa un valor real ya extraído por el parser estructurado.
+ */
+function augmentAssetFromHeaders(
+  asset: Asset,
+  cols: Partial<Record<HeaderField, number>>,
+  row: unknown[],
+): void {
+  const cell = (key: HeaderField): string => {
+    const idx = cols[key];
+    if (idx == null) return "";
+    return s(row[idx]);
+  };
+  const isMissing = (v: unknown): boolean =>
+    v == null || v === "" || v === "—" || (typeof v === "string" && v.trim() === "");
+
+  if (isMissing(asset.addr)) {
+    const v = cell("addr") || cell("fullAddr");
+    if (v && v !== "—") asset.addr = v;
+  }
+  if (isMissing(asset.fullAddr)) {
+    const v = cell("fullAddr") || cell("addr");
+    if (v && v !== "—") asset.fullAddr = v;
+  }
+  if (isMissing(asset.prov)) {
+    const v = cell("prov");
+    if (v && v !== "—") asset.prov = v;
+  }
+  if (isMissing(asset.pob)) {
+    const v = cell("pob");
+    if (v && v !== "—") asset.pob = v;
+  }
+  if (isMissing(asset.cp)) {
+    const v = cell("cp");
+    if (v && v !== "—") asset.cp = v;
+  }
+  if (isMissing(asset.ccaa)) {
+    const v = cell("ccaa");
+    if (v && v !== "—") asset.ccaa = v;
+  }
+  if (isMissing(asset.catRef)) {
+    const v = cell("catRef");
+    if (v && v !== "—") {
+      asset.catRef = v;
+      if (isMissing(asset.adm.cref)) asset.adm.cref = v;
+    }
+  }
+  if (isMissing(asset.clase)) {
+    const v = cell("clase");
+    if (v && v !== "—") asset.clase = v;
+  }
+  if (isMissing(asset.uso)) {
+    const v = cell("uso");
+    if (v && v !== "—") asset.uso = v;
+  }
+  if (isMissing(asset.bien)) {
+    const v = cell("bien");
+    if (v && v !== "—") asset.bien = v;
+  }
+  if (asset.precio == null) {
+    const v = cell("precio");
+    const n = toNum(v);
+    if (n != null) asset.precio = n;
+  }
+  if (asset.sqm == null) {
+    const v = cell("sqm");
+    const n = toNum(v);
+    if (n != null) asset.sqm = n;
+  }
+  if (isMissing(asset.tip) || asset.tip === "Vivienda") {
+    const v = cell("tip");
+    if (v && v !== "—") {
+      const norm = normalizeTipo(v);
+      asset.tip = norm;
+      asset.tipC = tipToTipC(norm);
+    }
+  }
+  if (isMissing(asset.ownerName)) {
+    const v = cell("ownerName");
+    if (v && v !== "—") asset.ownerName = v;
+  }
+  if (isMissing(asset.ownerTel)) {
+    const v = cell("ownerTel");
+    if (v && v !== "—") asset.ownerTel = v;
+  }
+  if (isMissing(asset.ownerMail)) {
+    const v = cell("ownerMail");
+    if (v && v !== "—") asset.ownerMail = v;
+  }
+  if (isMissing(asset.cat)) {
+    const v = cell("cat");
+    if (v && v !== "—") asset.cat = v;
+  }
+  // adm fields
+  if (isMissing(asset.adm.car)) {
+    const v = cell("car");
+    if (v && v !== "—") asset.adm.car = v;
+  }
+  if (isMissing(asset.adm.cli)) {
+    const v = cell("cli");
+    if (v && v !== "—") asset.adm.cli = v;
+  }
+  if (isMissing(asset.adm.pip)) {
+    const v = cell("pip");
+    if (v && v !== "—") asset.adm.pip = v;
+  }
+  if (isMissing(asset.adm.ejud)) {
+    const v = cell("ejud");
+    if (v && v !== "—") asset.adm.ejud = v;
+  }
+  if (isMissing(asset.adm.eneg)) {
+    const v = cell("eneg");
+    if (v && v !== "—") asset.adm.eneg = v;
+  }
+  // Pub
+  const pubVal = cell("pub").toUpperCase().trim();
+  if (["SI", "SÍ", "SIM", "YES", "TRUE", "1"].includes(pubVal)) {
+    asset.pub = true;
+    asset.fase = "Publicado";
+    asset.faseC = "fp-pub";
+  }
+}
+
 const FORMAT_ANCHORS: { format: SheetFormat; col0: string; verify: string[] }[] = [
   { format: "prov2", col0: "ID PIPEDRIVE", verify: ["ASSET ID", "ASSET PROVINCE"] },
   { format: "prov1", col0: "DATA REF",     verify: ["UF", "PROVINCIA"] },
@@ -452,6 +633,163 @@ function shiftRows(rows: unknown[][], offset: number): unknown[][] {
 export interface ParseExcelResult {
   assets: Asset[];
   sheetDiag: { sheet: string; format: SheetFormat; rows: number }[];
+}
+
+/**
+ * Fallback sin Claude: parsea cualquier hoja Excel usando ÚNICAMENTE la
+ * heurística de cabeceras (inferHeaderColumns). Pensado para cuando el
+ * formato no encaja con ningún proveedor conocido y la detección IA no está
+ * disponible (clave inválida, sin internet, etc.).
+ *
+ * Para cada fila no vacía produce un Asset:
+ *  - id desde la columna inferida como id; si no hay, "RAW-{sheet}-{row}"
+ *  - estructura mínima rellenada desde cabeceras (prov, pob, cp, addr,
+ *    catRef, tip, precio, etc.)
+ *  - fila completa preservada en excelRaw
+ *
+ * Garantía: nunca devuelve [] si el archivo tenía filas con datos. Cada
+ * fila se guarda — el usuario puede re-mapear desde la sección "Datos Excel".
+ */
+export function parseExcelHeuristic(
+  file: File,
+): Promise<{ assets: Asset[]; totalRows: number; sheets: string[] }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result;
+        if (!data) {
+          reject(new Error("No se pudo leer el archivo"));
+          return;
+        }
+        const wb = XLSX.read(data, { type: "binary", cellDates: true });
+        const defaultMap = defaultMapUrlForClient();
+        const assets: Asset[] = [];
+        const sheets: string[] = [];
+        let totalRows = 0;
+
+        for (const sheetName of wb.SheetNames) {
+          const ws = wb.Sheets[sheetName];
+          const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, {
+            header: 1,
+            defval: "",
+            raw: false,
+          });
+          if (rows.length < 2) continue;
+          sheets.push(sheetName);
+
+          const headerRow = rows[0] as unknown[];
+          const cols = inferHeaderColumns(headerRow);
+
+          const sheetSlug = sheetName
+            .toUpperCase()
+            .replace(/\s+/g, "-")
+            .replace(/[^A-Z0-9-]/g, "")
+            .slice(0, 32) || "SHEET";
+
+          for (let r = 1; r < rows.length; r++) {
+            const row = rows[r] as unknown[];
+            const isEmpty = row.every((c) => c == null || String(c).trim() === "");
+            if (isEmpty) continue;
+            totalRows++;
+
+            const cell = (key: HeaderField): string => {
+              const idx = cols[key];
+              if (idx == null) return "";
+              return s(row[idx]);
+            };
+
+            const explicitId = cell("id");
+            const firstNonEmpty = row
+              .map((c) => String(c ?? "").trim())
+              .find((c) => c !== "");
+            const id =
+              explicitId && explicitId !== "—" && explicitId.length <= 64
+                ? explicitId
+                : firstNonEmpty && firstNonEmpty.length <= 64
+                  ? firstNonEmpty
+                  : `RAW-${sheetSlug}-${r}`;
+
+            const raw = buildRawRowFromFullSheet(rows, r);
+
+            const tipRaw = cell("tip");
+            const tip = tipRaw ? normalizeTipo(tipRaw) : "Vivienda";
+            const faseRaw = cell("fase");
+            const pubVal = cell("pub").toUpperCase().trim();
+            const isPub = ["SI", "SÍ", "SIM", "YES", "TRUE", "1"].includes(pubVal);
+
+            const prov = cell("prov");
+            const pob = cell("pob");
+            const cp = cell("cp");
+            const addr = cell("addr");
+            const fullAddr = cell("fullAddr");
+            const catRef = cell("catRef");
+            const ccaa = cell("ccaa");
+
+            const adm = emptyAdm();
+            adm.aid = id;
+            const carRaw = cell("car"); if (carRaw && carRaw !== "—") adm.car = carRaw;
+            const cliRaw = cell("cli"); if (cliRaw && cliRaw !== "—") adm.cli = cliRaw;
+            const pipRaw = cell("pip"); if (pipRaw && pipRaw !== "—") adm.pip = pipRaw;
+            const ejudRaw = cell("ejud"); if (ejudRaw && ejudRaw !== "—") adm.ejud = ejudRaw;
+            const enegRaw = cell("eneg"); if (enegRaw && enegRaw !== "—") adm.eneg = enegRaw;
+            if (prov && prov !== "—") adm.prov = prov.toUpperCase();
+            if (pob && pob !== "—") adm.city = pob;
+            if (cp && cp !== "—") adm.zip = cp;
+            if (addr && addr !== "—") adm.addr = addr;
+            if (catRef && catRef !== "—") adm.cref = catRef;
+            const catRaw = cell("cat"); if (catRaw && catRaw !== "—") adm.cat = catRaw;
+
+            assets.push({
+              id,
+              cat: catRaw || "—",
+              prov: prov || "—",
+              pob: pob || "—",
+              cp: cp || "—",
+              addr: addr || fullAddr || "—",
+              tip,
+              tipC: tipToTipC(tip),
+              fase: isPub ? "Publicado" : faseRaw || "Suspendido",
+              faseC: isPub ? "fp-pub" : faseToFaseC(faseRaw || ""),
+              precio: toNum(cell("precio")),
+              fav: false,
+              chk: false,
+              sqm: toNum(cell("sqm")),
+              tvia: "—",
+              nvia: "—",
+              num: "—",
+              esc: "—",
+              pla: "—",
+              pta: "—",
+              map: defaultMap,
+              catRef: catRef || "—",
+              clase: cell("clase") || "—",
+              uso: cell("uso") || "—",
+              bien: cell("bien") || "—",
+              supC: "—",
+              supG: "—",
+              coef: "—",
+              ccaa: ccaa || "—",
+              fullAddr: fullAddr || addr || "—",
+              desc: fullAddr || addr || "—",
+              ownerName: cell("ownerName") || "—",
+              ownerTel: cell("ownerTel") || "—",
+              ownerMail: cell("ownerMail") || "—",
+              adm,
+              pub: isPub,
+              excelRaw: { [sheetName]: raw },
+            });
+          }
+        }
+
+        resolve({ assets, totalRows, sheets });
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error("Error en parseo heurístico"));
+      }
+    };
+    reader.onerror = () => reject(new Error("Error al leer el archivo"));
+    reader.readAsBinaryString(file);
+  });
 }
 
 export function parseExcelFile(file: File): Promise<Asset[]>;
@@ -527,6 +865,33 @@ export function parseExcelFile(file: File, opts?: { diag?: boolean }): Promise<A
               break;
             default:
               break;
+          }
+
+          // Bug 1 fix: post-pass augmentation. For sheets where the structured
+          // parser ran (prov1/2/3) but column ordering or naming caused some
+          // fields to land as "—", re-read the row through header heuristics
+          // and fill ONLY the gaps. Never overrides values the parser captured.
+          if (format !== "unknown" && format !== "enriquecido") {
+            const shiftedHeader = (shifted[0] ?? []) as unknown[];
+            const cols = inferHeaderColumns(shiftedHeader);
+            if (Object.keys(cols).length > 0) {
+              const byIdSheet = new Map<string, Asset>();
+              for (const a of all) byIdSheet.set(a.id, a);
+              for (let r = 1; r < shifted.length; r++) {
+                const row = shifted[r] as unknown[];
+                if (!row) continue;
+                // Identify the row's id via the heuristic header. If parser
+                // used a different col, the heuristic should still find it
+                // (same header text → same column).
+                const idCellIdx = cols.id;
+                if (idCellIdx == null) continue;
+                const candidateId = s(row[idCellIdx]);
+                if (!candidateId || candidateId === "—") continue;
+                const asset = byIdSheet.get(candidateId);
+                if (!asset) continue;
+                augmentAssetFromHeaders(asset, cols, row);
+              }
+            }
           }
         }
 

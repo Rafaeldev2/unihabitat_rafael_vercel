@@ -72,6 +72,42 @@ function slimAsset(a: Asset): Record<string, unknown> {
   };
 }
 
+/**
+ * Extrae el primer objeto JSON balanceado del texto. Robusto frente a:
+ *  - prefijos como "Aquí está el JSON: ..."
+ *  - bloques fenced ```json ... ```
+ *  - llaves dentro de strings JSON
+ *
+ * Devuelve null si no encuentra un objeto balanceado.
+ */
+function extractFirstJsonObject(text: string): string | null {
+  // Try fenced code block first
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const candidate = fenced ? fenced[1] : text;
+
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escape = false;
+  for (let i = 0; i < candidate.length; i++) {
+    const c = candidate[i];
+    if (escape) { escape = false; continue; }
+    if (c === "\\" && inString) { escape = true; continue; }
+    if (c === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (c === "{") {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (c === "}") {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        return candidate.slice(start, i + 1);
+      }
+    }
+  }
+  return null;
+}
+
 async function callClaude(assets: Record<string, unknown>[]): Promise<ClaudeValidationResult> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error("ANTHROPIC_API_KEY no configurada");
@@ -85,7 +121,9 @@ async function callClaude(assets: Record<string, unknown>[]): Promise<ClaudeVali
     },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 4096,
+      // 8192 da margen suficiente para lotes de hasta ~25 activos con
+      // warnings + summary sin truncarse a la mitad del JSON.
+      max_tokens: 8192,
       system: SYSTEM_PROMPT,
       messages: [
         {
@@ -102,12 +140,24 @@ async function callClaude(assets: Record<string, unknown>[]): Promise<ClaudeVali
   }
 
   const data = await res.json();
+  const stopReason: string | undefined = data.stop_reason;
   const text: string = data.content?.[0]?.text ?? "";
 
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("Claude no devolvió JSON válido");
+  if (stopReason === "max_tokens") {
+    throw new Error(
+      `Respuesta IA truncada por max_tokens. Reduce el tamaño del lote (AI_BATCH_SIZE en UploadActivosModal) o sube max_tokens.`,
+    );
+  }
 
-  return JSON.parse(jsonMatch[0]) as ClaudeValidationResult;
+  const json = extractFirstJsonObject(text);
+  if (!json) throw new Error("Claude no devolvió un objeto JSON balanceado");
+
+  try {
+    return JSON.parse(json) as ClaudeValidationResult;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`JSON inválido en respuesta IA: ${msg}`);
+  }
 }
 
 /**

@@ -2,6 +2,7 @@
 
 import { use, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useApp } from "@/lib/context";
+import { isAdmin } from "@/lib/auth-helpers";
 import { assetNotes, assetDocs, docNotes, adminNotes, chatMessages } from "@/lib/mock-data";
 import Link from "next/link";
 import type { Asset, NoteEntry, DocItem, ChatMessage } from "@/lib/types";
@@ -19,16 +20,21 @@ import { EditableExcelRawSection } from "@/components/EditableExcelRawSection";
 import { listEmptyExcelFields } from "@/lib/excel-raw-utils";
 
 const tabs = [
-  { icon: Home, label: "Características" },
-  { icon: FolderOpen, label: "Documentación" },
-  { icon: Briefcase, label: "Agentes" },
-  { icon: Users, label: "Clientes" },
-  { icon: Lock, label: "Administrador" },
+  { icon: Home,       label: "Características", adminOnly: false, contentIndex: 0 },
+  { icon: FolderOpen, label: "Documentación",   adminOnly: false, contentIndex: 1 },
+  { icon: Briefcase,  label: "Agentes",         adminOnly: true,  contentIndex: 2 },
+  { icon: Users,      label: "Clientes",        adminOnly: true,  contentIndex: 3 },
+  { icon: Lock,       label: "Administrador",   adminOnly: true,  contentIndex: 4 },
 ];
 
 export default function AssetDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { getAsset, togglePub } = useApp();
+  const { getAsset, togglePub, session } = useApp();
+  const userIsAdmin = isAdmin(session);
+  const visibleTabs = useMemo(
+    () => tabs.filter((t) => userIsAdmin || !t.adminOnly),
+    [userIsAdmin],
+  );
   const ctxAsset = getAsset(id);
   const [remoteAsset, setRemoteAsset] = useState<Asset | null | undefined>(undefined);
   const [tab, setTab] = useState(0);
@@ -68,6 +74,10 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
       setCurrentUser({ nombre: "Admin", email: "admin@propcrm.com" });
     }
   }, []);
+
+  useEffect(() => {
+    if (!userIsAdmin && tab > 1) setTab(0);
+  }, [userIsAdmin, tab]);
 
   const asset = remoteAsset ?? ctxAsset ?? null;
 
@@ -110,7 +120,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
           >
             <ExternalLink size={13} /> Ver en portal
           </Link>
-          <span className="rounded-md bg-gold/10 px-2.5 py-1 text-xs font-medium text-gold">Admin</span>
+          <span className="rounded-md bg-gold/10 px-2.5 py-1 text-xs font-medium text-gold">{userIsAdmin ? "Admin" : "Vendedor"}</span>
           <Link href="/admin" className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3.5 py-2 text-xs font-medium text-navy transition-colors hover:bg-cream">
             <ArrowLeft size={14} /> Volver
           </Link>
@@ -143,15 +153,17 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
       <div className="flex flex-1 overflow-hidden" style={{ height: "calc(100vh - 102px)" }}>
         {/* Left nav */}
         <div className="flex w-44 min-w-[176px] flex-col bg-navy py-3">
-          {tabs.map((t, i) => {
+          {visibleTabs.map((t, i) => {
             const Icon = t.icon;
+            const isLast = i === visibleTabs.length - 1;
+            const isAdminBtn = t.adminOnly && t.contentIndex === 4;
             return (
               <button
-                key={i}
-                onClick={() => setTab(i)}
+                key={t.contentIndex}
+                onClick={() => setTab(t.contentIndex)}
                 className={`flex items-center gap-2.5 border-l-[3px] px-4 py-2.5 text-left transition-all ${
-                  tab === i ? "border-l-gold bg-white/[0.06] text-gold" : "border-l-transparent text-white/35 hover:bg-white/[0.03] hover:text-white/60"
-                } ${i === 4 ? "mt-auto border-t border-t-white/[0.06] pt-3" : ""}`}
+                  tab === t.contentIndex ? "border-l-gold bg-white/[0.06] text-gold" : "border-l-transparent text-white/35 hover:bg-white/[0.03] hover:text-white/60"
+                } ${isAdminBtn && isLast ? "mt-auto border-t border-t-white/[0.06] pt-3" : ""}`}
               >
                 <Icon size={15} strokeWidth={1.5} />
                 <span className="text-xs font-medium">{t.label}</span>
@@ -164,9 +176,9 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
         <div className="flex-1 overflow-y-auto bg-cream p-6">
           {tab === 0 && <TabCaracteristicas asset={asset} assetId={id} currentUser={currentUser} reloadAsset={loadRemote} />}
           {tab === 1 && <TabDocumentacion assetId={id} docSubTab={docSubTab} setDocSubTab={setDocSubTab} currentUser={currentUser} />}
-          {tab === 2 && <TabAgentes asset={asset} assetId={id} currentUser={currentUser} />}
-          {tab === 3 && <TabClientes assetId={id} />}
-          {tab === 4 && <TabAdmin asset={asset} assetId={id} togglePub={() => void handleTogglePub()} currentUser={currentUser} reloadAsset={loadRemote} />}
+          {tab === 2 && userIsAdmin && <TabAgentes asset={asset} assetId={id} currentUser={currentUser} />}
+          {tab === 3 && userIsAdmin && <TabClientes assetId={id} />}
+          {tab === 4 && userIsAdmin && <TabAdmin asset={asset} assetId={id} togglePub={() => void handleTogglePub()} currentUser={currentUser} reloadAsset={loadRemote} />}
         </div>
       </div>
     </>

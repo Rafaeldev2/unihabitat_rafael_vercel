@@ -2,23 +2,23 @@
 
 import { useState, useRef, useCallback } from "react";
 import { useApp } from "@/lib/context";
-import { parseExcelFile, extractRawPreview, parseWithMapping, type ParseExcelResult } from "@/lib/normalize-excel";
+import { parseExcelFile, extractRawPreview, parseWithMapping, parseExcelHeuristic, type ParseExcelResult } from "@/lib/normalize-excel";
 import { enrichAssetsBatch } from "@/app/actions/catastro";
 import type { CatastroEnrichFailure } from "@/app/actions/catastro";
 import { validateAssetsBatch } from "@/app/actions/claude";
 import type { ClaudeAssetResult } from "@/app/actions/claude";
-import { upsertAssets } from "@/app/actions/assets";
+import { upsertAssets, fetchAssetsByIds } from "@/app/actions/assets";
 import { detectFormatWithClaude } from "@/app/actions/claude-format-detect";
 import type { Asset } from "@/lib/types";
 import { computeEmptyStatsFromAssets, formatExcelImportEmptySummary } from "@/lib/excel-raw-utils";
 import {
   X, Upload, Loader2, CheckCircle, AlertCircle,
   ChevronDown, ChevronUp, Sparkles, FileSpreadsheet,
-  Brain, MapPin, Database, Clock, Ban, Zap,
+  Brain, MapPin, Database, Clock, Ban, Zap, Copy, Download,
 } from "lucide-react";
 
 // ─── Tunables ────────────────────────────────────────────────────────────────
-const AI_BATCH_SIZE = 50;          // activos por llamada Claude (era 20)
+const AI_BATCH_SIZE = 15;          // activos por llamada Claude (combinado con max_tokens=8192 deja margen para lotes con warnings + summary sin truncar)
 const AI_CONCURRENCY = 3;          // llamadas Claude en paralelo
 const AI_SKIP_THRESHOLD = 500;     // omitir IA para archivos > N activos
 const CATASTRO_BATCH_SIZE = 30;    // activos por llamada Catastro (era 15)
@@ -26,6 +26,11 @@ const CATASTRO_CONCURRENCY = 6;    // llamadas Catastro en paralelo
 const DB_BATCH_SIZE = 100;         // activos por upsert a Supabase (era 50)
 const DB_CONCURRENCY = 4;          // upserts paralelos
 // ─────────────────────────────────────────────────────────────────────────────
+
+interface FailedUpsert { id: string; reason: string; }
+
+type LogLevel = "info" | "warn" | "error";
+interface LogEntry { ts: string; level: LogLevel; msg: string; }
 
 function chunkArray<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -148,8 +153,41 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
   const [warningsOpen, setWarningsOpen] = useState(false);
   const [subProgress, setSubProgress] = useState({ done: 0, total: 0, label: "" });
   const [excelEmptySummary, setExcelEmptySummary] = useState<string | null>(null);
+  const [failedUpserts, setFailedUpserts] = useState<FailedUpsert[]>([]);
+  const [failedOpen, setFailedOpen] = useState(false);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const cancelledRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const logsRef = useRef<LogEntry[]>([]);
+
+  /**
+   * Acumula un evento del pipeline de upload. Mirroring inmediato a la
+   * consola del navegador (console.log/warn/error) para que el usuario lo
+   * vea en tiempo real en DevTools, y guardado en estado para descarga.
+   */
+  const pushLog = useCallback((level: LogLevel, msg: string) => {
+    const ts = new Date().toISOString();
+    const entry: LogEntry = { ts, level, msg };
+    logsRef.current.push(entry);
+    setLogs(prev => [...prev, entry]);
+    const tag = "[upload]";
+    if (level === "error") console.error(tag, ts, msg);
+    else if (level === "warn") console.warn(tag, ts, msg);
+    else console.log(tag, ts, msg);
+  }, []);
+
+  const downloadLog = useCallback(() => {
+    const lines = logsRef.current.map(l => `[${l.ts}] ${l.level.toUpperCase()} ${l.msg}`);
+    const blob = new Blob([lines.join("\n") + "\n"], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `propcrm-upload-${new Date().toISOString().replace(/[:.]/g, "-")}.log`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, []);
 
   const updateStep = useCallback((id: StepId, patch: Partial<PipelineStep>) => {
     setSteps(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
@@ -169,8 +207,15 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
     setMessage("");
     setAiSummary("");
     setAiWarnings([]);
+    setFailedUpserts([]);
+    setFailedOpen(false);
+    setLogs([]);
+    logsRef.current = [];
     setParsedCount(0);
     setExcelEmptySummary(null);
+    pushLog("info", `Inicio de upload: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
+
+    const finalFailures: FailedUpsert[] = [];
     setSubProgress({ done: 0, total: 0, label: "" });
     cancelledRef.current = false;
     setSteps(INITIAL_STEPS.map(s => ({ ...s, status: "pending", elapsed: undefined })));
@@ -181,6 +226,7 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
       updateStep("parse", { status: "active", detail: `Leyendo ${file.name}…` });
       const diagResult = await parseExcelFile(file, { diag: true }) as ParseExcelResult;
       let parsed = diagResult.assets;
+      pushLog("info", `Parser estructurado: ${parsed.length} activos · hojas: ${diagResult.sheetDiag.map(s => `${s.sheet}=${s.format}(${s.rows})`).join(", ")}`);
       const sheetInfo = diagResult.sheetDiag
         .filter(s => s.format !== "unknown")
         .map(s => `${s.sheet}: ${s.format} (${s.rows})`)
@@ -194,33 +240,56 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
       });
 
       // ── Step 1b: AI Format Detection (solo si parse devolvió 0) ─────────
+      // Si la IA falla o no detecta formato, NO abortamos: caemos al
+      // parseo heurístico (sin Claude) para que siempre se cargue algo.
       if (parsed.length === 0) {
         const t1 = Date.now();
         updateStep("ai-detect", { status: "active", detail: "Enviando cabeceras a Claude…" });
+        let aiUsed = false;
         try {
           const preview = await extractRawPreview(file);
+          pushLog("info", `Detección IA: enviando cabeceras de ${preview.length} hoja(s)`);
           const detection = await detectFormatWithClaude(preview);
+          pushLog("info", `Detección IA: confidence=${detection.confidence}, descripción="${detection.description}"`);
 
           if (detection.confidence > 0.5 && Object.keys(detection.mapping).length > 0) {
             updateStep("ai-detect", { status: "active", detail: `Formato detectado (${detection.description}). Parseando…` });
-            parsed = await parseWithMapping(file, detection.mapping);
-            if (parsed.length === 0) {
-              updateStep("ai-detect", { status: "error", detail: "Formato detectado pero sin filas válidas", elapsed: Date.now() - t1 });
-              setStatus("error");
-              setMessage(`La IA identificó el formato (${detection.description}) pero no se pudieron extraer filas válidas.`);
-              return;
+            const aiParsed = await parseWithMapping(file, detection.mapping);
+            if (aiParsed.length > 0) {
+              parsed = aiParsed;
+              aiUsed = true;
+              updateStep("ai-detect", { status: "done", detail: `${parsed.length} activo(s) extraídos con IA`, elapsed: Date.now() - t1 });
+            } else {
+              updateStep("ai-detect", { status: "skipped", detail: `IA detectó formato pero no extrajo filas — uso heurística`, elapsed: Date.now() - t1 });
+              pushLog("warn", "IA detectó formato pero parseWithMapping devolvió 0 filas; cayendo a heurística");
             }
-            updateStep("ai-detect", { status: "done", detail: `${parsed.length} activo(s) extraídos con IA`, elapsed: Date.now() - t1 });
           } else {
-            updateStep("ai-detect", { status: "error", detail: "No se pudo detectar el formato", elapsed: Date.now() - t1 });
-            setStatus("error");
-            setMessage("No se encontraron filas válidas. La IA tampoco pudo detectar el formato del Excel.");
-            return;
+            updateStep("ai-detect", { status: "skipped", detail: `IA no detectó formato (conf=${detection.confidence.toFixed(2)}) — uso heurística`, elapsed: Date.now() - t1 });
+            pushLog("warn", `IA confidence ${detection.confidence} bajo umbral 0.5; cayendo a heurística`);
           }
-        } catch {
-          updateStep("ai-detect", { status: "error", detail: "Error de conexión con IA", elapsed: Date.now() - t1 });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          updateStep("ai-detect", { status: "error", detail: `IA no disponible: ${msg.slice(0, 80)} — uso heurística`, elapsed: Date.now() - t1 });
+          pushLog("error", `Detección IA falló: ${msg}`);
+        }
+
+        // ── Step 1c: Fallback heurístico SIN Claude ──────────────────────
+        // Funciona aunque la IA esté caída, la clave sea inválida o no haya internet.
+        if (!aiUsed) {
+          try {
+            const heuristic = await parseExcelHeuristic(file);
+            pushLog("info", `Heurística: ${heuristic.assets.length} activos extraídos de ${heuristic.totalRows} filas en ${heuristic.sheets.length} hoja(s)`);
+            if (heuristic.assets.length > 0) {
+              parsed = heuristic.assets;
+            }
+          } catch (err) {
+            pushLog("error", `Heurística falló: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+
+        if (parsed.length === 0) {
           setStatus("error");
-          setMessage("No se encontraron filas válidas. La detección automática con IA falló.");
+          setMessage("No se encontraron filas válidas en el archivo. Comprueba que tenga datos con cabeceras reconocibles.");
           return;
         }
       } else {
@@ -244,6 +313,9 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
             dbErrors.push(...result.errors);
           }
           rawSaved += result.inserted + result.updated;
+          if (result.errors.length > 0) {
+            pushLog("error", `upsertAssets batch error: ${result.errors.join(" | ")}`);
+          }
           updateStep("db-raw", { status: "active", detail: `${rawSaved}/${parsed.length} activos guardados…` });
         }, DB_CONCURRENCY);
 
@@ -266,6 +338,7 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : "error desconocido";
+        pushLog("error", `Step 2 (db-raw) lanzó: ${msg}`);
         updateStep("db-raw", { status: "error", detail: msg, elapsed: Date.now() - tRaw });
       }
 
@@ -409,8 +482,64 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
             : allEnriched;
           // Guardar en paralelo con batches grandes para minimizar invocaciones
           const dbBatches = chunkArray(toSave, DB_BATCH_SIZE);
-          await runConcurrent(dbBatches, (batch) => upsertAssets(batch), DB_CONCURRENCY);
+          // Bug 3: cada batch capturado individualmente. Si runConcurrent
+          // rechaza por completo (p.ej. requireAdmin throw → sesión perdida),
+          // marcamos TODOS los IDs como fallidos para que el banner rojo se
+          // dispare y el usuario sepa que la persistencia final falló.
+          try {
+            await runConcurrent(dbBatches, async (batch) => {
+              try {
+                const result = await upsertAssets(batch);
+                if (result.errors.length > 0 && result.inserted + result.updated < batch.length) {
+                  for (const a of batch) {
+                    if (!finalFailures.some(f => f.id === a.id)) {
+                      finalFailures.push({ id: a.id, reason: result.errors[0] ?? "upsert final falló" });
+                    }
+                  }
+                }
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                for (const a of batch) {
+                  if (!finalFailures.some(f => f.id === a.id)) {
+                    finalFailures.push({ id: a.id, reason: msg });
+                  }
+                }
+              }
+            }, DB_CONCURRENCY);
+          } catch (err) {
+            console.error("[upload] orquestación de upsert final falló:", err);
+            const msg = err instanceof Error ? err.message : String(err);
+            for (const a of toSave) {
+              if (!finalFailures.some(f => f.id === a.id)) {
+                finalFailures.push({ id: a.id, reason: msg });
+              }
+            }
+          }
         }
+      }
+
+      // Bug 3: verificación post-upload. Comparamos los IDs parseados con los
+      // que realmente están en la BD. Cualquier ID ausente entra en
+      // finalFailures con razón clara — convierte fallo silencioso en visible.
+      try {
+        const expectedIds = parsed.map(a => a.id);
+        const present = await fetchAssetsByIds(expectedIds);
+        const presentIds = new Set(present.map(a => a.id));
+        for (const id of expectedIds) {
+          if (!presentIds.has(id) && !finalFailures.some(f => f.id === id)) {
+            finalFailures.push({ id, reason: "no encontrado en BD tras el upsert" });
+          }
+        }
+      } catch (err) {
+        console.error("[upload] verificación post-upsert falló:", err);
+      }
+
+      if (finalFailures.length > 0) {
+        setFailedUpserts(finalFailures);
+        parts.push(`⚠ ${finalFailures.length} activo(s) NO se guardaron.`);
+        pushLog("error", `${finalFailures.length} activos NO persistidos. IDs: ${finalFailures.slice(0, 10).map(f => f.id).join(", ")}${finalFailures.length > 10 ? "…" : ""}`);
+      } else {
+        pushLog("info", `Verificación post-upload OK: ${parsed.length} activos confirmados en BD`);
       }
 
       setMessage(parts.length > 0 ? parts.join(" ") : `${parsed.length} activos procesados.`);
@@ -622,6 +751,14 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
 
           {status === "success" && (
             <div className="max-h-[60vh] space-y-3 overflow-y-auto">
+              {failedUpserts.length > 0 && (
+                <FailedUpsertsBanner
+                  failures={failedUpserts}
+                  total={parsedCount}
+                  open={failedOpen}
+                  onToggle={() => setFailedOpen(v => !v)}
+                />
+              )}
               <StepList compact />
               <div className="flex items-start gap-2 rounded-lg bg-green-50 px-3 py-2.5">
                 <CheckCircle size={16} className="mt-0.5 shrink-0 text-green-500" />
@@ -660,28 +797,57 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
                   )}
                 </div>
               )}
-              <button
-                type="button"
-                onClick={handleClose}
-                className="mx-auto block rounded-lg bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy3"
-              >
-                Cerrar
-              </button>
+              <div className="flex justify-center gap-2">
+                {logs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={downloadLog}
+                    className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3.5 py-2 text-xs font-medium text-navy transition-colors hover:bg-cream"
+                  >
+                    <Download size={13} /> Descargar log ({logs.length})
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="rounded-lg bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy3"
+                >
+                  Cerrar
+                </button>
+              </div>
             </div>
           )}
 
           {status === "error" && (
             <div className="max-h-[60vh] space-y-3 overflow-y-auto">
+              {failedUpserts.length > 0 && (
+                <FailedUpsertsBanner
+                  failures={failedUpserts}
+                  total={parsedCount}
+                  open={failedOpen}
+                  onToggle={() => setFailedOpen(v => !v)}
+                />
+              )}
               {steps.some(s => s.status !== "pending") && <StepList compact />}
               <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5">
                 <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-400" />
                 <p className="text-xs text-red-600">{message}</p>
               </div>
-              <div className="flex justify-center gap-2">
+              <div className="flex flex-wrap justify-center gap-2">
+                {logs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={downloadLog}
+                    className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3.5 py-2 text-xs font-medium text-navy transition-colors hover:bg-cream"
+                  >
+                    <Download size={13} /> Descargar log ({logs.length})
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
                     setStatus("idle"); setMessage(""); setAiSummary(""); setAiWarnings([]);
+                    setFailedUpserts([]); setFailedOpen(false);
                     setParsedCount(0); setExcelEmptySummary(null); setSubProgress({ done: 0, total: 0, label: "" });
                     cancelledRef.current = false; setSteps(INITIAL_STEPS);
                   }}
@@ -701,6 +867,70 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function FailedUpsertsBanner({
+  failures,
+  total,
+  open,
+  onToggle,
+}: {
+  failures: FailedUpsert[];
+  total: number;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const copyIds = async () => {
+    try {
+      await navigator.clipboard.writeText(failures.map(f => f.id).join("\n"));
+    } catch {
+      /* ignorar — el usuario puede seleccionar manualmente */
+    }
+  };
+  return (
+    <div className="rounded-lg border border-red-300 bg-red-50">
+      <div className="flex items-start gap-2 px-3 py-2.5">
+        <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-500" />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold text-red-700">
+            {failures.length} de {total} activo(s) no se guardaron
+          </p>
+          <p className="mt-0.5 text-[11px] text-red-600">
+            Estas filas NO están en la base de datos. Al refrescar la página no aparecerán.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={copyIds}
+          className="flex shrink-0 items-center gap-1 rounded-md border border-red-300 bg-white px-2 py-1 text-[11px] font-medium text-red-700 transition-colors hover:bg-red-100"
+          title="Copiar IDs al portapapeles"
+        >
+          <Copy size={11} /> Copiar IDs
+        </button>
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex shrink-0 items-center rounded-md p-1 text-red-500 transition-colors hover:bg-red-100"
+          aria-label={open ? "Ocultar detalles" : "Mostrar detalles"}
+        >
+          {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </button>
+      </div>
+      {open && (
+        <div className="max-h-40 overflow-y-auto border-t border-red-200 px-3 py-2">
+          {failures.slice(0, 100).map(f => (
+            <div key={f.id} className="mb-1 last:mb-0 flex gap-2 text-[10px] leading-snug">
+              <span className="font-semibold text-red-800">{f.id}</span>
+              <span className="text-red-600">{f.reason}</span>
+            </div>
+          ))}
+          {failures.length > 100 && (
+            <p className="mt-1 text-[10px] text-red-500">…y {failures.length - 100} más</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

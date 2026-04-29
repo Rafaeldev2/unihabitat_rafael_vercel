@@ -162,10 +162,10 @@ function LoginForm() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-navy via-navy2 to-navy3 px-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br from-gold to-gold3 shadow-lg">
-            <Building2 className="text-navy" size={28} />
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center">
+          <img src="/LogoAzul.svg" alt="Unihabitat" className="h-12 w-auto"/>
           </div>
-          <h1 className="text-2xl font-bold text-white">PropCRM</h1>
+          <h1 className="text-2xl font-bold text-white">Unihabitat</h1>
           <p className="mt-1 text-sm text-white/50">Gestión de activos inmobiliarios</p>
         </div>
 
@@ -261,7 +261,7 @@ function LoginForm() {
         </form>
 
         <p className="mt-6 text-center text-xs text-white/30">
-          PropCRM v2.0 — Panel de gestión inmobiliaria
+          Unihabitat v2.0 — Panel de gestión inmobiliaria
         </p>
       </div>
     </div>

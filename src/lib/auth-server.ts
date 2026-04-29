@@ -53,20 +53,11 @@ export async function requireEditPermission(sectionId: SectionId): Promise<UserS
 }
 
 /**
- * For vendor: checks that the asset is assigned to them.
+ * Vendedores share the admin asset universe: they can view (and, when
+ * `requireEditPermission` allows, edit) every asset. Kept as a function so
+ * existing callers stay unchanged and the gate can be re-tightened later if
+ * the product reintroduces per-vendedor asset assignments.
  */
-export async function requireAssetAccess(session: UserSession, assetId: string): Promise<void> {
-  if (session.role === "admin") return;
-  if (!session.vendedorId) throw new Error("Vendedor sin ID asignado");
-
-  const { createServiceClient } = await import("./supabase/server");
-  const sb = await createServiceClient();
-  const { data } = await sb
-    .from("vendedor_assets")
-    .select("asset_id")
-    .eq("vendedor_id", session.vendedorId)
-    .eq("asset_id", assetId)
-    .maybeSingle();
-
-  if (!data) throw new Error("No tienes acceso a este activo");
+export async function requireAssetAccess(_session: UserSession, _assetId: string): Promise<void> {
+  return;
 }

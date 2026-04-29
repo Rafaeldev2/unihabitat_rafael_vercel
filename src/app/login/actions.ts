@@ -33,6 +33,16 @@ function normalizePasswordInput(raw: unknown): string {
   return raw.replace(ZW_RE, "").trim().normalize("NFC");
 }
 
+async function clearAuthCookies() {
+  const cookieStore = await cookies();
+  cookieStore.delete("dev-auth");
+  for (const c of cookieStore.getAll()) {
+    if (/^sb-.*-auth-token(\.\d+)?$/.test(c.name)) {
+      cookieStore.delete(c.name);
+    }
+  }
+}
+
 export async function signIn(formData: FormData) {
   const emailRaw = formData.get("email");
   const password = formData.get("password");
@@ -68,6 +78,7 @@ export async function signIn(formData: FormData) {
     } catch { /* BD no disponible — continuamos sin vendedorId */ }
   }
 
+  await clearAuthCookies();
   const cookieStore = await cookies();
   cookieStore.set(
     "dev-auth",
@@ -94,6 +105,7 @@ export async function signUp(formData: FormData): Promise<{ error?: string; succ
 
   try {
     // Create dev-auth cookie
+    await clearAuthCookies();
     const cookieStore = await cookies();
     cookieStore.set("dev-auth", JSON.stringify({ email, role: "cliente", nombre }), cookieBase);
 
@@ -123,8 +135,7 @@ export async function signUp(formData: FormData): Promise<{ error?: string; succ
 }
 
 export async function signOut() {
-  const cookieStore = await cookies();
-  cookieStore.delete("dev-auth");
+  await clearAuthCookies();
   redirect("/login");
 }
 

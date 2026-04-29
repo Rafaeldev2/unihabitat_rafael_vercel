@@ -13,7 +13,10 @@ export async function fetchAssets(): Promise<Asset[]> {
     .from("assets")
     .select("*")
     .order("created_at", { ascending: false });
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("[fetchAssets] Supabase error:", error.message);
+    throw new Error(error.message);
+  }
   return (data ?? []).map(rowToAsset);
 }
 
@@ -223,6 +226,7 @@ export async function upsertAssets(assets: Asset[]): Promise<{ inserted: number;
       .upsert(rows, { onConflict: "id", ignoreDuplicates: false });
 
     if (upsertErr) {
+      console.error(`[upsertAssets] upsertErr batch starting at ${i} (${batchIds.length} ids): ${upsertErr.message}`, batchIds);
       errors.push(`Batch ${i}: ${upsertErr.message}`);
     } else {
       for (const r of rows) {

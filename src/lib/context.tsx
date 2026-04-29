@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import type { Asset, Comprador, Vendedor, Tarea } from "./types";
 import type { VendorPermission, UserSession } from "./permissions";
 import { assets as initialAssets, compradores as initialComp, vendedores as initialVend, tareasData } from "./mock-data";
@@ -52,6 +53,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [permissions, setPermissions] = useState<VendorPermission[]>([]);
   const [assignedAssetIds, setAssignedAssetIds] = useState<string[]>([]);
   const [assignedCompradorIds, setAssignedCompradorIds] = useState<string[]>([]);
+  const pathname = usePathname();
 
   const assetsLoadTokenRef = useRef(0);
   const BACKFILL_CHUNK = 100;
@@ -61,10 +63,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       let rows = await fetchAssets();
       if (token !== assetsLoadTokenRef.current) return;
-      if (rows.length === 0) return;
 
+      // Antes existía un early-return cuando rows.length === 0 que dejaba los
+      // mocks visibles. Eso enmascaraba fallos reales del fetch (BD vacía vs
+      // BD inalcanzable se veían igual). Ahora siempre escribimos el resultado.
       const GEOAPIFY_KEY = process.env.NEXT_PUBLIC_GEOAPIFY_KEY;
-      if (GEOAPIFY_KEY) {
+      if (GEOAPIFY_KEY && rows.length > 0) {
         const needMap = rows.filter((a) => shouldBackfillMapFromAddress(a));
         for (let i = 0; i < needMap.length; i += BACKFILL_CHUNK) {
           if (token !== assetsLoadTokenRef.current) return;
@@ -91,17 +95,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       if (token !== assetsLoadTokenRef.current) return;
       setState((prev) => ({ ...prev, assets: rows }));
-    } catch {
-      /* mantener estado (p. ej. mocks) */
+    } catch (err) {
+      // Si la BD falla, NO mantenemos los mocks: es engañoso. Vaciamos la
+      // lista y registramos el error para que sea visible en DevTools.
+      console.error("[loadAssetsFromServer] fetchAssets falló:", err);
+      if (token === assetsLoadTokenRef.current) {
+        setState((prev) => ({ ...prev, assets: [] }));
+      }
     }
   }, []);
 
   const refreshAssets = useCallback(() => loadAssetsFromServer(), [loadAssetsFromServer]);
 
   useEffect(() => {
-    const s = getDevAuthFromDocument();
-    setSession(s);
-  }, []);
+    // Re-read the dev-auth cookie on every navigation so that signing out and
+    // logging in under a different role (admin ↔ vendedor) refreshes the
+    // session immediately. AppProvider lives in the root layout and never
+    // remounts, so a one-shot mount effect would leave `session` stuck at
+    // whatever it was on first page load.
+    setSession(getDevAuthFromDocument());
+  }, [pathname]);
 
   useEffect(() => {
     void loadAssetsFromServer();
@@ -138,11 +151,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [session]);
 
-  const filteredAssets = session?.role === "vendedor" && assignedAssetIds.length > 0
-    ? state.assets.filter((a) => assignedAssetIds.includes(a.id))
-    : session?.role === "vendedor"
-      ? []
-      : state.assets;
+  // Vendedor and admin see the same asset list. Per-vendedor restriction was
+  // dropped intentionally — the only role-based hiding for vendedores happens
+  // at the asset-detail tab level (Agentes / Clientes / Administrador).
+  const filteredAssets = state.assets;
 
   const filteredCompradores = session?.role === "vendedor" && assignedCompradorIds.length > 0
     ? state.compradores.filter((c) => assignedCompradorIds.includes(c.id))
