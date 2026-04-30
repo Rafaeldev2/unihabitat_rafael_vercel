@@ -11,6 +11,7 @@ import { signOut } from "@/app/login/actions";
 import { getDevAuthFromDocument } from "@/lib/auth-helpers";
 import { fetchVendorPermissions } from "@/app/actions/permissions";
 import type { VendorPermission, SectionId, UserSession } from "@/lib/permissions";
+import { AssetsErrorBanner } from "@/components/AssetsErrorBanner";
 
 interface NavItem {
   href: string;
@@ -122,6 +123,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
 
       <main className="ml-[72px] flex flex-1 flex-col min-h-screen">
+        <AssetsErrorBanner />
         {children}
       </main>
     </div>

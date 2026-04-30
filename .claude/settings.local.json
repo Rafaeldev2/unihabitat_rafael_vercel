@@ -7,7 +7,13 @@
       "Bash(npx eslint *)",
       "Bash(xargs grep *)",
       "Skill(claude-api)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "mcp__plugin_vercel_vercel__list_projects",
+      "mcp__plugin_vercel_vercel__get_project",
+      "mcp__plugin_vercel_vercel__get_deployment_build_logs",
+      "mcp__plugin_vercel_vercel__deploy_to_vercel",
+      "mcp__plugin_vercel_vercel__get_deployment",
+      "mcp__plugin_vercel_vercel__list_deployments"
     ]
   }
 }

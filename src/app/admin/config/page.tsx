@@ -15,6 +15,7 @@ import {
   assignCompradorToVendor,
   unassignCompradorFromVendor,
 } from "@/app/actions/permissions";
+import { GeoapifyDiagnostics } from "@/components/GeoapifyDiagnostics";
 
 interface ToggleItem { label: string; desc: string; enabled: boolean; }
 
@@ -146,6 +147,7 @@ export default function ConfigPage() {
         <p className="mb-4 text-xs text-muted">Ajustes generales del CRM y portal público</p>
 
         <div className="flex flex-col gap-4">
+          <GeoapifyDiagnostics />
           <SettingsSection title="General" items={general} onToggle={(i) => toggle(general, setGeneral, i)} />
           <SettingsSection title="NDA y Privacidad" items={nda} onToggle={(i) => toggle(nda, setNda, i)} />
           <SettingsSection title="Portal Público" items={pubConf} onToggle={(i) => toggle(pubConf, setPubConf, i)} />

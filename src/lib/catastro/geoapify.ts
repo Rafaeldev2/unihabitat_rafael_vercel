@@ -1,14 +1,27 @@
 /**
  * Geocodificación y mapas estáticos Geoapify (servidor).
  * Usa GEOAPIFY_API_KEY; puede reutilizarse NEXT_PUBLIC_GEOAPIFY_KEY en build si solo hay una.
+ *
+ * Todas las rutas de error se loguean con categorías estables (`logGeo`) para
+ * que el operador pueda distinguir "dirección no encontrada" de "API key
+ * rechazada" sin tener que parsear stack traces.
  */
 
+import { logGeo, classifyFetchError, safeSnippet } from "./geoapify-logger";
+
+export type ServerKeySource = "GEOAPIFY_API_KEY" | "NEXT_PUBLIC_GEOAPIFY_KEY" | "none";
+
+/** Devuelve la clave + el origen para que las herramientas de diagnóstico puedan reportarlo. */
+export function getServerGeoapifyKeyInfo(): { key: string; source: ServerKeySource } {
+  const primary = process.env.GEOAPIFY_API_KEY?.trim();
+  if (primary) return { key: primary, source: "GEOAPIFY_API_KEY" };
+  const fallback = process.env.NEXT_PUBLIC_GEOAPIFY_KEY?.trim();
+  if (fallback) return { key: fallback, source: "NEXT_PUBLIC_GEOAPIFY_KEY" };
+  return { key: "", source: "none" };
+}
+
 function getServerGeoapifyKey(): string {
-  return (
-    process.env.GEOAPIFY_API_KEY?.trim() ||
-    process.env.NEXT_PUBLIC_GEOAPIFY_KEY?.trim() ||
-    ""
-  );
+  return getServerGeoapifyKeyInfo().key;
 }
 
 export function buildStaticMapUrl(lon: string, lat: string, apiKey?: string): string {
@@ -37,11 +50,22 @@ function coordsFromGeoapifyJson(data: {
 
 /**
  * Geocodifica texto (dirección + municipio + provincia) con Geoapify.
+ * Cualquier fallo se loguea con categoría: 401/429/5xx, timeout, network, json,
+ * sin clave, o sin coincidencia. Sigue devolviendo `null` para no romper a los
+ * llamadores; la diferencia es que ahora deja rastro.
  */
-export async function geocodeAddressLine(text: string): Promise<GeocodeHit | null> {
+export async function geocodeAddressLine(text: string, assetId?: string): Promise<GeocodeHit | null> {
+  const t0 = Date.now();
   const key = getServerGeoapifyKey();
   const q = text.trim();
-  if (!key || !q) return null;
+  if (!key) {
+    logGeo({ op: "geocodeAddressLine", reason: "no-key", ok: false, assetId, textSnippet: safeSnippet(q, 120) });
+    return null;
+  }
+  if (!q) {
+    logGeo({ op: "geocodeAddressLine", reason: "no-input", ok: false, assetId });
+    return null;
+  }
 
   const url = new URL("https://api.geoapify.com/v1/geocode/search");
   url.searchParams.set("text", q);
@@ -55,12 +79,44 @@ export async function geocodeAddressLine(text: string): Promise<GeocodeHit | nul
       headers: { Accept: "application/json" },
       cache: "no-store",
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      let body = "";
+      try { body = await res.text(); } catch { /* ignore */ }
+      logGeo({
+        op: "geocodeAddressLine",
+        reason: `http_${res.status}` as const,
+        ok: false,
+        status: res.status,
+        durationMs: Date.now() - t0,
+        assetId,
+        textSnippet: safeSnippet(q, 120),
+        bodySnippet: safeSnippet(body, 200),
+      });
+      return null;
+    }
     const data = (await res.json()) as {
       features?: { geometry?: { coordinates?: [number, number] } }[];
     };
-    return coordsFromGeoapifyJson(data);
-  } catch {
+    const hit = coordsFromGeoapifyJson(data);
+    logGeo({
+      op: "geocodeAddressLine",
+      reason: hit ? "ok" : "no-match",
+      ok: !!hit,
+      durationMs: Date.now() - t0,
+      assetId,
+      textSnippet: safeSnippet(q, 120),
+    });
+    return hit;
+  } catch (err) {
+    logGeo({
+      op: "geocodeAddressLine",
+      reason: classifyFetchError(err),
+      ok: false,
+      durationMs: Date.now() - t0,
+      assetId,
+      textSnippet: safeSnippet(q, 120),
+      message: err instanceof Error ? err.message : String(err),
+    });
     return null;
   }
 }
@@ -76,6 +132,11 @@ function geoClean(s: string | undefined | null): string {
 
 /**
  * Texto libre primero; luego postcode + city + state con filter=countrycode:es.
+ * Mantiene el contrato existente — devuelve la primera coincidencia o null.
+ * Los pasos extra del "ladder" (Catastro, fullAddr, reconstrucción) viven en
+ * `geocode-ladder.ts`; este stub conserva el comportamiento mínimo histórico
+ * para no romper a los llamadores que no usan el ladder.
+ *
  * @see https://apidocs.geoapify.com/docs/geocoding/forward-geocoding/
  */
 export async function geocodeAssetStub(stub: {
@@ -83,21 +144,28 @@ export async function geocodeAssetStub(stub: {
   cp: string;
   pob: string;
   prov: string;
-}): Promise<GeocodeHit | null> {
+}, assetId?: string): Promise<GeocodeHit | null> {
+  const t0 = Date.now();
   const key = getServerGeoapifyKey();
-  if (!key) return null;
+  if (!key) {
+    logGeo({ op: "geocodeAssetStub", reason: "no-key", ok: false, assetId });
+    return null;
+  }
 
   const addr = geoClean(stub.addr);
   const cp = geoClean(stub.cp);
   const pob = geoClean(stub.pob);
   const prov = geoClean(stub.prov);
 
-  if (!addr && !cp && !pob && !prov) return null;
+  if (!addr && !cp && !pob && !prov) {
+    logGeo({ op: "geocodeAssetStub", reason: "no-input", ok: false, assetId });
+    return null;
+  }
 
   if (addr || (cp && pob)) {
     const parts = [addr, cp, pob, prov].filter(Boolean);
     if (parts.length > 0) {
-      const hit = await geocodeAddressLine(`${parts.join(", ")}, España`);
+      const hit = await geocodeAddressLine(`${parts.join(", ")}, España`, assetId);
       if (hit) return hit;
     }
   }
@@ -122,19 +190,54 @@ export async function geocodeAssetStub(stub: {
       url.searchParams.set("state", prov);
       hasStruct = true;
     }
-    if (!hasStruct) return null;
+    if (!hasStruct) {
+      logGeo({ op: "geocodeAssetStub:structured", reason: "no-input", ok: false, assetId });
+      return null;
+    }
 
+    const queryDescription = `cp=${cp} pob=${pob} prov=${prov}`;
     const res = await fetch(url.toString(), {
       signal: AbortSignal.timeout(12_000),
       headers: { Accept: "application/json" },
       cache: "no-store",
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      let body = "";
+      try { body = await res.text(); } catch { /* ignore */ }
+      logGeo({
+        op: "geocodeAssetStub:structured",
+        reason: `http_${res.status}` as const,
+        ok: false,
+        status: res.status,
+        durationMs: Date.now() - t0,
+        assetId,
+        textSnippet: safeSnippet(queryDescription, 120),
+        bodySnippet: safeSnippet(body, 200),
+      });
+      return null;
+    }
     const data = (await res.json()) as {
       features?: { geometry?: { coordinates?: [number, number] } }[];
     };
-    return coordsFromGeoapifyJson(data);
-  } catch {
+    const hit = coordsFromGeoapifyJson(data);
+    logGeo({
+      op: "geocodeAssetStub:structured",
+      reason: hit ? "ok" : "no-match",
+      ok: !!hit,
+      durationMs: Date.now() - t0,
+      assetId,
+      textSnippet: safeSnippet(queryDescription, 120),
+    });
+    return hit;
+  } catch (err) {
+    logGeo({
+      op: "geocodeAssetStub:structured",
+      reason: classifyFetchError(err),
+      ok: false,
+      durationMs: Date.now() - t0,
+      assetId,
+      message: err instanceof Error ? err.message : String(err),
+    });
     return null;
   }
 }

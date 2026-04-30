@@ -4,7 +4,9 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef, ty
 import { usePathname } from "next/navigation";
 import type { Asset, Comprador, Vendedor, Tarea } from "./types";
 import type { VendorPermission, UserSession } from "./permissions";
-import { assets as initialAssets, compradores as initialComp, vendedores as initialVend, tareasData } from "./mock-data";
+// `assets` de mock-data ya NO se usa como semilla inicial; lo dejamos
+// disponible por si en el futuro se añade una acción "Sembrar demo".
+import { compradores as initialComp, vendedores as initialVend, tareasData } from "./mock-data";
 import { fetchAssets } from "@/app/actions/assets";
 import { backfillMissingMaps } from "@/app/actions/maps";
 import { shouldBackfillMapFromAddress } from "@/lib/map-default";
@@ -16,6 +18,8 @@ interface AppState {
   compradores: Comprador[];
   vendedores: Vendedor[];
   tareas: Tarea[];
+  assetsLoading: boolean;
+  assetsError: string | null;
 }
 
 interface AppContextType extends AppState {
@@ -42,11 +46,19 @@ interface AppContextType extends AppState {
 const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  // Inicializamos `assets` vacío para que la lista nunca arranque con los 6
+  // mocks de `mock-data.ts`. Los datos reales llegan de Supabase vía
+  // `loadAssetsFromServer()` y se exponen `assetsLoading` / `assetsError`
+  // para que la UI distinga "cargando" de "error" en lugar de mostrar mocks
+  // engañosos. Compradores, vendedores y tareas conservan su semilla mientras
+  // no estén dentro del alcance de esta corrección.
   const [state, setState] = useState<AppState>({
-    assets: initialAssets,
+    assets: [],
     compradores: initialComp,
     vendedores: initialVend,
     tareas: tareasData,
+    assetsLoading: true,
+    assetsError: null,
   });
 
   const [session, setSession] = useState<UserSession | null>(null);
@@ -60,6 +72,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const loadAssetsFromServer = useCallback(async () => {
     const token = ++assetsLoadTokenRef.current;
+    setState((prev) => ({ ...prev, assetsLoading: true, assetsError: null }));
     try {
       let rows = await fetchAssets();
       if (token !== assetsLoadTokenRef.current) return;
@@ -67,9 +80,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Antes existía un early-return cuando rows.length === 0 que dejaba los
       // mocks visibles. Eso enmascaraba fallos reales del fetch (BD vacía vs
       // BD inalcanzable se veían igual). Ahora siempre escribimos el resultado.
+      // Backfill defensivo: solo para filas SIN coordenadas y con dirección
+      // utilizable. La importación inicial ya geocodifica server-side, así
+      // que aquí solo recuperamos casos antiguos o errores transitorios.
       const GEOAPIFY_KEY = process.env.NEXT_PUBLIC_GEOAPIFY_KEY;
       if (GEOAPIFY_KEY && rows.length > 0) {
-        const needMap = rows.filter((a) => shouldBackfillMapFromAddress(a));
+        const needMap = rows.filter(
+          (a) => a.lat == null && a.lng == null && shouldBackfillMapFromAddress(a),
+        );
         for (let i = 0; i < needMap.length; i += BACKFILL_CHUNK) {
           if (token !== assetsLoadTokenRef.current) return;
           const chunk = needMap.slice(i, i + BACKFILL_CHUNK);
@@ -81,7 +99,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             cp: a.cp,
           }));
           try {
-            const hits = await backfillMissingMaps(stubs);
+            const { hits } = await backfillMissingMaps(stubs);
             rows = rows.map((a) => {
               const h = hits[a.id];
               if (!h) return a;
@@ -94,13 +112,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       if (token !== assetsLoadTokenRef.current) return;
-      setState((prev) => ({ ...prev, assets: rows }));
+      setState((prev) => ({ ...prev, assets: rows, assetsLoading: false, assetsError: null }));
     } catch (err) {
       // Si la BD falla, NO mantenemos los mocks: es engañoso. Vaciamos la
-      // lista y registramos el error para que sea visible en DevTools.
+      // lista, registramos el error y lo exponemos al UI vía `assetsError`.
       console.error("[loadAssetsFromServer] fetchAssets falló:", err);
       if (token === assetsLoadTokenRef.current) {
-        setState((prev) => ({ ...prev, assets: [] }));
+        const msg = err instanceof Error ? err.message : "No se pudieron cargar los activos";
+        setState((prev) => ({ ...prev, assets: [], assetsLoading: false, assetsError: msg }));
       }
     }
   }, []);
@@ -226,6 +245,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       compradores: filteredCompradores,
       vendedores: state.vendedores,
       tareas: filteredTareas,
+      assetsLoading: state.assetsLoading,
+      assetsError: state.assetsError,
       session,
       permissions,
       assignedAssetIds,

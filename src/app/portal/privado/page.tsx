@@ -46,7 +46,7 @@ export default function PortalPrivadoPage() {
           cp: a.cp,
         }));
         try {
-          const hits = await backfillMissingMaps(stubs);
+          const { hits } = await backfillMissingMaps(stubs);
           next = data.map((a) => {
             const h = hits[a.id];
             if (!h) return a;

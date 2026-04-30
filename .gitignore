@@ -41,3 +41,10 @@ Thumbs.db
 neondatabase.md
 supabecredential.md
 
+.env*.local
+
+# Test artifacts
+test-logs/
+playwright-report/
+test-results/
+playwright/.cache/

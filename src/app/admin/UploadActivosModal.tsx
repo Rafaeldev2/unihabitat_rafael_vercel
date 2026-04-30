@@ -8,6 +8,7 @@ import type { CatastroEnrichFailure } from "@/app/actions/catastro";
 import { validateAssetsBatch } from "@/app/actions/claude";
 import type { ClaudeAssetResult } from "@/app/actions/claude";
 import { upsertAssets, fetchAssetsByIds } from "@/app/actions/assets";
+import { backfillUploadedMaps } from "@/app/actions/maps";
 import { detectFormatWithClaude } from "@/app/actions/claude-format-detect";
 import type { Asset } from "@/lib/types";
 import { computeEmptyStatsFromAssets, formatExcelImportEmptySummary } from "@/lib/excel-raw-utils";
@@ -540,6 +541,62 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
         pushLog("error", `${finalFailures.length} activos NO persistidos. IDs: ${finalFailures.slice(0, 10).map(f => f.id).join(", ")}${finalFailures.length > 10 ? "…" : ""}`);
       } else {
         pushLog("info", `Verificación post-upload OK: ${parsed.length} activos confirmados en BD`);
+      }
+
+      // Bug 3: geocodifica server-side los activos recién importados para
+      // que el mapa real (lat/lng + URL Geoapify) ya esté persistido en BD
+      // antes del primer refresh. Sin esto, el placeholder de Madrid quedaba
+      // visible hasta que el cliente disparara el backfill. La acción usa
+      // ahora el "ladder" de 7 pasos (direct → catastro → fullAddr → addr/recon
+      // → structured → coarse) y reporta de forma diferenciada qué se geocodificó,
+      // qué quedó sin resolver y si el upsert de BD falló.
+      try {
+        const persistedIds = parsed
+          .map(a => a.id)
+          .filter(id => !finalFailures.some(f => f.id === id));
+        if (persistedIds.length > 0) {
+          const r = await backfillUploadedMaps(persistedIds);
+
+          const methodSummary = Object.entries(r.byMethod)
+            .map(([m, n]) => `${m}=${n}`)
+            .join(" ");
+          pushLog(
+            "info",
+            `Geocodificación post-import: ${r.persisted} persistidos / ${r.geocoded} geocodificados / ${r.unresolved} sin resultado` +
+              (methodSummary ? ` · métodos: ${methodSummary}` : ""),
+          );
+
+          if (r.persistError) {
+            pushLog(
+              "error",
+              `Mapas: error al persistir en Supabase — ${r.persistError}. Revisa RLS, permisos del service role y conectividad.`,
+            );
+          }
+          if (r.driftIds.length > 0) {
+            pushLog(
+              "warn",
+              `Mapas: ${r.driftIds.length} fila(s) geocodificada(s) sin lat/lng confirmados en BD (drift): ` +
+                `${r.driftIds.slice(0, 8).join(", ")}${r.driftIds.length > 8 ? "…" : ""}`,
+            );
+          }
+          if (r.unresolved > 0) {
+            pushLog(
+              "warn",
+              `Mapas: ${r.unresolved} activo(s) sin coordenadas tras el ladder. ` +
+                `Verifica direcciones en la ficha o usa "Forzar" si tienen referencia catastral.`,
+            );
+          }
+          if (r.geocoded === 0 && r.requested > 0) {
+            pushLog(
+              "error",
+              `Mapas: 0 activos geocodificados. Comprueba GEOAPIFY_API_KEY en .env.local y reinicia npm run dev. ` +
+                `Diagnóstico rápido: /admin/config → "Probar Geoapify".`,
+            );
+          }
+        }
+      } catch (err) {
+        console.error("[upload] backfillUploadedMaps falló:", err);
+        pushLog("warn", "Geocodificación post-import falló (los mapas se intentarán de nuevo al cargar la lista).");
       }
 
       setMessage(parts.length > 0 ? parts.join(" ") : `${parsed.length} activos procesados.`);
