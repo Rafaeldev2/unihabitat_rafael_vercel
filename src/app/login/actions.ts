@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { upsertComprador } from "@/app/actions/compradores";
+import { upsertComprador, ensureCompradorForEmail } from "@/app/actions/compradores";
 import { createServiceClient } from "@/lib/supabase/server";
 
 const cookieBase = {
@@ -66,6 +66,7 @@ export async function signIn(formData: FormData) {
   }
 
   let vendedorId: string | undefined;
+  let compradorId: string | undefined;
   if (devUser.role === "vendedor") {
     try {
       const sb = await createServiceClient();
@@ -76,13 +77,23 @@ export async function signIn(formData: FormData) {
         .maybeSingle();
       vendedorId = data?.id ?? undefined;
     } catch { /* BD no disponible — continuamos sin vendedorId */ }
+  } else if (devUser.role === "cliente") {
+    try {
+      compradorId = await ensureCompradorForEmail(emailKey, devUser.nombre);
+    } catch { /* BD no disponible — continuamos sin compradorId */ }
   }
 
   await clearAuthCookies();
   const cookieStore = await cookies();
   cookieStore.set(
     "dev-auth",
-    JSON.stringify({ email: emailKey, role: devUser.role, nombre: devUser.nombre, ...(vendedorId ? { vendedorId } : {}) }),
+    JSON.stringify({
+      email: emailKey,
+      role: devUser.role,
+      nombre: devUser.nombre,
+      ...(vendedorId ? { vendedorId } : {}),
+      ...(compradorId ? { compradorId } : {}),
+    }),
     cookieBase,
   );
   const dest = redirectTo || (devUser.role === "admin" || devUser.role === "vendedor" ? "/admin" : "/portal/privado");
@@ -107,7 +118,7 @@ export async function signUp(formData: FormData): Promise<{ error?: string; succ
     // Create dev-auth cookie
     await clearAuthCookies();
     const cookieStore = await cookies();
-    cookieStore.set("dev-auth", JSON.stringify({ email, role: "cliente", nombre }), cookieBase);
+    cookieStore.set("dev-auth", JSON.stringify({ email, role: "cliente", nombre, compradorId }), cookieBase);
 
     // Create comprador record via server action
     await upsertComprador({

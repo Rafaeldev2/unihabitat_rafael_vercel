@@ -8,12 +8,13 @@ import { useSearchParams } from "next/navigation";
 import {
   Search, MapPin, Building, SlidersHorizontal, X,
   ArrowUpDown,
-  Ruler, Tag, Layers,
+  Ruler, Tag, Layers, Star,
 } from "lucide-react";
 import { Suspense } from "react";
 import { FilterSelect } from "@/components/FilterSelect";
 import { InteractiveMap } from "@/components/InteractiveMap";
 import { usePortalAuth } from "@/hooks/usePortalAuth";
+import { useFavoritos } from "@/hooks/useFavoritos";
 
 type SortKey = "none" | "price_asc" | "price_desc" | "sqm_asc" | "sqm_desc" | "pob_az";
 
@@ -38,6 +39,8 @@ function PortalContent() {
   const [fPob, setFPob] = useState("");
   const [fTipo, setFTipo] = useState(searchParams.get("tipo") ?? "");
   const [sortBy, setSortBy] = useState<SortKey>("none");
+  const [compradorId, setCompradorId] = useState<string | null>(null);
+  const { isFavorito, toggleFavorito } = useFavoritos(compradorId);
 
   useEffect(() => {
     setQ(searchParams.get("pob") ?? "");
@@ -45,6 +48,16 @@ function PortalContent() {
     setFTipo(searchParams.get("tipo") ?? "");
     setFCat(searchParams.get("cat") ?? "");
   }, [searchParams]);
+
+  useEffect(() => {
+    const devCookie = document.cookie.split("; ").find(c => c.startsWith("dev-auth="));
+    if (devCookie) {
+      try {
+        const dev = JSON.parse(decodeURIComponent(devCookie.split("=").slice(1).join("=")));
+        setCompradorId(dev.compradorId ?? dev.comprador_id ?? null);
+      } catch { /* ignore */ }
+    }
+  }, []);
 
   const filtered = useMemo(() => {
     const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
@@ -267,6 +280,16 @@ function PortalContent() {
                       {groupsByContract[a.adm.con].length} inmuebles asociados al {a.cat || "NPL"}
                     </span>
                   </div>
+                )}
+                {compradorId && (
+                  <button
+                    type="button"
+                    aria-label={isFavorito(a.id) ? "Quitar de favoritos" : "Marcar como favorito"}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleFavorito(a.id); }}
+                    className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur transition-all hover:bg-white"
+                  >
+                    <Star size={16} className={isFavorito(a.id) ? "fill-gold text-gold" : "text-muted hover:text-gold"} />
+                  </button>
                 )}
               </div>
 

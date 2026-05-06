@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import { rowToAsset, assetToRow, mergeExcelRawMaps } from "@/lib/supabase/db";
+import { rowToAsset, rowToAssetPublic, assetToRow, mergeExcelRawMaps } from "@/lib/supabase/db";
 import type { Asset } from "@/lib/types";
 import { buildStaticMapUrl } from "@/lib/catastro/geoapify";
 import { requireAdmin, requireAdminOrVendor, requireEditPermission, requireAssetAccess } from "@/lib/auth-server";
@@ -20,6 +20,11 @@ export async function fetchAssets(): Promise<Asset[]> {
   return (data ?? []).map(rowToAsset);
 }
 
+/**
+ * Listado público para el portal: sanitiza PII del propietario, datos
+ * administrativos (cartera/contrato/deuda) y `excel_raw` antes de devolverlo
+ * al cliente.
+ */
 export async function fetchPublicAssets(): Promise<Asset[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -28,9 +33,13 @@ export async function fetchPublicAssets(): Promise<Asset[]> {
     .eq("pub", true)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
-  return (data ?? []).map(rowToAsset);
+  return (data ?? []).map(rowToAssetPublic);
 }
 
+/**
+ * Listado público por IDs (zona privada del cliente, dedup en uploads).
+ * Devuelve datos sanitizados — no incluye PII del propietario.
+ */
 export async function fetchAssetsByIds(ids: string[]): Promise<Asset[]> {
   if (ids.length === 0) return [];
   const supabase = await createServiceClient();
@@ -39,10 +48,14 @@ export async function fetchAssetsByIds(ids: string[]): Promise<Asset[]> {
     .select("*")
     .in("id", ids);
   if (error) throw new Error(error.message);
-  return (data ?? []).map(rowToAsset);
+  return (data ?? []).map(rowToAssetPublic);
 }
 
-/** Lectura con cliente anónimo (portal / rutas públicas). */
+/**
+ * Lectura con cliente anónimo (portal público y zona privada del cliente).
+ * Devuelve datos sanitizados — no expone owner_name/tel/mail, datos de cartera
+ * ni excel_raw. Para uso administrativo, ver fetchAssetByIdForAdmin.
+ */
 export async function fetchAssetById(id: string): Promise<Asset | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -51,7 +64,7 @@ export async function fetchAssetById(id: string): Promise<Asset | null> {
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  return data ? rowToAsset(data) : null;
+  return data ? rowToAssetPublic(data) : null;
 }
 
 /** Panel admin: incluye excel_raw y demás columnas con service role tras comprobar acceso. */

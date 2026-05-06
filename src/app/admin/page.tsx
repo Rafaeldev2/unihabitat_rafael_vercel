@@ -202,23 +202,27 @@ export default function ActivosPage() {
                 {label} <SortIcon col={col} />
               </button>
             ))}
-            <div className="mx-0.5 hidden h-4 w-px self-center bg-border2 sm:block" aria-hidden />
-            <button
-              type="button"
-              onClick={handleDeleteSelected}
-              disabled={deleting || selectedCount === 0}
-              className="flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-600 transition-colors hover:bg-red-100 disabled:opacity-40"
-            >
-              <Trash2 size={12} /> Borrar seleccionados{selectedCount > 0 ? ` (${selectedCount})` : ""}
-            </button>
-            <button
-              type="button"
-              onClick={handleDeleteAll}
-              disabled={deleting || assets.length === 0}
-              className="flex items-center gap-1.5 rounded-md border border-red-300 bg-white px-2.5 py-1 text-[11px] font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-40"
-            >
-              <Trash2 size={12} /> Borrar todos
-            </button>
+            {session?.role === "admin" && (
+              <>
+                <div className="mx-0.5 hidden h-4 w-px self-center bg-border2 sm:block" aria-hidden />
+                <button
+                  type="button"
+                  onClick={handleDeleteSelected}
+                  disabled={deleting || selectedCount === 0}
+                  className="flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-600 transition-colors hover:bg-red-100 disabled:opacity-40"
+                >
+                  <Trash2 size={12} /> Borrar seleccionados{selectedCount > 0 ? ` (${selectedCount})` : ""}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteAll}
+                  disabled={deleting || assets.length === 0}
+                  className="flex items-center gap-1.5 rounded-md border border-red-300 bg-white px-2.5 py-1 text-[11px] font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-40"
+                >
+                  <Trash2 size={12} /> Borrar todos
+                </button>
+              </>
+            )}
           </div>
         </div>
 

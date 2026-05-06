@@ -57,3 +57,8 @@ create policy "ofertas_anon_update" on public.ofertas for update using (true);
 create policy "comprador_assets_anon_select" on public.comprador_assets for select using (true);
 create policy "comprador_assets_anon_insert" on public.comprador_assets for insert with check (true);
 create policy "comprador_assets_anon_delete" on public.comprador_assets for delete using (true);
+
+-- Comprador Favoritos
+create policy "comprador_favoritos_anon_select" on public.comprador_favoritos for select using (true);
+create policy "comprador_favoritos_anon_insert" on public.comprador_favoritos for insert with check (true);
+create policy "comprador_favoritos_anon_delete" on public.comprador_favoritos for delete using (true);

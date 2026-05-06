@@ -214,6 +214,14 @@ create table if not exists public.comprador_assets (
   primary key (comprador_id, asset_id)
 );
 
+-- COMPRADOR ↔ ASSETS favorites (cada cliente marca sus propios favoritos)
+create table if not exists public.comprador_favoritos (
+  comprador_id text references public.compradores(id) on delete cascade,
+  asset_id text references public.assets(id) on delete cascade,
+  created_at timestamptz default now(),
+  primary key (comprador_id, asset_id)
+);
+
 -- VENDEDOR PERMISSIONS: per-vendor section access control
 create table if not exists public.vendedor_permissions (
   vendedor_id text references public.vendedores(id) on delete cascade,
@@ -258,6 +266,9 @@ create index if not exists idx_ofertas_estado on public.ofertas(estado);
 
 create index if not exists idx_comprador_assets_comprador on public.comprador_assets(comprador_id);
 create index if not exists idx_comprador_assets_asset on public.comprador_assets(asset_id);
+
+create index if not exists idx_comprador_favoritos_comprador on public.comprador_favoritos(comprador_id);
+create index if not exists idx_comprador_favoritos_asset on public.comprador_favoritos(asset_id);
 
 create index if not exists idx_vendedor_perms_vendor on public.vendedor_permissions(vendedor_id);
 create index if not exists idx_vendedor_assets_vendor on public.vendedor_assets(vendedor_id);
@@ -361,6 +372,23 @@ create policy "comprador_assets_admin" on public.comprador_assets
   for all using (public.is_admin());
 create policy "comprador_assets_client_read" on public.comprador_assets
   for select using (
+    comprador_id in (select id from public.compradores where user_id = auth.uid())
+  );
+
+-- COMPRADOR_FAVORITOS: admin full, clients manage own
+alter table public.comprador_favoritos enable row level security;
+create policy "comprador_favoritos_admin" on public.comprador_favoritos
+  for all using (public.is_admin());
+create policy "comprador_favoritos_client_read" on public.comprador_favoritos
+  for select using (
+    comprador_id in (select id from public.compradores where user_id = auth.uid())
+  );
+create policy "comprador_favoritos_client_insert" on public.comprador_favoritos
+  for insert with check (
+    comprador_id in (select id from public.compradores where user_id = auth.uid())
+  );
+create policy "comprador_favoritos_client_delete" on public.comprador_favoritos
+  for delete using (
     comprador_id in (select id from public.compradores where user_id = auth.uid())
   );
 

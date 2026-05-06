@@ -77,6 +77,35 @@ export function rowToAsset(r: any): Asset {
   };
 }
 
+/**
+ * Mapper para chamadas vindas do portal público / cliente. Remove PII do
+ * proprietário, dados administrativos internos (debtor/cartera/contrato) y el
+ * payload bruto de Excel. `adm.con` se conserva porque el portal lo usa para
+ * agrupar activos colaterales del mismo contrato.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToAssetPublic(r: any): Asset {
+  const full = rowToAsset(r);
+  const sanitizedAdm: AssetAdmin = {
+    pip: "—", lin: "—", cat: "—", car: "—", cli: "—", id1: "—",
+    con: full.adm.con,
+    aid: "—", loans: "—", tcol: "—", scol: "—", ccaa: "—",
+    prov: "—", city: "—", zip: "—", addr: "—", finca: "—", reg: "—",
+    cref: "—", ejud: "—", ejmap: "—", eneg: "—", ob: "—", sub: "—",
+    deu: "—", cprev: "—", cpost: "—", dtot: "—", pest: "—", str: "—",
+    liq: "—", avj: "—", mmap: "—", buck: "—", lbuck: "—", smf: "—",
+    rsub: "—", conn: "—", conn2: "—",
+  };
+  const { excelRaw: _excelRaw, ...rest } = full;
+  return {
+    ...rest,
+    ownerName: "—",
+    ownerTel: "—",
+    ownerMail: "—",
+    adm: sanitizedAdm,
+  };
+}
+
 export function assetToRow(a: Asset) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const row: Record<string, any> = {

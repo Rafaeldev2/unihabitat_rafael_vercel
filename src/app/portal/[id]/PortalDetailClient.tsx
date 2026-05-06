@@ -6,7 +6,7 @@ import type { Asset } from "@/lib/types";
 import Link from "next/link";
 import {
   ArrowLeft, Lock, FileText, MapPin, X, Loader2,
-  CheckCircle2, AlertCircle, Phone, Send, Building, Ruler,
+  CheckCircle2, AlertCircle, Send, Building, Ruler,
   Tag, Home, Layers, CalendarDays, Hash,
 } from "lucide-react";
 import { createOferta } from "@/app/actions/ofertas";
@@ -331,14 +331,6 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
                   >
                     <FileText size={13} /> Solicitar información
                   </button>
-                  {asset.ownerTel && asset.ownerTel !== "—" && (
-                    <a
-                      href={`tel:${asset.ownerTel}`}
-                      className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border py-3 text-xs font-medium text-navy hover:bg-cream"
-                    >
-                      <Phone size={13} /> Llamar ahora
-                    </a>
-                  )}
                 </div>
               </div>
 

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useApp } from "@/lib/context";
 import { fetchOfertasPendientes, updateOfertaEstado, type OfertaRow } from "@/app/actions/ofertas";
 import { fetchCompradores } from "@/app/actions/compradores";
-import { fetchAssetById } from "@/app/actions/assets";
+import { fetchAssetByIdForAdmin } from "@/app/actions/assets";
 import type { Asset, Comprador } from "@/lib/types";
 import Link from "next/link";
 import { FileText, CheckCircle2, XCircle, Send, Loader2, AlertCircle, Euro } from "lucide-react";
@@ -35,7 +35,7 @@ export default function OfertasPage() {
 
       // Cargar assets
       const assetIds = [...new Set(ofertasData.map(o => o.asset_id))];
-      const assetPromises = assetIds.map(id => fetchAssetById(id));
+      const assetPromises = assetIds.map(id => fetchAssetByIdForAdmin(id));
       const assetResults = await Promise.all(assetPromises);
       const assetMap = new Map<string, Asset>();
       assetResults.forEach(a => { if (a) assetMap.set(a.id, a); });

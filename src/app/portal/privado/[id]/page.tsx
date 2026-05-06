@@ -4,26 +4,51 @@ import { use, useState, useEffect } from "react";
 import { fetchAssetById } from "@/app/actions/assets";
 import type { Asset } from "@/lib/types";
 import { fmt, fmtM } from "@/lib/utils";
+import { useFavoritos } from "@/hooks/useFavoritos";
 import Link from "next/link";
-import { ArrowLeft, FileText, MessageSquare, FolderOpen } from "lucide-react";
+import { ArrowLeft, FileText, MessageSquare, FolderOpen, Lock, Star } from "lucide-react";
 import { InteractiveMap } from "@/components/InteractiveMap";
 
 export default function PortalPrivadoDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [asset, setAsset] = useState<Asset | null>(null);
   const [tab, setTab] = useState<"info" | "chat" | "docs">("info");
+  const [compradorId, setCompradorId] = useState<string | null>(null);
+  const { isFavorito, toggleFavorito } = useFavoritos(compradorId);
 
   useEffect(() => {
     fetchAssetById(id).then((data) => {
       if (data) setAsset(data);
     });
+    const devCookie = document.cookie.split("; ").find(c => c.startsWith("dev-auth="));
+    if (devCookie) {
+      try {
+        const dev = JSON.parse(decodeURIComponent(devCookie.split("=").slice(1).join("=")));
+        setCompradorId(dev.compradorId ?? dev.comprador_id ?? null);
+      } catch { /* ignore */ }
+    }
   }, [id]);
 
   if (!asset) return <div className="flex min-h-[60vh] items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-gold border-t-transparent" /></div>;
 
+  const fav = isFavorito(asset.id);
+
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
-      <Link href="/portal/privado" className="mb-5 inline-flex items-center gap-1.5 text-xs font-medium text-muted hover:text-navy"><ArrowLeft size={14} /> Volver a mi zona</Link>
+      <div className="mb-5 flex items-center justify-between">
+        <Link href="/portal/privado" className="inline-flex items-center gap-1.5 text-xs font-medium text-muted hover:text-navy"><ArrowLeft size={14} /> Volver a mi zona</Link>
+        {compradorId && (
+          <button
+            type="button"
+            onClick={() => toggleFavorito(asset.id)}
+            aria-label={fav ? "Quitar de favoritos" : "Marcar como favorito"}
+            className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-all ${fav ? "border-gold/30 bg-gold/5 text-gold" : "border-border bg-white text-muted hover:border-gold/30 hover:text-gold"}`}
+          >
+            <Star size={13} className={fav ? "fill-gold" : ""} />
+            {fav ? "Favorito" : "Marcar favorito"}
+          </button>
+        )}
+      </div>
 
       <div className="mb-5 flex gap-2 border-b border-border">
         {([["info", "Informacion", FileText], ["chat", "Mensajes", MessageSquare], ["docs", "Documentos", FolderOpen]] as const).map(([key, lbl, Icon]) => (
@@ -58,12 +83,17 @@ export default function PortalPrivadoDetailPage({ params }: { params: Promise<{ 
                 <InfoPill label="Uso" value={asset.uso} />
               </div>
             </div>
-            <div className="mt-4 rounded-lg border border-border bg-white p-5 shadow-sm">
+            <div className="relative mt-4 overflow-hidden rounded-lg border border-border bg-white p-5 shadow-sm">
+              <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm">
+                <Lock size={24} className="text-navy" />
+                <p className="mt-2 text-sm font-semibold text-navy">Información reservada</p>
+                <p className="mt-0.5 text-xs text-muted">Firma tu NDA para acceder a los datos del propietario</p>
+              </div>
               <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[1.5px] text-gold after:h-px after:flex-1 after:bg-border">Propietario</div>
-              <div className="grid grid-cols-3 gap-2">
-                <InfoPill label="Nombre" value={asset.ownerName} />
-                <InfoPill label="Telefono" value={asset.ownerTel} />
-                <InfoPill label="Email" value={asset.ownerMail} />
+              <div className="grid grid-cols-3 gap-2 blur-sm">
+                <InfoPill label="Nombre" value="XXXXXXXXXXXX" />
+                <InfoPill label="Telefono" value="+34 XXXXXXXXX" />
+                <InfoPill label="Email" value="XXXX@XXXX.com" />
               </div>
             </div>
             <div className="mt-4 rounded-lg border border-border bg-white p-5 shadow-sm">

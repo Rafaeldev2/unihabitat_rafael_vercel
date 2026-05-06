@@ -8,6 +8,7 @@ import { signOut } from "@/app/login/actions";
 import type { Asset } from "@/lib/types";
 import { fmt, fmtM, shortAddr } from "@/lib/utils";
 import { shouldBackfillMapFromAddress } from "@/lib/map-default";
+import { useFavoritos } from "@/hooks/useFavoritos";
 import Link from "next/link";
 import { Building, MapPin, LogIn, LogOut, FileText, Star } from "lucide-react";
 import { InteractiveMap } from "@/components/InteractiveMap";
@@ -17,6 +18,8 @@ export default function PortalPrivadoPage() {
   const [invitedAssets, setInvitedAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [compradorId, setCompradorId] = useState<string | null>(null);
+  const { isFavorito, toggleFavorito, favoritos } = useFavoritos(compradorId);
 
   async function handleLogout() {
     await signOut();
@@ -30,6 +33,7 @@ export default function PortalPrivadoPage() {
         const dev = JSON.parse(decodeURIComponent(devCookie.split("=").slice(1).join("=")));
         setUserEmail(dev.email ?? null);
         cid = dev.compradorId ?? dev.comprador_id ?? null;
+        setCompradorId(cid);
       } catch { /* ignore */ }
     }
 
@@ -93,7 +97,24 @@ export default function PortalPrivadoPage() {
 
   const allPublicIds = new Set(publicAssets.map(a => a.id));
   const exclusiveInvited = invitedAssets.filter(a => !allPublicIds.has(a.id));
-  const totalAssets = publicAssets.length + exclusiveInvited.length;
+  const allKnownAssets = [...publicAssets, ...exclusiveInvited];
+  const favoriteAssets = allKnownAssets.filter(a => favoritos.has(a.id));
+  const misActivos = favoriteAssets.length + exclusiveInvited.length;
+
+  const FavoriteToggle = ({ assetId }: { assetId: string }) => {
+    if (!compradorId) return null;
+    const fav = isFavorito(assetId);
+    return (
+      <button
+        type="button"
+        aria-label={fav ? "Quitar de favoritos" : "Marcar como favorito"}
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleFavorito(assetId); }}
+        className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur transition-all hover:bg-white"
+      >
+        <Star size={16} className={fav ? "fill-gold text-gold" : "text-muted hover:text-gold"} />
+      </button>
+    );
+  };
 
   const AssetCard = ({ a, badge }: { a: Asset; badge?: string }) => (
     <Link href={`/portal/privado/${a.id}`} className="group overflow-hidden rounded-xl border border-border bg-white shadow-sm transition-all hover:shadow-md">
@@ -111,6 +132,7 @@ export default function PortalPrivadoPage() {
             <Star size={10} /> {badge}
           </span>
         )}
+        <FavoriteToggle assetId={a.id} />
       </div>
       <div className="p-4">
         <div className="mb-1.5 flex items-center justify-between">
@@ -133,7 +155,7 @@ export default function PortalPrivadoPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-white">Mi Zona Privada</h1>
-            <p className="mt-1 text-sm text-white/40">Acceso a tus activos y propiedades disponibles</p>
+            <p className="mt-1 text-sm text-white/40">Tus favoritos y activos compartidos contigo</p>
           </div>
           <button onClick={handleLogout} className="flex items-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-white hover:bg-white/10">
             <LogOut size={14} /> Salir
@@ -146,8 +168,8 @@ export default function PortalPrivadoPage() {
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold/10 text-gold"><Building size={20} /></div>
             <div>
-              <div className="text-2xl font-bold text-navy">{totalAssets}</div>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">Activos disponibles</div>
+              <div className="text-2xl font-bold text-navy">{misActivos}</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">Mis activos</div>
             </div>
           </div>
         </div>
@@ -173,6 +195,17 @@ export default function PortalPrivadoPage() {
         </Link>
       </div>
 
+      {favoriteAssets.length > 0 && (
+        <>
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gold">
+            <Star size={14} className="fill-gold" /> Mis favoritos
+          </h2>
+          <div className="mb-8 grid grid-cols-3 gap-5">
+            {favoriteAssets.map(a => <AssetCard key={a.id} a={a} />)}
+          </div>
+        </>
+      )}
+
       {exclusiveInvited.length > 0 && (
         <>
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gold">
@@ -184,15 +217,14 @@ export default function PortalPrivadoPage() {
         </>
       )}
 
-      <h2 className="mb-3 text-sm font-semibold text-navy">Propiedades disponibles</h2>
-      <div className="grid grid-cols-3 gap-5">
-        {publicAssets.map(a => <AssetCard key={a.id} a={a} />)}
-      </div>
-
-      {totalAssets === 0 && (
+      {misActivos === 0 && (
         <div className="py-16 text-center">
           <Building size={40} className="mx-auto mb-3 text-border" />
-          <p className="text-sm text-muted">No hay propiedades publicadas en este momento</p>
+          <p className="mb-1 text-sm font-medium text-navy">Aún no tienes activos guardados</p>
+          <p className="mb-4 text-xs text-muted">Marca como favorito desde el listado público para verlos aquí</p>
+          <Link href="/portal" className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-xs font-medium text-white hover:bg-navy3">
+            <Building size={13} /> Explorar propiedades
+          </Link>
         </div>
       )}
     </div>
