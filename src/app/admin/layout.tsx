@@ -41,8 +41,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const s = getDevAuthFromDocument();
     setSession(s);
 
-    if (s?.role === "agente" && s.agenteId) {
-      fetchVendorPermissions(s.agenteId)
+    if (s?.role === "vendedor" && s.vendedorId) {
+      fetchVendorPermissions(s.vendedorId)
         .then(setPermissions)
         .catch(() => setPermissions([]))
         .finally(() => setReady(true));

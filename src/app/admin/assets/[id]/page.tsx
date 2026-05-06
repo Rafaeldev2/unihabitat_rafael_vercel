@@ -18,6 +18,7 @@ import { InteractiveMap } from "@/components/InteractiveMap";
 import { EditableSection, type FieldDef } from "@/components/EditableSection";
 import { EditableExcelRawSection } from "@/components/EditableExcelRawSection";
 import { listEmptyExcelFields } from "@/lib/excel-raw-utils";
+import { getDescriptionText } from "@/lib/utils";
 
 const tabs = [
   { icon: Home,       label: "Características", adminOnly: false, contentIndex: 0 },
@@ -120,7 +121,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
           >
             <ExternalLink size={13} /> Ver en portal
           </Link>
-          <span className="rounded-md bg-gold/10 px-2.5 py-1 text-xs font-medium text-gold">{userIsAdmin ? "Admin" : "Vendedor"}</span>
+          <span className="rounded-md bg-gold/10 px-2.5 py-1 text-xs font-medium text-gold">{userIsAdmin ? "Admin" : "Agente"}</span>
           <Link href="/admin" className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3.5 py-2 text-xs font-medium text-navy transition-colors hover:bg-cream">
             <ArrowLeft size={14} /> Volver
           </Link>
@@ -428,7 +429,7 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
         </div>
       </div>
       <SectionCard title="Descripción del Activo">
-        <p className="text-sm leading-[1.7] text-text">{asset.desc}</p>
+        <p className="text-sm leading-[1.7] text-text">{getDescriptionText(asset)}</p>
       </SectionCard>
       <div className="mt-3">
         <SectionCard title="Notas del activo">

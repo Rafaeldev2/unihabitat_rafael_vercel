@@ -19,9 +19,9 @@ export interface VendorPermission {
 
 export interface UserSession {
   email: string;
-  role: "admin" | "agente" | "cliente";
+  role: "admin" | "vendedor" | "cliente";
   nombre: string;
-  agenteId?: string;
+  vendedorId?: string;
 }
 
 export function hrefToSection(pathname: string): SectionId | "config" | null {

@@ -45,3 +45,50 @@ export function shortAddr(a: { nvia?: string; pob?: string; prov?: string }): st
   const via = a.nvia && a.nvia !== "—" ? a.nvia : "";
   return [via, a.pob, a.prov].filter(Boolean).join(", ") || a.pob || a.prov || "";
 }
+
+/**
+ * Reconstruye la dirección completa a partir de los campos estructurados
+ * (tvia/nvia/num/cp/pob/prov). Sirve para evitar el `fullAddr` crudo del Excel,
+ * que viene inconsistente entre proveedores. Cae a `fullAddr` solo si no hay
+ * datos estructurados utilizables.
+ */
+export function formatFullAddress(a: {
+  tvia?: string; nvia?: string; num?: string;
+  cp?: string; pob?: string; prov?: string;
+  fullAddr?: string;
+}): string {
+  const clean = (v?: string) => (v && v !== "—" ? v.trim() : "");
+  const via = [clean(a.tvia), clean(a.nvia), clean(a.num)].filter(Boolean).join(" ").trim();
+  const local = [clean(a.cp), clean(a.pob)].filter(Boolean).join(" ").trim();
+  const composed = [via, local, clean(a.prov)].filter(Boolean).join(", ");
+  return composed || clean(a.fullAddr) || "";
+}
+
+/**
+ * Devuelve la descripción del activo. Si `desc` está vacío o es una copia
+ * del endereço (problema histórico de la importación Excel, donde algunos
+ * paths hacían `desc: fullAddr`), genera un texto descriptivo a partir de
+ * tipo/lugar/superficie/categoría.
+ */
+export function getDescriptionText(a: {
+  desc?: string; addr?: string; fullAddr?: string;
+  bien?: string; tip?: string;
+  pob?: string; prov?: string;
+  supC?: string; sqm?: number | null;
+  cat?: string;
+}): string {
+  const desc = (a.desc || "").trim();
+  const isEmpty = !desc || desc === "—";
+  const isAddrCopy = Boolean(desc) && (desc === a.fullAddr || desc === a.addr);
+  if (isEmpty || isAddrCopy) {
+    const tipo = a.bien && a.bien !== "—" ? a.bien : (a.tip || "Inmueble");
+    const lugar = [a.pob, a.prov].filter(v => v && v !== "—").join(", ");
+    const sup = a.supC && a.supC !== "—" ? a.supC : (a.sqm ? `${a.sqm} m²` : "");
+    return [
+      `${tipo}${lugar ? ` ubicado en ${lugar}` : ""}.`,
+      sup ? `Superficie de ${sup}.` : "",
+      a.cat && a.cat !== "—" ? `Categoría ${a.cat}.` : "",
+    ].filter(Boolean).join(" ");
+  }
+  return desc;
+}

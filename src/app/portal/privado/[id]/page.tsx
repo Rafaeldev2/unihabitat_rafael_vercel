@@ -3,7 +3,7 @@
 import { use, useState, useEffect } from "react";
 import { fetchAssetById } from "@/app/actions/assets";
 import type { Asset } from "@/lib/types";
-import { fmt, fmtM } from "@/lib/utils";
+import { fmt, fmtM, getDescriptionText } from "@/lib/utils";
 import { useFavoritos } from "@/hooks/useFavoritos";
 import Link from "next/link";
 import { ArrowLeft, FileText, MessageSquare, FolderOpen, Lock, Star } from "lucide-react";
@@ -98,7 +98,7 @@ export default function PortalPrivadoDetailPage({ params }: { params: Promise<{ 
             </div>
             <div className="mt-4 rounded-lg border border-border bg-white p-5 shadow-sm">
               <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[1.5px] text-gold after:h-px after:flex-1 after:bg-border">Descripcion</div>
-              <p className="text-sm leading-[1.7] text-text">{asset.desc}</p>
+              <p className="text-sm leading-[1.7] text-text">{getDescriptionText(asset)}</p>
             </div>
           </div>
           <div className="sticky top-20">

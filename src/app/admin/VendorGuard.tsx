@@ -19,9 +19,9 @@ export function VendorGuard({ sectionId, children }: VendorGuardProps) {
     const s = getDevAuthFromDocument() as UserSession | null;
     if (!s) { setState("denied"); return; }
     if (s.role === "admin") { setState("allowed"); return; }
-    if (s.role !== "agente" || !s.agenteId) { setState("denied"); return; }
+    if (s.role !== "vendedor" || !s.vendedorId) { setState("denied"); return; }
 
-    fetchVendorPermissions(s.agenteId)
+    fetchVendorPermissions(s.vendedorId)
       .then((perms: VendorPermission[]) => {
         const perm = perms.find((p) => p.section === sectionId);
         setState(perm?.canView ? "allowed" : "denied");

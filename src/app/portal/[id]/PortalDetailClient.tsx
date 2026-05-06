@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { fmt, fmtM, shortAddr } from "@/lib/utils";
+import { fmt, fmtM, shortAddr, formatFullAddress, getDescriptionText } from "@/lib/utils";
 import type { Asset } from "@/lib/types";
 import Link from "next/link";
 import {
@@ -152,7 +152,7 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
               <div className="rounded-lg border border-border bg-white p-5 shadow-sm">
                 <SectionTitle>Descripción</SectionTitle>
                 <p className="text-sm leading-[1.8] text-text">
-                  {asset.desc || `${asset.bien || "Inmueble"} ubicado en ${asset.pob}, ${asset.prov}. Superficie de ${asset.supC || fmtM(asset.sqm)}. Categoría ${asset.cat}.`}
+                  {getDescriptionText(asset)}
                 </p>
               </div>
             </section>
@@ -174,11 +174,14 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
                     {asset.pla && <InfoPill icon={<Layers size={13} />} label="Planta" value={asset.pla} />}
                     {asset.pta && <InfoPill icon={<Hash size={13} />} label="Puerta" value={asset.pta} />}
                   </div>
-                  {asset.fullAddr && (
-                    <div className="mt-3 rounded-md bg-cream2 px-3 py-2 text-xs text-muted">
-                      <span className="font-semibold text-navy">Dirección completa:</span> {asset.fullAddr}
-                    </div>
-                  )}
+                  {(() => {
+                    const fullAddr = formatFullAddress(asset);
+                    return fullAddr ? (
+                      <div className="mt-3 rounded-md bg-cream2 px-3 py-2 text-xs text-muted">
+                        <span className="font-semibold text-navy">Dirección completa:</span> {fullAddr}
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
               </section>
             )}

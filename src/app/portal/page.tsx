@@ -97,13 +97,6 @@ function PortalContent() {
     setQ(""); setFCat(""); setFProv(""); setFPob(""); setFTipo("");
   }, []);
 
-  // Stats
-  const stats = useMemo(() => {
-    const provs = new Set(publicAssets.map(a => a.prov).filter(Boolean));
-    const pobs = new Set(publicAssets.map(a => a.pob).filter(Boolean));
-    return { total: publicAssets.length, provincias: provs.size, poblaciones: pobs.size };
-  }, [publicAssets]);
-
   // Group assets by contract ID for "X inmuebles asociados" badge
   const groupsByContract = useMemo(() => {
     const map: Record<string, string[]> = {};
@@ -152,22 +145,6 @@ function PortalContent() {
                   <button type="button" onClick={chip.clear}><X size={11} /></button>
                 </span>
               ))}
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="mt-6 flex gap-8">
-          <div>
-            <div className="text-2xl font-bold text-white">{stats.total}</div>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-white/40">Propiedades</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-white">{stats.provincias}</div>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-white/40">Provincias</div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-white">{stats.poblaciones}</div>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-white/40">Poblaciones</div>
           </div>
         </div>
 
