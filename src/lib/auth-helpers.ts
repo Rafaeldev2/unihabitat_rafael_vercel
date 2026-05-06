@@ -22,7 +22,7 @@ export function isAdmin(session: UserSession | null): boolean {
 }
 
 export function isVendedor(session: UserSession | null): boolean {
-  return session?.role === "vendedor";
+  return session?.role === "agente";
 }
 
 export function canViewSection(

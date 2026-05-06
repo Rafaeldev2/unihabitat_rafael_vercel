@@ -1,7 +1,7 @@
 export const ADMIN_SECTIONS = [
   { id: "activos",        label: "Activos",        href: "/admin" },
   { id: "compradores",    label: "Compradores",    href: "/admin/compradores" },
-  { id: "agentes",     label: "Agentes",     href: "/admin/agentes" },
+  { id: "agentes",        label: "Agentes",         href: "/admin/agentes" },
   { id: "tareas",         label: "Tareas",         href: "/admin/tareas" },
   { id: "ofertas",        label: "Ofertas",        href: "/admin/ofertas" },
   { id: "informes",       label: "Informes",       href: "/admin/informes" },

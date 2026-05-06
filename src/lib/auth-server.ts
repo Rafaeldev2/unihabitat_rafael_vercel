@@ -22,7 +22,7 @@ export async function requireAdmin(): Promise<UserSession> {
 
 export async function requireAdminOrVendor(): Promise<UserSession> {
   const session = await getServerSession();
-  if (!session || (session.role !== "admin" && session.role !== "vendedor")) {
+  if (!session || (session.role !== "admin" && session.role !== "agente")) {
     throw new Error("Acceso denegado: se requiere autenticación");
   }
   return session;
@@ -35,14 +35,14 @@ export async function requireEditPermission(sectionId: SectionId): Promise<UserS
   const session = await requireAdminOrVendor();
   if (session.role === "admin") return session;
 
-  if (!session.vendedorId) throw new Error("Vendedor sin ID asignado");
+  if (!session.agenteId) throw new Error("Agente sin ID asignado");
 
   const { createServiceClient } = await import("./supabase/server");
   const sb = await createServiceClient();
   const { data } = await sb
     .from("vendedor_permissions")
     .select("can_edit")
-    .eq("vendedor_id", session.vendedorId)
+    .eq("agente_Id", session.agenteId)
     .eq("section", sectionId)
     .maybeSingle();
 

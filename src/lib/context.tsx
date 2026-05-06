@@ -150,9 +150,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!session) return;
-    if (session.role !== "vendedor" || !session.vendedorId) return;
+    if (session.role !== "agente" || !session.agenteId) return;
     let cancelled = false;
-    const vid = session.vendedorId;
+    const vid = session.agenteId;
     fetchVendorPermissions(vid).then((p) => !cancelled && setPermissions(p)).catch(() => {});
     fetchVendorAssignedAssetIds(vid).then((ids) => !cancelled && setAssignedAssetIds(ids)).catch(() => {});
     fetchVendorAssignedCompradorIds(vid).then((ids) => !cancelled && setAssignedCompradorIds(ids)).catch(() => {});
@@ -160,10 +160,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [session]);
 
   const refreshAssignments = useCallback(async () => {
-    if (session?.role === "vendedor" && session.vendedorId) {
+    if (session?.role === "agente" && session.agenteId) {
       const [aIds, cIds] = await Promise.all([
-        fetchVendorAssignedAssetIds(session.vendedorId),
-        fetchVendorAssignedCompradorIds(session.vendedorId),
+        fetchVendorAssignedAssetIds(session.agenteId),
+        fetchVendorAssignedCompradorIds(session.agenteId),
       ]);
       setAssignedAssetIds(aIds);
       setAssignedCompradorIds(cIds);
@@ -175,13 +175,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // at the asset-detail tab level (Agentes / Clientes / Administrador).
   const filteredAssets = state.assets;
 
-  const filteredCompradores = session?.role === "vendedor" && assignedCompradorIds.length > 0
+  const filteredCompradores = session?.role === "agente" && assignedCompradorIds.length > 0
     ? state.compradores.filter((c) => assignedCompradorIds.includes(c.id))
-    : session?.role === "vendedor"
+    : session?.role === "agente"
       ? []
       : state.compradores;
 
-  const filteredTareas = session?.role === "vendedor"
+  const filteredTareas = session?.role === "agente"
     ? state.tareas.filter((t) => t.agente === session.nombre)
     : state.tareas;
 
