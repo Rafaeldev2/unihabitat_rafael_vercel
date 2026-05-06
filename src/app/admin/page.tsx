@@ -137,7 +137,7 @@ export default function ActivosPage() {
           <span className="rounded-md bg-cream px-2.5 py-0.5 text-xs font-medium text-muted">{assets.length} activos</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="rounded-md bg-gold/10 px-2.5 py-1 text-xs font-medium text-gold">{session?.role === "admin" ? "Admin" : "Vendedor"}</span>
+          <span className="rounded-md bg-gold/10 px-2.5 py-1 text-xs font-medium text-gold">{session?.role === "admin" ? "Admin" : "Agente"}</span>
           <button
             type="button"
             onClick={() => setUploadOpen(true)}

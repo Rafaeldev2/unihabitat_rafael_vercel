@@ -24,7 +24,7 @@ interface NavItem {
 const ALL_NAV_ITEMS: NavItem[] = [
   { href: "/admin",              label: "Activos",     icon: Building2,    sectionId: "activos" },
   { href: "/admin/compradores",  label: "Compradores", icon: ShoppingCart,  sectionId: "compradores" },
-  { href: "/admin/vendedores",   label: "Vendedores",  icon: Handshake,    sectionId: "vendedores" },
+  { href: "/admin/agentes",   label: "Agentes",  icon: Handshake,    sectionId: "agentes" },
   { href: "/admin/tareas",       label: "Tareas",      icon: CheckSquare,  sectionId: "tareas", sep: true },
   { href: "/admin/ofertas",      label: "Ofertas",     icon: FileText,     sectionId: "ofertas" },
   { href: "/admin/informes",     label: "Informes",    icon: BarChart3,    sectionId: "informes" },
@@ -41,8 +41,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const s = getDevAuthFromDocument();
     setSession(s);
 
-    if (s?.role === "vendedor" && s.vendedorId) {
-      fetchVendorPermissions(s.vendedorId)
+    if (s?.role === "agente" && s.agenteId) {
+      fetchVendorPermissions(s.agenteId)
         .then(setPermissions)
         .catch(() => setPermissions([]))
         .finally(() => setReady(true));
@@ -84,7 +84,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <span className={`rounded px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider ${
               session.role === "admin" ? "bg-gold/20 text-gold" : "bg-blue-400/20 text-blue-300"
             }`}>
-              {session.role === "admin" ? "Admin" : "Vendedor"}
+              {session.role === "admin" ? "Admin" : "Agente"}
             </span>
           </div>
         )}

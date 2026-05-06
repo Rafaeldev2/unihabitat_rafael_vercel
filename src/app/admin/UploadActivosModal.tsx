@@ -586,10 +586,15 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
                 `Verifica direcciones en la ficha o usa "Forzar" si tienen referencia catastral.`,
             );
           }
-          if (r.geocoded === 0 && r.requested > 0) {
+          // Solo avisamos de Geoapify si el ladder se ejecutó (`unresolved > 0`)
+          // y aun así no resolvió nada. Si `unresolved === 0`, ningún activo
+          // necesitaba geocodificación (todos ya traían coords) y un cero en
+          // `geocoded` sería un falso positivo.
+          if (r.geocoded === 0 && r.unresolved > 0) {
             pushLog(
               "error",
-              `Mapas: 0 activos geocodificados. Comprueba GEOAPIFY_API_KEY en .env.local y reinicia npm run dev. ` +
+              `Mapas: 0 activos geocodificados de ${r.unresolved} candidatos. ` +
+                `Comprueba GEOAPIFY_API_KEY en .env.local y reinicia npm run dev. ` +
                 `Diagnóstico rápido: /admin/config → "Probar Geoapify".`,
             );
           }

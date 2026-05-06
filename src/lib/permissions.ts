@@ -1,7 +1,7 @@
 export const ADMIN_SECTIONS = [
   { id: "activos",        label: "Activos",        href: "/admin" },
   { id: "compradores",    label: "Compradores",    href: "/admin/compradores" },
-  { id: "vendedores",     label: "Vendedores",     href: "/admin/vendedores" },
+  { id: "agentes",     label: "Agentes",     href: "/admin/agentes" },
   { id: "tareas",         label: "Tareas",         href: "/admin/tareas" },
   { id: "ofertas",        label: "Ofertas",        href: "/admin/ofertas" },
   { id: "informes",       label: "Informes",       href: "/admin/informes" },
@@ -19,9 +19,9 @@ export interface VendorPermission {
 
 export interface UserSession {
   email: string;
-  role: "admin" | "vendedor" | "cliente";
+  role: "admin" | "agente" | "cliente";
   nombre: string;
-  vendedorId?: string;
+  agenteId?: string;
 }
 
 export function hrefToSection(pathname: string): SectionId | "config" | null {
