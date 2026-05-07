@@ -7,7 +7,13 @@ import type { Asset } from "@/lib/types";
 // `actions-assets.test.ts`; aquí confirmamos que cuando el server delega un
 // asset publicado al cliente, el render NO bloquea con el candado.
 vi.mock("@/hooks/usePortalAuth", () => ({
-  usePortalAuth: () => ({ sensitiveVisible: false, currentUser: null, userResolved: true }),
+  usePortalAuth: () => ({
+    sensitiveVisible: false,
+    isStaff: false,
+    role: null,
+    currentUser: null,
+    userResolved: true,
+  }),
 }));
 vi.mock("leaflet/dist/leaflet.css", () => ({}));
 vi.mock("leaflet", () => ({ default: {

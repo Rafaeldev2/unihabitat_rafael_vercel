@@ -60,34 +60,43 @@ export async function updateSession(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   const role = user?.user_metadata?.role ?? "cliente";
 
+  // Crea un redirect preservando las cookies que el cliente Supabase haya
+  // refrescado durante getUser() (p. ej. nuevo access_token tras refresh).
+  // Sin esto, una redirección dentro del middleware borraba la sesión recién
+  // emitida y el usuario rebotaba al /login en el siguiente hop.
+  const redirectWithCookies = (pathnameTarget: string, addRedirectParam?: string) => {
+    const url = request.nextUrl.clone();
+    url.pathname = pathnameTarget;
+    if (addRedirectParam) {
+      url.searchParams.set("redirect", addRedirectParam);
+    } else {
+      url.searchParams.delete("redirect");
+    }
+    const res = NextResponse.redirect(url);
+    for (const c of supabaseResponse.cookies.getAll()) {
+      res.cookies.set(c);
+    }
+    return res;
+  };
+
   // Admin routes: require authenticated admin user
   if (pathname.startsWith("/admin")) {
     if (!user) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/login";
-      url.searchParams.set("redirect", pathname);
-      return NextResponse.redirect(url);
+      return redirectWithCookies("/login", pathname);
     }
     if (role !== "admin") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/portal/privado";
-      return NextResponse.redirect(url);
+      return redirectWithCookies("/portal/privado");
     }
   }
 
   // Portal privado requires authentication
   if (pathname.startsWith("/portal/privado") && !user) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("redirect", pathname);
-    return NextResponse.redirect(url);
+    return redirectWithCookies("/login", pathname);
   }
 
   // Login page: redirect authenticated users to their zone
   if (pathname === "/login" && user) {
-    const url = request.nextUrl.clone();
-    url.pathname = role === "admin" ? "/admin" : "/portal/privado";
-    return NextResponse.redirect(url);
+    return redirectWithCookies(role === "admin" ? "/admin" : "/portal/privado");
   }
 
   return supabaseResponse;

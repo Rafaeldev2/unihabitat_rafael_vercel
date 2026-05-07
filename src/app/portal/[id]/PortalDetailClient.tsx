@@ -36,7 +36,7 @@ interface PortalDetailClientProps {
 export default function PortalDetailClient({ asset, siblings }: PortalDetailClientProps) {
   const id = asset.id;
   const [showOfertaModal, setShowOfertaModal] = useState(false);
-  const { sensitiveVisible, currentUser, userResolved } = usePortalAuth();
+  const { sensitiveVisible, isStaff, currentUser, userResolved } = usePortalAuth();
   const [activeSection, setActiveSection] = useState<string>("descripcion");
   const [contactSent, setContactSent] = useState(false);
   const [contactForm, setContactForm] = useState({ nombre: "", email: "", telefono: "", mensaje: "" });
@@ -174,7 +174,7 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
                     {asset.pla && <InfoPill icon={<Layers size={13} />} label="Planta" value={asset.pla} />}
                     {asset.pta && <InfoPill icon={<Hash size={13} />} label="Puerta" value={asset.pta} />}
                   </div>
-                  {(() => {
+                  {isStaff && (() => {
                     const fullAddr = formatFullAddress(asset);
                     return fullAddr ? (
                       <div className="mt-3 rounded-md bg-cream2 px-3 py-2 text-xs text-muted">

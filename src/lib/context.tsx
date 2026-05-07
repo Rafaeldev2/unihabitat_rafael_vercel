@@ -4,10 +4,12 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef, ty
 import { usePathname } from "next/navigation";
 import type { Asset, Comprador, Vendedor, Tarea } from "./types";
 import type { VendorPermission, UserSession } from "./permissions";
-// `assets` de mock-data ya NO se usa como semilla inicial; lo dejamos
-// disponible por si en el futuro se añade una acción "Sembrar demo".
-import { compradores as initialComp, vendedores as initialVend, tareasData } from "./mock-data";
+// `assets` y `compradores` de mock-data ya NO se usan como semilla inicial;
+// los datos llegan de Supabase. Vendedores y tareas conservan su semilla
+// mientras no estén dentro del alcance de esta corrección.
+import { vendedores as initialVend, tareasData } from "./mock-data";
 import { fetchAssets } from "@/app/actions/assets";
+import { fetchCompradores } from "@/app/actions/compradores";
 import { backfillMissingMaps } from "@/app/actions/maps";
 import { shouldBackfillMapFromAddress } from "@/lib/map-default";
 import { getDevAuthFromDocument } from "@/lib/auth-helpers";
@@ -20,6 +22,8 @@ interface AppState {
   tareas: Tarea[];
   assetsLoading: boolean;
   assetsError: string | null;
+  compradoresLoading: boolean;
+  compradoresError: string | null;
 }
 
 interface AppContextType extends AppState {
@@ -41,24 +45,28 @@ interface AppContextType extends AppState {
   refreshAssignments: () => Promise<void>;
   /** Recarga activos desde Supabase y aplica geocodificación en lotes (tras import / evento). */
   refreshAssets: () => Promise<void>;
+  /** Recarga compradores desde Supabase. Útil tras crear/editar un comprador. */
+  refreshCompradores: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  // Inicializamos `assets` vacío para que la lista nunca arranque con los 6
-  // mocks de `mock-data.ts`. Los datos reales llegan de Supabase vía
-  // `loadAssetsFromServer()` y se exponen `assetsLoading` / `assetsError`
-  // para que la UI distinga "cargando" de "error" en lugar de mostrar mocks
-  // engañosos. Compradores, vendedores y tareas conservan su semilla mientras
-  // no estén dentro del alcance de esta corrección.
+  // Inicializamos `assets` y `compradores` vacíos para que la lista nunca
+  // arranque con los mocks de `mock-data.ts`. Los datos reales llegan de
+  // Supabase y se exponen `*Loading` / `*Error` para que la UI distinga
+  // "cargando" de "error" en lugar de mostrar mocks engañosos. Vendedores y
+  // tareas conservan su semilla mientras no estén dentro del alcance de esta
+  // corrección.
   const [state, setState] = useState<AppState>({
     assets: [],
-    compradores: initialComp,
+    compradores: [],
     vendedores: initialVend,
     tareas: tareasData,
     assetsLoading: true,
     assetsError: null,
+    compradoresLoading: true,
+    compradoresError: null,
   });
 
   const [session, setSession] = useState<UserSession | null>(null);
@@ -68,6 +76,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   const assetsLoadTokenRef = useRef(0);
+  const compradoresLoadTokenRef = useRef(0);
   const BACKFILL_CHUNK = 100;
 
   const loadAssetsFromServer = useCallback(async () => {
@@ -126,6 +135,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const refreshAssets = useCallback(() => loadAssetsFromServer(), [loadAssetsFromServer]);
 
+  const loadCompradoresFromServer = useCallback(async () => {
+    const token = ++compradoresLoadTokenRef.current;
+    setState((prev) => ({ ...prev, compradoresLoading: true, compradoresError: null }));
+    try {
+      const rows = await fetchCompradores();
+      if (token !== compradoresLoadTokenRef.current) return;
+      setState((prev) => ({
+        ...prev,
+        compradores: rows,
+        compradoresLoading: false,
+        compradoresError: null,
+      }));
+    } catch (err) {
+      console.error("[loadCompradoresFromServer] fetchCompradores falló:", err);
+      if (token === compradoresLoadTokenRef.current) {
+        const msg = err instanceof Error ? err.message : "No se pudieron cargar los compradores";
+        setState((prev) => ({
+          ...prev,
+          compradores: [],
+          compradoresLoading: false,
+          compradoresError: msg,
+        }));
+      }
+    }
+  }, []);
+
+  const refreshCompradores = useCallback(
+    () => loadCompradoresFromServer(),
+    [loadCompradoresFromServer],
+  );
+
   useEffect(() => {
     // Re-read the dev-auth cookie on every navigation so that signing out and
     // logging in under a different role (admin ↔ vendedor) refreshes the
@@ -137,15 +177,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void loadAssetsFromServer();
-  }, [loadAssetsFromServer]);
+    void loadCompradoresFromServer();
+  }, [loadAssetsFromServer, loadCompradoresFromServer]);
 
   useEffect(() => {
     const onAssetsUpdated = () => {
       void loadAssetsFromServer();
     };
+    const onCompradoresUpdated = () => {
+      void loadCompradoresFromServer();
+    };
     window.addEventListener("propcrm-assets-updated", onAssetsUpdated);
-    return () => window.removeEventListener("propcrm-assets-updated", onAssetsUpdated);
-  }, [loadAssetsFromServer]);
+    window.addEventListener("propcrm-compradores-updated", onCompradoresUpdated);
+    return () => {
+      window.removeEventListener("propcrm-assets-updated", onAssetsUpdated);
+      window.removeEventListener("propcrm-compradores-updated", onCompradoresUpdated);
+    };
+  }, [loadAssetsFromServer, loadCompradoresFromServer]);
 
 
   useEffect(() => {
@@ -247,13 +295,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       tareas: filteredTareas,
       assetsLoading: state.assetsLoading,
       assetsError: state.assetsError,
+      compradoresLoading: state.compradoresLoading,
+      compradoresError: state.compradoresError,
       session,
       permissions,
       assignedAssetIds,
       assignedCompradorIds,
       togglePub, toggleFav, toggleChk, toggleChkAll, toggleTaskDone,
       addAssets, clearAssets, removeAssetsByIds, getAsset, getComprador, getVendedor,
-      refreshAssignments, refreshAssets,
+      refreshAssignments, refreshAssets, refreshCompradores,
     }}>
       {children}
     </AppContext.Provider>

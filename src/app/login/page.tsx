@@ -3,7 +3,7 @@
 import { Suspense, useState, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { signIn, signUp } from "./actions";
-import { Building2, LogIn, UserPlus, AlertCircle, CheckCircle2, ChevronDown, Phone } from "lucide-react";
+import { LogIn, UserPlus, AlertCircle, ChevronDown, Phone } from "lucide-react";
 import COUNTRY_CODES from "@/lib/country-codes";
 import { formatPhoneNumber } from "@/lib/phone-utils";
 
@@ -120,13 +120,11 @@ function LoginForm() {
   const redirectTo = searchParams.get("redirect") ?? "";
   const [mode, setMode] = useState<"login" | "register">("login");
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
-    setSuccess("");
     setLoading(true);
 
     const fd = new FormData(e.currentTarget);
@@ -143,16 +141,11 @@ function LoginForm() {
     }
 
     try {
-      if (mode === "login") {
-        const result = await signIn(fd);
-        if (result?.error) setError(result.error);
-      } else {
-        const result = await signUp(fd);
-        if (result?.error) setError(result.error);
-        if (result?.success) setSuccess(result.success);
-      }
+      const result = mode === "login" ? await signIn(fd) : await signUp(fd);
+      if (result?.error) setError(result.error);
     } catch {
-      // redirect throws — that's normal
+      // signIn/signUp llaman a redirect() en éxito; la excepción NEXT_REDIRECT
+      // es manejada por el framework para navegar el cliente.
     } finally {
       setLoading(false);
     }
@@ -173,14 +166,14 @@ function LoginForm() {
           <div className="mb-6 flex rounded-lg bg-white/[0.06] p-1">
             <button
               type="button"
-              onClick={() => { setMode("login"); setError(""); setSuccess(""); }}
+              onClick={() => { setMode("login"); setError(""); }}
               className={`flex flex-1 items-center justify-center gap-2 rounded-md py-2 text-sm font-medium transition-all ${mode === "login" ? "bg-white/10 text-white shadow" : "text-white/40 hover:text-white/60"}`}
             >
               <LogIn size={14} /> Iniciar sesión
             </button>
             <button
               type="button"
-              onClick={() => { setMode("register"); setError(""); setSuccess(""); }}
+              onClick={() => { setMode("register"); setError(""); }}
               className={`flex flex-1 items-center justify-center gap-2 rounded-md py-2 text-sm font-medium transition-all ${mode === "register" ? "bg-white/10 text-white shadow" : "text-white/40 hover:text-white/60"}`}
             >
               <UserPlus size={14} /> Registrarse
@@ -243,11 +236,6 @@ function LoginForm() {
           {error && (
             <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-300">
               <AlertCircle size={14} /> {error}
-            </div>
-          )}
-          {success && (
-            <div className="mb-4 flex items-center gap-2 rounded-lg bg-green-500/10 px-3 py-2 text-xs text-green-300">
-              <CheckCircle2 size={14} /> {success}
             </div>
           )}
 

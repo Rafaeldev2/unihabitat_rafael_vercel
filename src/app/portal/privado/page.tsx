@@ -4,7 +4,9 @@ import { useState, useEffect } from "react";
 import { fetchPublicAssets, fetchAssetsByIds } from "@/app/actions/assets";
 import { backfillMissingMaps } from "@/app/actions/maps";
 import { fetchInvitedAssetIds } from "@/app/actions/invitations";
+import { ensureCompradorForEmail } from "@/app/actions/compradores";
 import { signOut } from "@/app/login/actions";
+import { createClient } from "@/lib/supabase/client";
 import type { Asset } from "@/lib/types";
 import { fmt, fmtM, shortAddr } from "@/lib/utils";
 import { shouldBackfillMapFromAddress } from "@/lib/map-default";
@@ -26,16 +28,50 @@ export default function PortalPrivadoPage() {
   }
 
   useEffect(() => {
-    let cid: string | null = null;
-    const devCookie = document.cookie.split("; ").find(c => c.startsWith("dev-auth="));
-    if (devCookie) {
+    let cancelled = false;
+
+    // Resolución de usuario: dev-auth (cuentas demo) → Supabase (cuentas reales).
+    // Hasta que sepamos quién es el usuario y/o tengamos su compradorId, no
+    // podemos cargar invitaciones, así que el resto del effect espera al
+    // resultado de resolveUser().
+    const resolveUser = async (): Promise<string | null> => {
+      const devCookie = document.cookie
+        .split("; ")
+        .find((c) => c.startsWith("dev-auth="));
+      if (devCookie) {
+        try {
+          const dev = JSON.parse(
+            decodeURIComponent(devCookie.split("=").slice(1).join("=")),
+          );
+          if (cancelled) return null;
+          setUserEmail(dev.email ?? null);
+          const cid = dev.compradorId ?? dev.comprador_id ?? null;
+          setCompradorId(cid);
+          return cid;
+        } catch {
+          /* fallthrough — probamos con Supabase */
+        }
+      }
+
       try {
-        const dev = JSON.parse(decodeURIComponent(devCookie.split("=").slice(1).join("=")));
-        setUserEmail(dev.email ?? null);
-        cid = dev.compradorId ?? dev.comprador_id ?? null;
-        setCompradorId(cid);
-      } catch { /* ignore */ }
-    }
+        const sb = createClient();
+        const { data: { user } } = await sb.auth.getUser();
+        if (cancelled || !user?.email) return null;
+        setUserEmail(user.email);
+        const nombre =
+          (user.user_metadata?.nombre as string | undefined) || user.email;
+        try {
+          const cid = await ensureCompradorForEmail(user.email, nombre);
+          if (cancelled) return null;
+          setCompradorId(cid);
+          return cid;
+        } catch {
+          return null;
+        }
+      } catch {
+        return null;
+      }
+    };
 
     const loadPublic = (async () => {
       const data = await fetchPublicAssets();
@@ -63,17 +99,24 @@ export default function PortalPrivadoPage() {
       setPublicAssets(next);
     })();
 
-    const loadInvited = cid
-      ? fetchInvitedAssetIds(cid).then(async (ids) => {
-          if (ids.length === 0) return;
-          const assets = await fetchAssetsByIds(ids);
-          setInvitedAssets(assets);
-        })
-      : Promise.resolve();
+    const loadInvited = resolveUser().then(async (cid) => {
+      if (!cid) return;
+      const ids = await fetchInvitedAssetIds(cid);
+      if (cancelled || ids.length === 0) return;
+      const assets = await fetchAssetsByIds(ids);
+      if (cancelled) return;
+      setInvitedAssets(assets);
+    });
 
     Promise.all([loadPublic, loadInvited])
       .catch(() => {})
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (loading) return <div className="flex min-h-[60vh] items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-gold border-t-transparent" /></div>;
