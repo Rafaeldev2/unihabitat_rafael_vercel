@@ -20,7 +20,11 @@ export default function PortalPrivadoPage() {
   const [invitedAssets, setInvitedAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userNombre, setUserNombre] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string>("cliente");
   const [compradorId, setCompradorId] = useState<string | null>(null);
+
+  const showClientInfo = userRole !== "admin" && userRole !== "vendedor";
   const { isFavorito, toggleFavorito, favoritos } = useFavoritos(compradorId);
 
   async function handleLogout() {
@@ -45,6 +49,8 @@ export default function PortalPrivadoPage() {
           );
           if (cancelled) return null;
           setUserEmail(dev.email ?? null);
+          setUserNombre(dev.nombre ?? dev.email ?? null);
+          setUserRole(dev.role ?? "cliente");
           const cid = dev.compradorId ?? dev.comprador_id ?? null;
           setCompradorId(cid);
           return cid;
@@ -60,6 +66,8 @@ export default function PortalPrivadoPage() {
         setUserEmail(user.email);
         const nombre =
           (user.user_metadata?.nombre as string | undefined) || user.email;
+        setUserNombre(nombre);
+        setUserRole((user.user_metadata?.role as string | undefined) || "cliente");
         try {
           const cid = await ensureCompradorForEmail(user.email, nombre);
           if (cancelled) return null;
@@ -195,12 +203,42 @@ export default function PortalPrivadoPage() {
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
       <div className="mb-8 rounded-xl bg-gradient-to-br from-navy to-navy3 p-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">Mi Zona Privada</h1>
-            <p className="mt-1 text-sm text-white/40">Tus favoritos y activos compartidos contigo</p>
-          </div>
-          <button onClick={handleLogout} className="flex items-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-white hover:bg-white/10">
+        <div className="flex items-center justify-between gap-4">
+          {showClientInfo ? (
+            <div className="flex items-center gap-4">
+              <div
+                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-base font-bold text-white shadow-lg ring-2 ring-white/20"
+                style={{ background: "linear-gradient(135deg,#0d2a4a,#b8933a)" }}
+              >
+                {(userNombre || userEmail || "?")
+                  .split(/\s+/)
+                  .filter(Boolean)
+                  .map((w) => w[0])
+                  .join("")
+                  .toUpperCase()
+                  .slice(0, 2) || "??"}
+              </div>
+              <div className="min-w-0">
+                <h1 className="truncate text-2xl font-bold text-white">
+                  {userNombre || userEmail || "Mi Zona Privada"}
+                </h1>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  {userEmail && userNombre !== userEmail && (
+                    <span className="truncate text-xs text-white/60">{userEmail}</span>
+                  )}
+                  <span className="rounded bg-gold/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-gold">
+                    Cliente
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <h1 className="text-2xl font-bold text-white">Mi Zona Privada</h1>
+              <p className="mt-1 text-sm text-white/40">Tus favoritos y activos compartidos contigo</p>
+            </div>
+          )}
+          <button onClick={handleLogout} className="flex shrink-0 items-center gap-2 rounded-lg border border-white/20 px-4 py-2 text-sm font-medium text-white hover:bg-white/10">
             <LogOut size={14} /> Salir
           </button>
         </div>

@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { rowToComprador, compradorToRow } from "@/lib/supabase/db";
 import type { Comprador } from "@/lib/types";
 
@@ -38,10 +38,44 @@ export async function fetchCompradorByEmail(email: string): Promise<Comprador | 
   return data ? rowToComprador(data) : null;
 }
 
+/**
+ * Resuelve `auth.users.id` por email vía Admin API (best-effort).
+ * Devuelve null si el usuario no existe en Auth o si la API admin no está disponible.
+ */
+async function resolveAuthUserIdByEmail(email: string): Promise<string | null> {
+  const target = email.trim().toLowerCase();
+  if (!target) return null;
+  try {
+    const sb = await createServiceClient();
+    const { data } = await sb.auth.admin.listUsers({ page: 1, perPage: 200 });
+    const u = data?.users?.find((x) => (x.email || "").toLowerCase() === target);
+    return u?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Crea un registro de comprador si no existe (portal público / dev-auth sin fila en BD). */
 export async function ensureCompradorForEmail(email: string, nombre: string): Promise<string> {
   const existing = await fetchCompradorByEmail(email);
-  if (existing) return existing.id;
+  const userId = await resolveAuthUserIdByEmail(email);
+
+  if (existing) {
+    // Back-fill user_id si la fila ya existía sin vínculo a Auth.
+    if (userId) {
+      const sb = await createServiceClient();
+      const { data: row } = await sb
+        .from("compradores")
+        .select("user_id")
+        .eq("id", existing.id)
+        .maybeSingle();
+      if (!row?.user_id) {
+        await sb.from("compradores").update({ user_id: userId }).eq("id", existing.id);
+      }
+    }
+    return existing.id;
+  }
+
   const id = crypto.randomUUID();
   const initials = nombre
     .split(/\s+/)
@@ -68,6 +102,10 @@ export async function ensureCompradorForEmail(email: string, nombre: string): Pr
     nda: "Pendiente",
   };
   await upsertComprador(c);
+  if (userId) {
+    const sb = await createServiceClient();
+    await sb.from("compradores").update({ user_id: userId }).eq("id", id);
+  }
   return id;
 }
 

@@ -15,6 +15,8 @@ import { FilterSelect } from "@/components/FilterSelect";
 import { InteractiveMap } from "@/components/InteractiveMap";
 import { usePortalAuth } from "@/hooks/usePortalAuth";
 import { useFavoritos } from "@/hooks/useFavoritos";
+import { createClient } from "@/lib/supabase/client";
+import { ensureCompradorForEmail } from "@/app/actions/compradores";
 
 type SortKey = "none" | "price_asc" | "price_desc" | "sqm_asc" | "sqm_desc" | "pob_az";
 
@@ -50,13 +52,29 @@ function PortalContent() {
   }, [searchParams]);
 
   useEffect(() => {
-    const devCookie = document.cookie.split("; ").find(c => c.startsWith("dev-auth="));
-    if (devCookie) {
+    let cancelled = false;
+    (async () => {
+      const devCookie = document.cookie.split("; ").find(c => c.startsWith("dev-auth="));
+      if (devCookie) {
+        try {
+          const dev = JSON.parse(decodeURIComponent(devCookie.split("=").slice(1).join("=")));
+          const cid = dev.compradorId ?? dev.comprador_id ?? null;
+          if (cid) {
+            if (!cancelled) setCompradorId(cid);
+            return;
+          }
+        } catch { /* fallthrough — probamos Supabase */ }
+      }
       try {
-        const dev = JSON.parse(decodeURIComponent(devCookie.split("=").slice(1).join("=")));
-        setCompradorId(dev.compradorId ?? dev.comprador_id ?? null);
-      } catch { /* ignore */ }
-    }
+        const sb = createClient();
+        const { data: { user } } = await sb.auth.getUser();
+        if (cancelled || !user?.email) return;
+        const nombre = (user.user_metadata?.nombre as string | undefined) || user.email;
+        const cid = await ensureCompradorForEmail(user.email, nombre);
+        if (!cancelled) setCompradorId(cid);
+      } catch { /* sin sesión real — sin compradorId */ }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const filtered = useMemo(() => {

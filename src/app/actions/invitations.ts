@@ -28,7 +28,7 @@ export async function inviteCompradorToAsset(
   try {
     const { data: comp } = await supabase
       .from("compradores")
-      .select("nombre, user_id")
+      .select("nombre, email, user_id")
       .eq("id", compradorId)
       .maybeSingle();
 
@@ -41,8 +41,28 @@ export async function inviteCompradorToAsset(
     const nombre = comp?.nombre ?? compradorId;
     const lugar = asset ? `${asset.pob}, ${asset.prov}` : assetId;
 
+    // Resolver user_id por email si la fila no lo tiene aún (mismo patrón
+    // que `resolveAgenteUserId` en vendedores.ts).
+    let userId: string | null = (comp?.user_id as string | null) ?? null;
+    const compEmail = ((comp?.email as string | undefined) ?? "").trim().toLowerCase();
+    if (!userId && compEmail) {
+      try {
+        const { data } = await supabase.auth.admin.listUsers({ page: 1, perPage: 200 });
+        const u = data?.users?.find((x) => (x.email || "").toLowerCase() === compEmail);
+        userId = u?.id ?? null;
+        if (userId) {
+          await supabase
+            .from("compradores")
+            .update({ user_id: userId })
+            .eq("id", compradorId);
+        }
+      } catch {
+        /* admin API caída — seguimos sin notificación entregable */
+      }
+    }
+
     await supabase.from("notificaciones").insert({
-      user_id: comp?.user_id ?? null,
+      user_id: userId,
       tipo: "invitacion",
       mensaje: `${nombre}, se te ha compartido un activo en ${lugar}`,
       referencia_id: assetId,

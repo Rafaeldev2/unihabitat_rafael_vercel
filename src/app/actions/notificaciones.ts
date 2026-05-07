@@ -77,3 +77,21 @@ export async function createNotificacion(params: {
   });
   if (error) throw new Error(error.message);
 }
+
+export async function deleteNotificacion(id: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("notificaciones")
+    .delete()
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteAllForUser(userId: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("notificaciones")
+    .delete()
+    .eq("user_id", userId);
+  if (error) throw new Error(error.message);
+}

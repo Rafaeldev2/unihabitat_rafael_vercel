@@ -837,19 +837,28 @@ function TabClientes({ assetId }: { assetId: string }) {
   const handleInvite = async (compradorId: string) => {
     setInviting(compradorId);
     const result = await inviteCompradorToAsset(compradorId, assetId);
+    setInviting(null);
     if (result.success) {
       setInvitedIds(prev => new Set([...prev, compradorId]));
+      const cl = compradores.find(c => c.id === compradorId);
+      alert(`Activo compartido correctamente con ${cl?.nombre ?? "el cliente"}.`);
+      setShowInviteModal(false);
+    } else {
+      alert(`No se pudo compartir el activo: ${result.error ?? "error desconocido"}.`);
     }
-    setInviting(null);
   };
 
   const handleRevoke = async (compradorId: string) => {
     setInviting(compradorId);
     const result = await revokeCompradorFromAsset(compradorId, assetId);
+    setInviting(null);
     if (result.success) {
       setInvitedIds(prev => { const n = new Set(prev); n.delete(compradorId); return n; });
+      const cl = compradores.find(c => c.id === compradorId);
+      alert(`Acceso revocado para ${cl?.nombre ?? "el cliente"}.`);
+    } else {
+      alert(`No se pudo revocar el acceso: ${result.error ?? "error desconocido"}.`);
     }
-    setInviting(null);
   };
 
   const getInitials = (name: string) => name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
