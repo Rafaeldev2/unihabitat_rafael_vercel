@@ -313,8 +313,21 @@ function parseProveedor3(rows: unknown[][], defaultMap: string, sheetLabel: stri
  * 12=Planta, 13=Puerta, 14=Sup. Construida, 15=Sup. Gráfica, 16=Longitud, 17=Latitud,
  * 18=Antigüedad, 19=Coeficiente, 20=Descripción Activo, 21=URL Imagen
  */
+// Normaliza referências catastrais para chave de Map: tira espaços e uppercase.
+// Cadastros espanhóis às vezes vêm com espaços ou case inconsistente entre
+// hojas, o que fazia o enrichAssets perder o match silenciosamente.
+function normCatRef(ref: string): string {
+  return ref.replace(/\s+/g, "").toUpperCase();
+}
+
 function parseEnriquecido(rows: unknown[][], defaultMap: string): Map<string, Partial<Asset>> {
   const geoKey = typeof process !== "undefined" ? process.env.NEXT_PUBLIC_GEOAPIFY_KEY?.trim() ?? "" : "";
+  if (!geoKey) {
+    // Aviso único por import: sem clave Geoapify cliente, mapas estáticos
+    // caem para OpenStreetMap ou para defaultMap. O backfill posterior
+    // (`backfillUploadedMaps`) usa a clave servidor e pode ainda recuperar.
+    console.warn("[parseEnriquecido] NEXT_PUBLIC_GEOAPIFY_KEY ausente — usando mapa por defecto en filas sin lat/lon. Configura la clave para mapas estáticos durante el parseo.");
+  }
   const byRef = new Map<string, Partial<Asset>>();
   for (let r = 1; r < rows.length; r++) {
     const row = rows[r] as unknown[];
@@ -337,7 +350,7 @@ function parseEnriquecido(rows: unknown[][], defaultMap: string): Map<string, Pa
     const latNum = toNum(row[17]);
     const lonNum = toNum(row[16]);
 
-    byRef.set(ref, {
+    byRef.set(normCatRef(ref), {
       catRef: ref,
       clase: s(row[1]),
       uso: s(row[2]),
@@ -368,7 +381,9 @@ function parseEnriquecido(rows: unknown[][], defaultMap: string): Map<string, Pa
 
 function enrichAssets(assets: Asset[], enriquecido: Map<string, Partial<Asset>>): Asset[] {
   return assets.map(a => {
-    const enr = enriquecido.get(a.catRef) ?? enriquecido.get(a.adm.cref);
+    const k1 = a.catRef && a.catRef !== "—" ? normCatRef(a.catRef) : "";
+    const k2 = a.adm.cref && a.adm.cref !== "—" ? normCatRef(a.adm.cref) : "";
+    const enr = (k1 && enriquecido.get(k1)) || (k2 && enriquecido.get(k2)) || undefined;
     if (!enr) return a;
     return { ...a, ...enr, adm: { ...a.adm, cref: enr.catRef ?? a.adm.cref } } as Asset;
   });
@@ -447,7 +462,7 @@ function inferHeaderColumns(headerRow: unknown[]): Partial<Record<HeaderField, n
     const h = String(headerRow[c] ?? "").toUpperCase().trim();
     if (!h) continue;
 
-    if (cols.id === undefined && /\b(UF|NDG|ASSET ID|ID PRINEX|ID ACTIVO|REFERENCIA(?! CATASTRAL)|CONTRACT ID|DATA REF|^ID$|^ID\s|CODIGO ACTIVO)\b/.test(h)) {
+    if (cols.id === undefined && /\b(UF|NDG|ASSET ID|ID PRINEX|ID ACTIVO|REFERENCIA(?! CATASTRAL)|CONTRACT ID|DATA REF|^ID$|^ID\s|^ID\d+$|^ID\d+\s|CODIGO ACTIVO)\b/.test(h)) {
       set("id", c);
       continue;
     }
@@ -625,14 +640,35 @@ function detectFormatByHeader(header: unknown[]): { format: SheetFormat; offset:
   return { format: "unknown", offset: 0 };
 }
 
+/**
+ * Quando o nome da aba já confirma o formato, basta achar o col0 anchor para
+ * determinar o offset — sem exigir os campos de `verify` (que mudam de file
+ * para file: ex. prov1 às vezes traz "ID1" em vez de "UF").
+ */
+function findOffsetByCol0(header: unknown[], format: SheetFormat): number {
+  const anchor = FORMAT_ANCHORS.find(a => a.format === format);
+  if (!anchor) return 0;
+  const upper = header.map(h => String(h ?? "").toUpperCase().trim());
+  const idx = upper.findIndex(h => h.includes(anchor.col0));
+  return idx >= 0 ? idx : 0;
+}
+
 function shiftRows(rows: unknown[][], offset: number): unknown[][] {
   if (offset === 0) return rows;
   return rows.map(r => (r as unknown[]).slice(offset));
 }
 
+export interface SheetDiagEntry {
+  sheet: string;
+  format: SheetFormat;
+  rows: number;
+  parsed: number;
+  offset: number;
+}
+
 export interface ParseExcelResult {
   assets: Asset[];
-  sheetDiag: { sheet: string; format: SheetFormat; rows: number }[];
+  sheetDiag: SheetDiagEntry[];
 }
 
 /**
@@ -806,57 +842,55 @@ export function parseExcelFile(file: File, opts?: { diag?: boolean }): Promise<A
         const all: Asset[] = [];
         let enriquecidoMap = new Map<string, Partial<Asset>>();
         const extraColumns = new Map<string, Record<string, string>>();
-        const sheetDiag: { sheet: string; format: SheetFormat; rows: number }[] = [];
+        const sheetDiag: SheetDiagEntry[] = [];
 
         for (const sheetName of wb.SheetNames) {
           const ws = wb.Sheets[sheetName];
           const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: false });
-          if (rows.length < 2) { sheetDiag.push({ sheet: sheetName, format: "unknown", rows: 0 }); continue; }
+          if (rows.length < 2) { sheetDiag.push({ sheet: sheetName, format: "unknown", rows: 0, parsed: 0, offset: 0 }); continue; }
           const name = sheetName.toUpperCase().replace(/\s+/g, " ").trim();
 
-          let format: SheetFormat = "unknown";
-          let offset = 0;
+          let nameFormat: SheetFormat = "unknown";
+          if (name.includes("PROVEEDOR 1") || name.includes("PROVEEDOR1")) nameFormat = "prov1";
+          else if (name.includes("PROVEEDOR 2") || name.includes("PROVEEDOR2")) nameFormat = "prov2";
+          else if (name.includes("PROVEEDOR 3") || name.includes("PROVEEDOR3")) nameFormat = "prov3";
+          else if (name.includes("ENRIQUECIDO")) nameFormat = "enriquecido";
 
-          if (name.includes("PROVEEDOR 1") || name.includes("PROVEEDOR1")) {
-            format = "prov1";
-          } else if (name.includes("PROVEEDOR 2") || name.includes("PROVEEDOR2")) {
-            format = "prov2";
-          } else if (name.includes("PROVEEDOR 3") || name.includes("PROVEEDOR3")) {
-            format = "prov3";
-          } else if (name.includes("ENRIQUECIDO")) {
-            format = "enriquecido";
+          // Detectar offset por âncora de cabeçalho mesmo quando o nome da aba já
+          // identificou o formato. Providers às vezes prepend colunas de metadata
+          // (Propietario, Telefono, etc.) antes do layout canônico — sem essa
+          // detecção, o parser lê colunas erradas e descarta linhas silenciosamente.
+          let format: SheetFormat;
+          let offset: number;
+          if (nameFormat !== "unknown") {
+            format = nameFormat;
+            // Nome da aba já confirma o formato; só precisamos achar o col0
+            // (sem exigir os verify fields, que variam entre arquivos).
+            offset = findOffsetByCol0(rows[0] as unknown[], nameFormat);
           } else {
             const detected = detectFormatByHeader(rows[0] as unknown[]);
             format = detected.format;
             offset = detected.offset;
           }
 
-          sheetDiag.push({ sheet: sheetName, format, rows: rows.length - 1 });
-
+          const before = all.length;
           const shifted = shiftRows(rows, offset);
           const header = (rows[0] as unknown[]).map(h => String(h ?? "").toUpperCase().trim());
+
+          // Coluna de id (após shift) para capturar metadados extras à esquerda
+          // do layout canônico. prov1 ID em col 2 (UF), prov2 em col 7 (Asset ID),
+          // prov3 em col 1 (NDG).
+          const idColForFormat: Record<Exclude<SheetFormat, "unknown" | "enriquecido">, number> = {
+            prov1: 2, prov2: 7, prov3: 1,
+          };
 
           switch (format) {
             case "prov1":
               all.push(...parseProveedor1(shifted, defaultMap, sheetName, rows));
               break;
-            case "prov2": {
+            case "prov2":
               all.push(...parseProveedor2(shifted, defaultMap, sheetName, rows));
-              if (offset > 0) {
-                for (let r = 1; r < rows.length; r++) {
-                  const row = rows[r] as unknown[];
-                  const id = s((shifted[r] as unknown[])?.[7]);
-                  if (!id || id === "—") continue;
-                  const extra: Record<string, string> = {};
-                  for (let c = 0; c < offset; c++) {
-                    const key = header[c] || `COL${c}`;
-                    extra[key] = s(row[c]);
-                  }
-                  extraColumns.set(id, extra);
-                }
-              }
               break;
-            }
             case "prov3":
               all.push(...parseProveedor3(shifted, defaultMap, sheetName, rows));
               break;
@@ -866,6 +900,35 @@ export function parseExcelFile(file: File, opts?: { diag?: boolean }): Promise<A
             default:
               break;
           }
+
+          // Capturar colunas extra à esquerda (Propietario, Telefono, mail,
+          // Publicar, Categoria, etc.) para qualquer prov format com offset > 0.
+          if (offset > 0 && (format === "prov1" || format === "prov2" || format === "prov3")) {
+            const idIdx = idColForFormat[format];
+            for (let r = 1; r < rows.length; r++) {
+              const row = rows[r] as unknown[];
+              const id = s((shifted[r] as unknown[])?.[idIdx]);
+              if (!id || id === "—") continue;
+              const prev = extraColumns.get(id) ?? {};
+              const extra: Record<string, string> = { ...prev };
+              for (let c = 0; c < offset; c++) {
+                const key = header[c] || `COL${c}`;
+                const val = s(row[c]);
+                if (val !== "—" || !(key in extra)) extra[key] = val;
+              }
+              extraColumns.set(id, extra);
+            }
+          }
+
+          const parsedFromSheet =
+            format === "enriquecido" ? enriquecidoMap.size : all.length - before;
+          sheetDiag.push({
+            sheet: sheetName,
+            format,
+            rows: rows.length - 1,
+            parsed: parsedFromSheet,
+            offset,
+          });
 
           // Bug 1 fix: post-pass augmentation. For sheets where the structured
           // parser ran (prov1/2/3) but column ordering or naming caused some

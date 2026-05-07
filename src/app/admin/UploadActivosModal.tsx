@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { useApp } from "@/lib/context";
-import { parseExcelFile, extractRawPreview, parseWithMapping, parseExcelHeuristic, type ParseExcelResult } from "@/lib/normalize-excel";
+import { parseExcelFile, extractRawPreview, parseWithMapping, parseExcelHeuristic, type ParseExcelResult, type SheetDiagEntry } from "@/lib/normalize-excel";
 import { enrichAssetsBatch } from "@/app/actions/catastro";
 import type { CatastroEnrichFailure } from "@/app/actions/catastro";
 import { validateAssetsBatch } from "@/app/actions/claude";
@@ -154,6 +154,7 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
   const [warningsOpen, setWarningsOpen] = useState(false);
   const [subProgress, setSubProgress] = useState({ done: 0, total: 0, label: "" });
   const [excelEmptySummary, setExcelEmptySummary] = useState<string | null>(null);
+  const [sheetDiag, setSheetDiag] = useState<SheetDiagEntry[]>([]);
   const [failedUpserts, setFailedUpserts] = useState<FailedUpsert[]>([]);
   const [failedOpen, setFailedOpen] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -214,6 +215,7 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
     logsRef.current = [];
     setParsedCount(0);
     setExcelEmptySummary(null);
+    setSheetDiag([]);
     pushLog("info", `Inicio de upload: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`);
 
     const finalFailures: FailedUpsert[] = [];
@@ -227,10 +229,16 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
       updateStep("parse", { status: "active", detail: `Leyendo ${file.name}…` });
       const diagResult = await parseExcelFile(file, { diag: true }) as ParseExcelResult;
       let parsed = diagResult.assets;
-      pushLog("info", `Parser estructurado: ${parsed.length} activos · hojas: ${diagResult.sheetDiag.map(s => `${s.sheet}=${s.format}(${s.rows})`).join(", ")}`);
+      setSheetDiag(diagResult.sheetDiag);
+      pushLog("info", `Parser estructurado: ${parsed.length} activos · hojas: ${diagResult.sheetDiag.map(s => `${s.sheet}=${s.format}(${s.rows}r,${s.parsed}p,off=${s.offset})`).join(", ")}`);
+      for (const sd of diagResult.sheetDiag) {
+        if (sd.format !== "unknown" && sd.parsed < sd.rows) {
+          pushLog("warn", `Hoja "${sd.sheet}": ${sd.parsed}/${sd.rows} fila(s) parseadas — ${sd.rows - sd.parsed} descartadas (probable ID vacío o duplicado).`);
+        }
+      }
       const sheetInfo = diagResult.sheetDiag
         .filter(s => s.format !== "unknown")
-        .map(s => `${s.sheet}: ${s.format} (${s.rows})`)
+        .map(s => `${s.sheet}: ${s.format} (${s.parsed}/${s.rows})`)
         .join(" · ");
       updateStep("parse", {
         status: "done",
@@ -836,6 +844,7 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
                   {excelEmptySummary}
                 </div>
               )}
+              <SheetDiagBanner diag={sheetDiag} />
               {aiWarnings.length > 0 && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50">
                   <button
@@ -891,6 +900,7 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
                 />
               )}
               {steps.some(s => s.status !== "pending") && <StepList compact />}
+              <SheetDiagBanner diag={sheetDiag} />
               <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5">
                 <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-400" />
                 <p className="text-xs text-red-600">{message}</p>
@@ -910,7 +920,8 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
                   onClick={() => {
                     setStatus("idle"); setMessage(""); setAiSummary(""); setAiWarnings([]);
                     setFailedUpserts([]); setFailedOpen(false);
-                    setParsedCount(0); setExcelEmptySummary(null); setSubProgress({ done: 0, total: 0, label: "" });
+                    setParsedCount(0); setExcelEmptySummary(null); setSheetDiag([]);
+                    setSubProgress({ done: 0, total: 0, label: "" });
                     cancelledRef.current = false; setSteps(INITIAL_STEPS);
                   }}
                   className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-navy hover:bg-cream"
@@ -927,6 +938,38 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
               </div>
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SheetDiagBanner({ diag }: { diag: SheetDiagEntry[] }) {
+  const issues = diag.filter(d => d.format !== "unknown" && d.parsed < d.rows);
+  if (issues.length === 0) return null;
+  const totalSkipped = issues.reduce((acc, d) => acc + (d.rows - d.parsed), 0);
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+      <div className="flex items-start gap-2">
+        <AlertCircle size={16} className="mt-0.5 shrink-0 text-amber-500" />
+        <div className="min-w-0 flex-1 text-[11px] leading-snug text-amber-900">
+          <p className="font-semibold">
+            {totalSkipped} fila(s) descartada(s) en {issues.length} hoja(s)
+          </p>
+          <ul className="mt-1 space-y-0.5">
+            {issues.map(d => (
+              <li key={d.sheet}>
+                <span className="font-medium">{d.sheet}</span>
+                <span className="text-amber-700">
+                  {" "}— {d.parsed}/{d.rows} parseadas
+                  {d.offset > 0 && ` · offset=${d.offset}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 text-[10px] text-amber-700">
+            Posibles causas: ID vacío, ID duplicado entre hojas, o cabecera no reconocida.
+          </p>
         </div>
       </div>
     </div>
