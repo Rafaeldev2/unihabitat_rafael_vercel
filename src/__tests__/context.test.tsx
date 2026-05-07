@@ -13,6 +13,12 @@ vi.mock("@/app/actions/assets", () => ({
 vi.mock("@/app/actions/maps", () => ({
   backfillMissingMaps: (...args: unknown[]) => backfillMissingMapsMock(...args),
 }));
+vi.mock("@/app/actions/compradores", () => ({
+  fetchCompradores: vi.fn(async () => []),
+}));
+vi.mock("@/app/actions/vendedores", () => ({
+  fetchVendedores: vi.fn(async () => []),
+}));
 vi.mock("@/app/actions/permissions", () => ({
   fetchVendorPermissions: vi.fn(async () => []),
   fetchVendorAssignedAssetIds: vi.fn(async () => []),

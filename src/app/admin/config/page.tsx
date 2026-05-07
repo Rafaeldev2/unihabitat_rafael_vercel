@@ -311,7 +311,7 @@ export default function ConfigPage() {
                       <UserCog size={11} /> Permisos
                     </button>
                     <Link
-                      href={`/admin/vendedores/${v.id}`}
+                      href={`/admin/agentes/${v.id}`}
                       className="flex items-center gap-1 rounded-md border border-border bg-white px-2.5 py-1 text-xs text-muted hover:text-navy"
                     >
                       <Pencil size={11} /> Detalle
@@ -325,10 +325,10 @@ export default function ConfigPage() {
               )}
 
               <Link
-                href="/admin/vendedores"
+                href="/admin/agentes"
                 className="flex items-center justify-center gap-1.5 rounded-md border-2 border-dashed border-border p-3 text-xs font-medium text-muted hover:border-navy/30 hover:text-navy"
               >
-                <Plus size={13} /> Gestionar vendedores
+                <Plus size={13} /> Gestionar agentes
               </Link>
             </div>
           </div>

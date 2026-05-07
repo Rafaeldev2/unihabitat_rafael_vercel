@@ -1,12 +1,62 @@
 import { cookies } from "next/headers";
 import type { UserSession, SectionId } from "./permissions";
 
+/**
+ * Resuelve la sesión actual desde cookies. Prioriza `dev-auth` (cuentas demo)
+ * y, si no existe, intenta resolver con Supabase Auth para que los usuarios
+ * registrados vía signUp/signIn también queden reconocidos.
+ */
 export async function getServerSession(): Promise<UserSession | null> {
   const cookieStore = await cookies();
   const raw = cookieStore.get("dev-auth")?.value;
-  if (!raw) return null;
+  if (raw) {
+    try {
+      return JSON.parse(raw) as UserSession;
+    } catch {
+      /* fallthrough a Supabase */
+    }
+  }
+
+  const hasSupabaseCookie = cookieStore
+    .getAll()
+    .some((c) => /^sb-.*-auth-token(\.\d+)?$/.test(c.name));
+  if (!hasSupabaseCookie) return null;
+
   try {
-    return JSON.parse(raw);
+    const { createClient } = await import("./supabase/server");
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const role =
+      (user.user_metadata?.role as string | undefined) === "admin"
+        ? "admin"
+        : (user.user_metadata?.role as string | undefined) === "vendedor"
+        ? "vendedor"
+        : "cliente";
+
+    const nombre =
+      (user.user_metadata?.nombre as string | undefined) ||
+      user.email ||
+      "Usuario";
+
+    let vendedorId: string | undefined;
+    if (role === "vendedor" && user.email) {
+      const { data: vRow } = await supabase
+        .from("vendedores")
+        .select("id")
+        .or(`user_id.eq.${user.id},email.ilike.${user.email}`)
+        .limit(1)
+        .maybeSingle();
+      vendedorId = (vRow?.id as string | undefined) ?? undefined;
+    }
+
+    return {
+      email: user.email ?? "",
+      role,
+      nombre,
+      ...(vendedorId ? { vendedorId } : {}),
+    };
   } catch {
     return null;
   }

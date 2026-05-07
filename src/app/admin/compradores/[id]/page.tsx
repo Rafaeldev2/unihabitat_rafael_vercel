@@ -1,11 +1,26 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { useApp } from "@/lib/context";
 import { chatMessages } from "@/lib/mock-data";
 import Link from "next/link";
 import type { Comprador } from "@/lib/types";
-import { User, FolderOpen, MessageSquare, ArrowLeft, Upload, FileText, Download, Send, Save, Plus } from "lucide-react";
+import {
+  User,
+  FolderOpen,
+  MessageSquare,
+  ArrowLeft,
+  Upload,
+  FileText,
+  Download,
+  Send,
+  Save,
+  Plus,
+  Loader2,
+  CheckCircle,
+  UserCog,
+} from "lucide-react";
+import { getCompradorAgente, setCompradorAgente } from "@/app/actions/vendedores";
 
 const tabs = [
   { icon: User, label: "Datos" },
@@ -98,9 +113,13 @@ function TabDatos({ c }: { c: Comprador }) {
         <div className="grid grid-cols-3 gap-2">
           <DataPill label="Teléfono" value={c.tel} />
           <DataPill label="Email" value={c.email} />
-          <DataPill label="Agente asignado" value={c.agente} />
+          <DataPill label="Agente (legacy)" value={c.agente || "—"} />
         </div>
       </SectionCard></div>
+
+      <div className="mb-4">
+        <AgenteAssignmentCard compradorId={c.id} />
+      </div>
 
       <div className="mb-4"><SectionCard title="Perfil de Búsqueda">
         <div className="grid grid-cols-3 gap-2">
@@ -173,5 +192,127 @@ function TabConversacion() {
         <button className="flex items-center gap-1 self-end rounded-md bg-gold px-3.5 py-2.5 text-xs font-medium text-white hover:bg-gold2"><Send size={12} /></button>
       </div>
     </>
+  );
+}
+
+function AgenteAssignmentCard({ compradorId }: { compradorId: string }) {
+  const { vendedores, vendedoresLoading, refreshCompradores } = useApp();
+  const [currentAgenteId, setCurrentAgenteId] = useState<string>("");
+  const [pendingAgenteId, setPendingAgenteId] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getCompradorAgente(compradorId)
+      .then((id) => {
+        if (cancelled) return;
+        const value = id ?? "";
+        setCurrentAgenteId(value);
+        setPendingAgenteId(value);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCurrentAgenteId("");
+        setPendingAgenteId("");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [compradorId]);
+
+  const dirty = pendingAgenteId !== currentAgenteId;
+  const selectedVendor = vendedores.find((v) => v.id === pendingAgenteId);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaved(false);
+    try {
+      await setCompradorAgente(compradorId, pendingAgenteId || null);
+      setCurrentAgenteId(pendingAgenteId);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      void refreshCompradores();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "No se pudo asignar el agente");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <SectionCard title="Agente asignado">
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <UserCog size={18} className="flex-shrink-0 text-gold" />
+          <p className="text-xs text-muted">
+            Selecciona el agente responsable. Al guardar, recibirá una notificación en su panel.
+          </p>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center gap-2 text-xs text-muted">
+            <Loader2 size={14} className="animate-spin" /> Cargando agente actual…
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <select
+              value={pendingAgenteId}
+              onChange={(e) => setPendingAgenteId(e.target.value)}
+              disabled={saving || vendedoresLoading}
+              className="flex-1 cursor-pointer appearance-none rounded-md border border-border bg-cream2 px-3 py-2 text-sm outline-none focus:border-navy focus:bg-white"
+            >
+              <option value="">Sin asignar</option>
+              {vendedores.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.nombre}
+                  {v.email ? ` — ${v.email}` : ""}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleSave}
+              disabled={!dirty || saving}
+              className="flex items-center gap-1.5 rounded-md bg-gold px-3.5 py-2 text-xs font-medium text-white hover:bg-gold2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saving ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : saved ? (
+                <CheckCircle size={12} />
+              ) : (
+                <Save size={12} />
+              )}
+              {saved ? "Guardado" : "Guardar"}
+            </button>
+          </div>
+        )}
+
+        {selectedVendor && (
+          <div className="flex items-center gap-2 rounded-md bg-cream2 p-2 text-xs text-muted">
+            <div
+              className="flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-bold text-white"
+              style={{ background: `linear-gradient(135deg,${selectedVendor.col || "#2563a8,#0d2a4a"})` }}
+            >
+              {selectedVendor.ini || selectedVendor.nombre.slice(0, 2).toUpperCase()}
+            </div>
+            <span>
+              <strong className="font-semibold text-navy">{selectedVendor.nombre}</strong>
+              {selectedVendor.tel ? ` · ${selectedVendor.tel}` : ""}
+            </span>
+            <Link
+              href={`/admin/agentes/${selectedVendor.id}`}
+              className="ml-auto text-gold hover:underline"
+            >
+              Ver agente
+            </Link>
+          </div>
+        )}
+      </div>
+    </SectionCard>
   );
 }

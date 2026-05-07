@@ -7,9 +7,10 @@ import type { VendorPermission, UserSession } from "./permissions";
 // `assets` y `compradores` de mock-data ya NO se usan como semilla inicial;
 // los datos llegan de Supabase. Vendedores y tareas conservan su semilla
 // mientras no estén dentro del alcance de esta corrección.
-import { vendedores as initialVend, tareasData } from "./mock-data";
+import { tareasData } from "./mock-data";
 import { fetchAssets } from "@/app/actions/assets";
 import { fetchCompradores } from "@/app/actions/compradores";
+import { fetchVendedores } from "@/app/actions/vendedores";
 import { backfillMissingMaps } from "@/app/actions/maps";
 import { shouldBackfillMapFromAddress } from "@/lib/map-default";
 import { getDevAuthFromDocument } from "@/lib/auth-helpers";
@@ -24,6 +25,8 @@ interface AppState {
   assetsError: string | null;
   compradoresLoading: boolean;
   compradoresError: string | null;
+  vendedoresLoading: boolean;
+  vendedoresError: string | null;
 }
 
 interface AppContextType extends AppState {
@@ -47,6 +50,8 @@ interface AppContextType extends AppState {
   refreshAssets: () => Promise<void>;
   /** Recarga compradores desde Supabase. Útil tras crear/editar un comprador. */
   refreshCompradores: () => Promise<void>;
+  /** Recarga vendedores/agentes desde Supabase. */
+  refreshVendedores: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -61,12 +66,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>({
     assets: [],
     compradores: [],
-    vendedores: initialVend,
+    vendedores: [],
     tareas: tareasData,
     assetsLoading: true,
     assetsError: null,
     compradoresLoading: true,
     compradoresError: null,
+    vendedoresLoading: true,
+    vendedoresError: null,
   });
 
   const [session, setSession] = useState<UserSession | null>(null);
@@ -77,6 +84,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const assetsLoadTokenRef = useRef(0);
   const compradoresLoadTokenRef = useRef(0);
+  const vendedoresLoadTokenRef = useRef(0);
   const BACKFILL_CHUNK = 100;
 
   const loadAssetsFromServer = useCallback(async () => {
@@ -166,6 +174,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [loadCompradoresFromServer],
   );
 
+  const loadVendedoresFromServer = useCallback(async () => {
+    const token = ++vendedoresLoadTokenRef.current;
+    setState((prev) => ({ ...prev, vendedoresLoading: true, vendedoresError: null }));
+    try {
+      const rows = await fetchVendedores();
+      if (token !== vendedoresLoadTokenRef.current) return;
+      setState((prev) => ({
+        ...prev,
+        vendedores: rows,
+        vendedoresLoading: false,
+        vendedoresError: null,
+      }));
+    } catch (err) {
+      console.error("[loadVendedoresFromServer] fetchVendedores falló:", err);
+      if (token === vendedoresLoadTokenRef.current) {
+        const msg = err instanceof Error ? err.message : "No se pudieron cargar los agentes";
+        setState((prev) => ({
+          ...prev,
+          vendedores: [],
+          vendedoresLoading: false,
+          vendedoresError: msg,
+        }));
+      }
+    }
+  }, []);
+
+  const refreshVendedores = useCallback(
+    () => loadVendedoresFromServer(),
+    [loadVendedoresFromServer],
+  );
+
   useEffect(() => {
     // Re-read the dev-auth cookie on every navigation so that signing out and
     // logging in under a different role (admin ↔ vendedor) refreshes the
@@ -178,7 +217,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void loadAssetsFromServer();
     void loadCompradoresFromServer();
-  }, [loadAssetsFromServer, loadCompradoresFromServer]);
+    void loadVendedoresFromServer();
+  }, [loadAssetsFromServer, loadCompradoresFromServer, loadVendedoresFromServer]);
 
   useEffect(() => {
     const onAssetsUpdated = () => {
@@ -187,13 +227,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const onCompradoresUpdated = () => {
       void loadCompradoresFromServer();
     };
+    const onVendedoresUpdated = () => {
+      void loadVendedoresFromServer();
+    };
     window.addEventListener("propcrm-assets-updated", onAssetsUpdated);
     window.addEventListener("propcrm-compradores-updated", onCompradoresUpdated);
+    window.addEventListener("propcrm-vendedores-updated", onVendedoresUpdated);
     return () => {
       window.removeEventListener("propcrm-assets-updated", onAssetsUpdated);
       window.removeEventListener("propcrm-compradores-updated", onCompradoresUpdated);
+      window.removeEventListener("propcrm-vendedores-updated", onVendedoresUpdated);
     };
-  }, [loadAssetsFromServer, loadCompradoresFromServer]);
+  }, [loadAssetsFromServer, loadCompradoresFromServer, loadVendedoresFromServer]);
 
 
   useEffect(() => {
@@ -297,13 +342,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       assetsError: state.assetsError,
       compradoresLoading: state.compradoresLoading,
       compradoresError: state.compradoresError,
+      vendedoresLoading: state.vendedoresLoading,
+      vendedoresError: state.vendedoresError,
       session,
       permissions,
       assignedAssetIds,
       assignedCompradorIds,
       togglePub, toggleFav, toggleChk, toggleChkAll, toggleTaskDone,
       addAssets, clearAssets, removeAssetsByIds, getAsset, getComprador, getVendedor,
-      refreshAssignments, refreshAssets, refreshCompradores,
+      refreshAssignments, refreshAssets, refreshCompradores, refreshVendedores,
     }}>
       {children}
     </AppContext.Provider>

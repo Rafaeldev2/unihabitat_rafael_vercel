@@ -6,13 +6,14 @@ import { isAdmin } from "@/lib/auth-helpers";
 import { assetNotes, assetDocs, docNotes, adminNotes, chatMessages } from "@/lib/mock-data";
 import Link from "next/link";
 import type { Asset, NoteEntry, DocItem, ChatMessage } from "@/lib/types";
-import { Home, FolderOpen, Briefcase, Users, Lock, ArrowLeft, Upload, Download, FileText, FileSpreadsheet, Image, MessageSquare, Send, Save, Plus, Mail, X, Loader2, AlertCircle, CheckCircle2, Building, ExternalLink, RefreshCw } from "lucide-react";
+import { Home, FolderOpen, Briefcase, Users, Lock, ArrowLeft, Upload, Download, FileText, FileSpreadsheet, Image, MessageSquare, Send, Save, Plus, Mail, X, Loader2, AlertCircle, CheckCircle2, CheckCircle, Building, ExternalLink, RefreshCw, UserCog } from "lucide-react";
 import { uploadDocumento, fetchDocumentos, deleteDocumento, getDocumentUrl, type DocRow } from "@/app/actions/documentos";
 import { createNota, fetchNotas, type NotaRow } from "@/app/actions/notas";
 import { fetchCompradores } from "@/app/actions/compradores";
 import { fetchAssetByIdForAdmin, toggleAssetPub, updateAssetFields } from "@/app/actions/assets";
 import { inviteCompradorToAsset, revokeCompradorFromAsset, fetchInvitedCompradores } from "@/app/actions/invitations";
 import { refreshAssetCatastro } from "@/app/actions/catastro";
+import { getAssetAgente, setAssetAgente } from "@/app/actions/vendedores";
 import type { Comprador } from "@/lib/types";
 import { InteractiveMap } from "@/components/InteractiveMap";
 import { EditableSection, type FieldDef } from "@/components/EditableSection";
@@ -762,6 +763,9 @@ function TabAgentes({ asset, assetId, currentUser }: { asset: Asset; assetId: st
           ))}
         </div>
       </div>
+
+      <AssetAgenteAssignmentCard assetId={assetId} />
+
       <div className="mb-3 flex items-center justify-between">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Notas del agente</p>
         <button
@@ -1241,6 +1245,127 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset }: { ass
         </div>
       </div>
     </>
+  );
+}
+
+function AssetAgenteAssignmentCard({ assetId }: { assetId: string }) {
+  const { vendedores, vendedoresLoading, refreshAssets } = useApp();
+  const [currentAgenteId, setCurrentAgenteId] = useState("");
+  const [pendingAgenteId, setPendingAgenteId] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getAssetAgente(assetId)
+      .then((id) => {
+        if (cancelled) return;
+        const value = id ?? "";
+        setCurrentAgenteId(value);
+        setPendingAgenteId(value);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCurrentAgenteId("");
+        setPendingAgenteId("");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [assetId]);
+
+  const dirty = pendingAgenteId !== currentAgenteId;
+  const selectedVendor = vendedores.find((v) => v.id === pendingAgenteId);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaved(false);
+    try {
+      await setAssetAgente(assetId, pendingAgenteId || null);
+      setCurrentAgenteId(pendingAgenteId);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      void refreshAssets();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "No se pudo asignar el agente");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mb-4 rounded-lg border border-border bg-white p-4 shadow-sm">
+      <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[1.5px] text-gold after:h-px after:flex-1 after:bg-border">
+        <UserCog size={13} /> Agente principal del activo
+      </div>
+
+      <p className="mb-3 text-xs text-muted">
+        Designa al agente responsable de gestionar este activo. Recibirá una notificación al asignarlo.
+      </p>
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-xs text-muted">
+          <Loader2 size={14} className="animate-spin" /> Cargando agente actual…
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <select
+            value={pendingAgenteId}
+            onChange={(e) => setPendingAgenteId(e.target.value)}
+            disabled={saving || vendedoresLoading}
+            className="flex-1 cursor-pointer appearance-none rounded-md border border-border bg-cream2 px-3 py-2 text-sm outline-none focus:border-navy focus:bg-white"
+          >
+            <option value="">Sin asignar</option>
+            {vendedores.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.nombre}
+                {v.email ? ` — ${v.email}` : ""}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleSave}
+            disabled={!dirty || saving}
+            className="flex items-center gap-1.5 rounded-md bg-gold px-3.5 py-2 text-xs font-medium text-white hover:bg-gold2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : saved ? (
+              <CheckCircle size={12} />
+            ) : (
+              <Save size={12} />
+            )}
+            {saved ? "Guardado" : "Guardar"}
+          </button>
+        </div>
+      )}
+
+      {selectedVendor && (
+        <div className="mt-3 flex items-center gap-2 rounded-md bg-cream2 p-2 text-xs text-muted">
+          <div
+            className="flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-bold text-white"
+            style={{ background: `linear-gradient(135deg,${selectedVendor.col || "#2563a8,#0d2a4a"})` }}
+          >
+            {selectedVendor.ini || selectedVendor.nombre.slice(0, 2).toUpperCase()}
+          </div>
+          <span>
+            <strong className="font-semibold text-navy">{selectedVendor.nombre}</strong>
+            {selectedVendor.tel ? ` · ${selectedVendor.tel}` : ""}
+          </span>
+          <Link
+            href={`/admin/agentes/${selectedVendor.id}`}
+            className="ml-auto text-gold hover:underline"
+          >
+            Ver agente
+          </Link>
+        </div>
+      )}
+    </div>
   );
 }
 
