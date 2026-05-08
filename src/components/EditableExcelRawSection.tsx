@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Save, Loader2, CheckCircle2 } from "lucide-react";
 import { updateAssetExcelRaw } from "@/app/actions/assets";
 import { normalizeExcelCellInput } from "@/lib/excel-raw-utils";
+import { toast } from "@/lib/toast";
 
 function cloneRaw(r: Record<string, Record<string, string>>): Record<string, Record<string, string>> {
   return JSON.parse(JSON.stringify(r)) as Record<string, Record<string, string>>;
@@ -58,7 +59,7 @@ export function EditableExcelRawSection({
       setTimeout(() => setSaved(false), 2000);
       onSaved?.();
     } catch (err) {
-      alert("Error al guardar: " + (err instanceof Error ? err.message : String(err)));
+      toast.error("Error al guardar Excel raw", { description: err instanceof Error ? err.message : String(err) });
     } finally {
       setSaving(false);
     }

@@ -20,6 +20,7 @@ import {
   fetchVendorAssignedAssetIds,
   fetchVendorAssignedCompradorIds,
 } from "@/app/actions/permissions";
+import { toast } from "@/lib/toast";
 import {
   updateVendedor,
   deleteVendedor,
@@ -104,9 +105,10 @@ export default function AgenteDetailPage({
       void refreshVendedores();
       void refreshCompradores();
       void refreshAssets();
+      toast.success("Agente eliminado", { description: `"${v.nombre}" ha sido desvinculado correctamente.` });
       window.location.href = "/admin/agentes";
     } catch (err) {
-      alert(err instanceof Error ? err.message : "No se pudo eliminar");
+      toast.error("No se pudo eliminar el agente", { description: err instanceof Error ? err.message : String(err) });
     }
   };
 
@@ -143,13 +145,15 @@ export default function AgenteDetailPage({
       if (isAssigned) {
         await setCompradorAgente(cId, null);
         setAssignedCompradores((prev) => prev.filter((x) => x !== cId));
+        toast.success("Comprador desasignado", { description: `Retirado del agente ${v.nombre}` });
       } else {
         await setCompradorAgente(cId, v.id);
         setAssignedCompradores((prev) => [...prev, cId]);
+        toast.success("Comprador asignado al agente", { description: `Agente: ${v.nombre}` });
       }
       void refreshCompradores();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "No se pudo asignar");
+      toast.error("No se pudo asignar el comprador", { description: err instanceof Error ? err.message : String(err) });
     } finally {
       setAssigningC(null);
     }
@@ -163,13 +167,15 @@ export default function AgenteDetailPage({
       if (isAssigned) {
         await setAssetAgente(aId, null);
         setAssignedAssets((prev) => prev.filter((x) => x !== aId));
+        toast.success("Activo desasignado", { description: `Retirado del agente ${v.nombre}` });
       } else {
         await setAssetAgente(aId, v.id);
         setAssignedAssets((prev) => [...prev, aId]);
+        toast.success("Activo asignado al agente", { description: `Agente: ${v.nombre}` });
       }
       void refreshAssets();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "No se pudo asignar");
+      toast.error("No se pudo asignar el activo", { description: err instanceof Error ? err.message : String(err) });
     } finally {
       setAssigningA(null);
     }
@@ -209,8 +215,9 @@ export default function AgenteDetailPage({
       await upsertVendorPermissions(v.id, perms);
       setPermsSaved(true);
       setTimeout(() => setPermsSaved(false), 2000);
+      toast.success("Permisos guardados", { description: `Actualizados para ${v.nombre}` });
     } catch (err) {
-      alert(err instanceof Error ? err.message : "No se pudieron guardar los permisos");
+      toast.error("No se pudieron guardar los permisos", { description: err instanceof Error ? err.message : String(err) });
     } finally {
       setPermsSaving(false);
     }

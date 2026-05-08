@@ -21,6 +21,7 @@ import {
   UserCog,
 } from "lucide-react";
 import { getCompradorAgente, setCompradorAgente } from "@/app/actions/vendedores";
+import { toast } from "@/lib/toast";
 
 const tabs = [
   { icon: User, label: "Datos" },
@@ -238,8 +239,13 @@ function AgenteAssignmentCard({ compradorId }: { compradorId: string }) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
       void refreshCompradores();
+      if (pendingAgenteId && selectedVendor) {
+        toast.success("Agente asignado al comprador", { description: `Agente: ${selectedVendor.nombre}` });
+      } else {
+        toast.success("Agente retirado del comprador");
+      }
     } catch (err) {
-      alert(err instanceof Error ? err.message : "No se pudo asignar el agente");
+      toast.error("No se pudo asignar el agente", { description: err instanceof Error ? err.message : String(err) });
     } finally {
       setSaving(false);
     }

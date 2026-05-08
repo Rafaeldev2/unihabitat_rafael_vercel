@@ -1,6 +1,8 @@
 "use server";
 
-import { createServiceClient } from "@/lib/supabase/server";
+import { sendEmail } from "@/lib/email/send";
+import { EMAIL_SUPPORT } from "@/lib/email/resend";
+import { contactInquiryTemplate } from "@/lib/email/templates";
 
 interface ContactFormData {
   nombre: string;
@@ -12,32 +14,27 @@ interface ContactFormData {
 }
 
 export async function enviarContacto(data: ContactFormData): Promise<{ ok: boolean; error?: string }> {
-  const { nombre, email, asunto, mensaje } = data;
+  const nombre = data.nombre?.trim() ?? "";
+  const email = data.email?.trim() ?? "";
+  const asunto = data.asunto?.trim() ?? "";
+  const mensaje = data.mensaje?.trim() ?? "";
+  const telefono = data.telefono?.trim() || undefined;
 
-  if (!nombre.trim() || !email.trim() || !asunto.trim() || !mensaje.trim()) {
+  if (!nombre || !email || !asunto || !mensaje) {
     return { ok: false, error: "Todos los campos obligatorios deben estar completos" };
   }
 
-  try {
-    const sb = await createServiceClient();
-    const { error } = await sb.from("mensajes").insert({
-      from_email: email.trim(),
-      from_name: nombre.trim(),
-      telefono: data.telefono?.trim() || null,
-      asunto: asunto.trim(),
-      mensaje: mensaje.trim(),
-      asset_id: data.assetId || null,
-      created_at: new Date().toISOString(),
-    });
+  const tpl = contactInquiryTemplate({ nombre, email, telefono, asunto, mensaje });
+  const result = await sendEmail({
+    to: EMAIL_SUPPORT,
+    subject: tpl.subject,
+    html: tpl.html,
+    text: tpl.text,
+    replyTo: email,
+  });
 
-    if (error) {
-      console.error("Error saving contact form:", error);
-      return { ok: false, error: "No se pudo enviar el mensaje. Inténtalo de nuevo." };
-    }
-
-    return { ok: true };
-  } catch (err) {
-    console.error("Contact form error:", err);
-    return { ok: false, error: "Error del servidor. Inténtalo de nuevo más tarde." };
+  if (!result.ok) {
+    return { ok: false, error: "No se pudo enviar el mensaje. Inténtalo de nuevo más tarde." };
   }
+  return { ok: true };
 }

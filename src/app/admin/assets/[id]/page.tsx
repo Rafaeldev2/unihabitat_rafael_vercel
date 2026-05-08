@@ -20,6 +20,7 @@ import { EditableSection, type FieldDef } from "@/components/EditableSection";
 import { EditableExcelRawSection } from "@/components/EditableExcelRawSection";
 import { listEmptyExcelFields } from "@/lib/excel-raw-utils";
 import { getDescriptionText } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 
 const tabs = [
   { icon: Home,       label: "Características", adminOnly: false, contentIndex: 0 },
@@ -92,7 +93,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
       togglePub(asset.id);
       loadRemote();
     } catch (err) {
-      alert("Error al cambiar estado: " + (err instanceof Error ? err.message : String(err)));
+      toast.error("Error al cambiar el estado del activo", { description: err instanceof Error ? err.message : String(err) });
     } finally {
       setToggling(false);
     }
@@ -268,7 +269,7 @@ function DocItemRow({ doc, onDelete }: { doc: DocRow; onDelete?: () => void }) {
       a.click();
       document.body.removeChild(a);
     } catch (err) {
-      alert("Error al descargar: " + (err instanceof Error ? err.message : String(err)));
+      toast.error("Error al descargar el documento", { description: err instanceof Error ? err.message : String(err) });
     } finally {
       setDownloading(false);
     }
@@ -453,9 +454,9 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
                     text: generalNote.trim(),
                   });
                   setGeneralNote("");
-                  alert("Nota guardada correctamente");
+                  toast.success("Nota guardada", { description: "La nota general fue añadida al activo." });
                 } catch (err) {
-                  alert("Error al guardar: " + (err instanceof Error ? err.message : String(err)));
+                  toast.error("Error al guardar la nota", { description: err instanceof Error ? err.message : String(err) });
                 } finally {
                   setSaving(false);
                 }
@@ -539,8 +540,9 @@ function TabDocumentacion({ assetId, docSubTab, setDocSubTab, currentUser }: { a
     try {
       await deleteDocumento(docId);
       await loadData();
+      toast.success("Documento eliminado");
     } catch (err) {
-      alert("Error al eliminar: " + (err instanceof Error ? err.message : String(err)));
+      toast.error("Error al eliminar el documento", { description: err instanceof Error ? err.message : String(err) });
     }
   };
 
@@ -556,8 +558,9 @@ function TabDocumentacion({ assetId, docSubTab, setDocSubTab, currentUser }: { a
       setNoteText("");
       setShowNoteForm(false);
       await loadData();
+      toast.success("Nota guardada");
     } catch (err) {
-      alert("Error al guardar nota: " + (err instanceof Error ? err.message : String(err)));
+      toast.error("Error al guardar la nota", { description: err instanceof Error ? err.message : String(err) });
     } finally {
       setSavingNote(false);
     }
@@ -746,8 +749,9 @@ function TabAgentes({ asset, assetId, currentUser }: { asset: Asset; assetId: st
       setNoteText("");
       setShowNoteForm(false);
       await loadNotes();
+      toast.success("Nota guardada");
     } catch (err) {
-      alert("Error al guardar nota: " + (err instanceof Error ? err.message : String(err)));
+      toast.error("Error al guardar la nota", { description: err instanceof Error ? err.message : String(err) });
     } finally {
       setSavingNote(false);
     }
@@ -841,10 +845,10 @@ function TabClientes({ assetId }: { assetId: string }) {
     if (result.success) {
       setInvitedIds(prev => new Set([...prev, compradorId]));
       const cl = compradores.find(c => c.id === compradorId);
-      alert(`Activo compartido correctamente con ${cl?.nombre ?? "el cliente"}.`);
+      toast.success("Activo compartido", { description: `Compartido con ${cl?.nombre ?? "el cliente"}.` });
       setShowInviteModal(false);
     } else {
-      alert(`No se pudo compartir el activo: ${result.error ?? "error desconocido"}.`);
+      toast.error("No se pudo compartir el activo", { description: result.error ?? "error desconocido" });
     }
   };
 
@@ -855,9 +859,9 @@ function TabClientes({ assetId }: { assetId: string }) {
     if (result.success) {
       setInvitedIds(prev => { const n = new Set(prev); n.delete(compradorId); return n; });
       const cl = compradores.find(c => c.id === compradorId);
-      alert(`Acceso revocado para ${cl?.nombre ?? "el cliente"}.`);
+      toast.success("Acceso revocado", { description: `Para ${cl?.nombre ?? "el cliente"}.` });
     } else {
-      alert(`No se pudo revocar el acceso: ${result.error ?? "error desconocido"}.`);
+      toast.error("No se pudo revocar el acceso", { description: result.error ?? "error desconocido" });
     }
   };
 
@@ -1008,8 +1012,9 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset }: { ass
       setOwnerSaved(true);
       setTimeout(() => setOwnerSaved(false), 2000);
       reloadAsset();
+      toast.success("Propietario guardado");
     } catch (err) {
-      alert("Error al guardar propietario: " + (err instanceof Error ? err.message : String(err)));
+      toast.error("Error al guardar el propietario", { description: err instanceof Error ? err.message : String(err) });
     } finally {
       setOwnerSaving(false);
     }
@@ -1042,8 +1047,9 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset }: { ass
       });
       setAdminNote("");
       await loadAdminNotes();
+      toast.success("Nota administrativa guardada");
     } catch (err) {
-      alert("Error al guardar: " + (err instanceof Error ? err.message : String(err)));
+      toast.error("Error al guardar la nota administrativa", { description: err instanceof Error ? err.message : String(err) });
     } finally {
       setSaving(false);
     }
@@ -1300,8 +1306,13 @@ function AssetAgenteAssignmentCard({ assetId }: { assetId: string }) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
       void refreshAssets();
+      if (pendingAgenteId && selectedVendor) {
+        toast.success("Agente asignado al activo", { description: `Agente: ${selectedVendor.nombre}` });
+      } else {
+        toast.success("Agente retirado del activo");
+      }
     } catch (err) {
-      alert(err instanceof Error ? err.message : "No se pudo asignar el agente");
+      toast.error("No se pudo asignar el agente", { description: err instanceof Error ? err.message : String(err) });
     } finally {
       setSaving(false);
     }

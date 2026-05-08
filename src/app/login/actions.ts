@@ -40,6 +40,12 @@ function destinationForRole(role: string | undefined, redirectTo: string): strin
   return role === "admin" || role === "vendedor" ? "/admin" : "/portal/privado";
 }
 
+function withWelcome(path: string): string {
+  if (!path) return path;
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}welcome=1`;
+}
+
 async function clearAuthCookies() {
   const cookieStore = await cookies();
   cookieStore.delete("dev-auth");
@@ -125,7 +131,7 @@ export async function signIn(formData: FormData) {
   if (DEV_USERS[emailKey]) {
     const devResult = await signInDevUser(emailKey, passwordKey, redirectTo);
     if (devResult.error) return devResult;
-    redirect(destinationForRole(DEV_USERS[emailKey].role, redirectTo));
+    redirect(withWelcome(destinationForRole(DEV_USERS[emailKey].role, redirectTo)));
   }
 
   // 2) Usuarios reales: Supabase Auth.
@@ -135,7 +141,7 @@ export async function signIn(formData: FormData) {
   // Limpia dev-auth si quedó de un login demo previo.
   await clearDevAuthOnly();
 
-  redirect(destinationForRole(result.role, redirectTo));
+  redirect(withWelcome(destinationForRole(result.role, redirectTo)));
 }
 
 /**
@@ -397,7 +403,7 @@ export async function signUp(formData: FormData): Promise<{ error?: string }> {
     await clearDevAuthOnly();
   }
 
-  redirect(redirectTo || "/portal/privado");
+  redirect(withWelcome(redirectTo || "/portal/privado"));
 }
 
 export async function signOut() {

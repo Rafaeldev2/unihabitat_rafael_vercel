@@ -9,6 +9,7 @@ import { Search, Star, X, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Plus, C
 import { UploadActivosModal } from "./UploadActivosModal";
 import { FilterSelect } from "@/components/FilterSelect";
 import { deleteAllAssets, deleteAssetsByIds } from "@/app/actions/assets";
+import { toast } from "@/lib/toast";
 
 type SortCol = "prov" | "pob" | "sqm" | "precio" | "cat" | "addr" | "cp" | "tip" | "fase";
 
@@ -44,7 +45,7 @@ export default function ActivosPage() {
       if (fCat && a.cat !== fCat) return false;
       if (fProv && a.prov !== fProv) return false;
       if (fPob && a.pob !== fPob) return false;
-      if (fTipo && a.tip !== fTipo) return false;
+      if (fTipo && (a.tip ?? "").toUpperCase() !== fTipo) return false;
       if (fFase && a.fase !== fFase) return false;
       if (favOnly && !a.fav) return false;
       if (q) {
@@ -90,7 +91,7 @@ export default function ActivosPage() {
       .sort((a, b) => a.localeCompare(b, "es"));
   }, [assets, fProv]);
   const tipOptions = useMemo(
-    () => [...new Set(assets.map(a => a.tip))]
+    () => [...new Set(assets.map(a => (a.tip ?? "").toUpperCase()).filter(Boolean))]
       .sort((a, b) => a.localeCompare(b, "es")),
     [assets]
   );
@@ -122,9 +123,9 @@ export default function ActivosPage() {
     try {
       const { deleted } = await deleteAllAssets();
       clearAssets();
-      window.alert(`${deleted} activo(s) eliminados correctamente.`);
+      toast.success("Activos eliminados", { description: `${deleted} activo(s) eliminados correctamente.` });
     } catch (err) {
-      window.alert("Error al borrar: " + (err instanceof Error ? err.message : String(err)));
+      toast.error("Error al borrar todos los activos", { description: err instanceof Error ? err.message : String(err) });
     } finally {
       setDeleting(false);
     }
@@ -143,9 +144,9 @@ export default function ActivosPage() {
       try {
         window.dispatchEvent(new Event("propcrm-assets-updated"));
       } catch { /* ignore */ }
-      window.alert(`${deleted} activo(s) eliminados correctamente.`);
+      toast.success("Activos eliminados", { description: `${deleted} activo(s) eliminados correctamente.` });
     } catch (err) {
-      window.alert("Error al borrar: " + (err instanceof Error ? err.message : String(err)));
+      toast.error("Error al borrar los activos seleccionados", { description: err instanceof Error ? err.message : String(err) });
     } finally {
       setDeleting(false);
     }

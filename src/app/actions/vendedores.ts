@@ -3,6 +3,7 @@
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { rowToVendedor, vendedorToRow } from "@/lib/supabase/db";
 import { requireAdmin } from "@/lib/auth-server";
+import { createNotificacion } from "@/app/actions/notificaciones";
 import type { Vendedor } from "@/lib/types";
 
 /* ------------------------------------------------------------------ */
@@ -198,14 +199,15 @@ async function notifyAgente(params: {
   mensaje: string;
   referenciaId: string;
 }): Promise<void> {
-  const { userId } = await resolveAgenteUserId(params.vendedorId);
+  const { userId, nombre, email } = await resolveAgenteUserId(params.vendedorId);
   if (!userId) return; // sin user vinculado; la notificación no se entrega
-  const sb = await createServiceClient();
-  await sb.from("notificaciones").insert({
-    user_id: userId,
+  await createNotificacion({
+    userId,
     tipo: params.tipo,
     mensaje: params.mensaje,
-    referencia_id: params.referenciaId,
+    referenciaId: params.referenciaId,
+    email: email || undefined,
+    recipientName: nombre,
   });
 }
 

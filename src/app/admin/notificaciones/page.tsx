@@ -12,21 +12,35 @@ const colorMap: Record<string, string> = { match: "text-gold bg-gold/10", docume
 export default function NotificacionesPage() {
   const supabase = createClient();
   const [notifs, setNotifs] = useState<Notif[]>([]);
-
-  const load = useCallback(async () => {
-    const { data } = await supabase.from("notificaciones").select("*").order("created_at", { ascending: false }).limit(50);
-    if (data) setNotifs(data as Notif[]);
-  }, [supabase]);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id ?? null);
+    });
+  }, [supabase]);
+
+  const load = useCallback(async () => {
+    if (!userId) return;
+    const { data } = await supabase
+      .from("notificaciones")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (data) setNotifs(data as Notif[]);
+  }, [supabase, userId]);
+
+  useEffect(() => {
+    if (!userId) return;
     load();
-    const channel = supabase.channel("notif-page")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notificaciones" }, (payload) => {
+    const channel = supabase.channel(`notif-page-${userId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "notificaciones", filter: `user_id=eq.${userId}` }, (payload) => {
         setNotifs(prev => [payload.new as Notif, ...prev]);
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [load, supabase]);
+  }, [load, supabase, userId]);
 
   async function markRead(id: string) {
     await supabase.from("notificaciones").update({ leida: true }).eq("id", id);

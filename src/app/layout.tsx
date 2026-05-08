@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { AppProvider } from "@/lib/context";
 import { CookieConsentBanner } from "@/components/CookieConsentBanner";
+import { Toaster } from "@/components/Toaster";
+import { WelcomeToast } from "@/components/WelcomeToast";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -17,6 +19,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen antialiased">
         <AppProvider>{children}</AppProvider>
         <CookieConsentBanner />
+        <Toaster />
+        <WelcomeToast />
       </body>
     </html>
   );

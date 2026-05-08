@@ -2,6 +2,7 @@
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth-server";
+import { createNotificacion } from "@/app/actions/notificaciones";
 
 export interface CompradorAssetRow {
   comprador_id: string;
@@ -61,11 +62,13 @@ export async function inviteCompradorToAsset(
       }
     }
 
-    await supabase.from("notificaciones").insert({
-      user_id: userId,
+    await createNotificacion({
+      userId: userId ?? undefined,
       tipo: "invitacion",
       mensaje: `${nombre}, se te ha compartido un activo en ${lugar}`,
-      referencia_id: assetId,
+      referenciaId: assetId,
+      email: compEmail || undefined,
+      recipientName: nombre,
     });
   } catch {
     // notification is best-effort

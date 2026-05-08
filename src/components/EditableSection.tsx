@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Save, Loader2, CheckCircle2 } from "lucide-react";
 import { updateAssetFields } from "@/app/actions/assets";
 import { parseLocaleMoneyInput } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 
 export type FieldDef = {
   label: string;
@@ -95,7 +96,7 @@ export function EditableSection({ title, assetId, fields, cols = 4, onSaved }: E
         onSaved?.();
       }
     } catch (err) {
-      alert("Error al guardar: " + (err instanceof Error ? err.message : String(err)));
+      toast.error("Error al guardar la sección", { description: err instanceof Error ? err.message : String(err) });
     } finally {
       setSaving(false);
     }

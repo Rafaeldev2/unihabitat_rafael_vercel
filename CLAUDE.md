@@ -72,6 +72,13 @@ Optional (Catastro / mapas / IA):
 - `ASSET_UPSERT_AFTER_CATASTRO_ENRICH=true` — tras enriquecer, ejecutar `upsertAssets` en Supabase
 - `ANTHROPIC_API_KEY` — habilita la validación/normalización IA en `src/app/actions/claude.ts`; si falta, las acciones devuelven un no-op informativo
 
+Email (Resend):
+- `RESEND_API_KEY` — API key de Resend. Requiere que el dominio del remitente esté verificado en el panel de Resend. Sin esta variable, los envíos en `src/lib/email/send.ts` devuelven `ok:false` con mensaje claro
+- `EMAIL_FROM` — remitente (default `"Unihabitat <soporte@unihabitat.es>"`). Debe usar un dominio verificado en Resend
+- `EMAIL_SUPPORT` — destinatario interno de los formularios "Contáctanos" y "Solicitar información" (default `"soporte@unihabitat.com"`)
+- `EMAIL_DRY_RUN=true` — registra los envíos en consola sin llamar a Resend (útil en desarrollo y CI)
+- `NEXT_PUBLIC_APP_URL` — URL pública de la app, se inserta como CTA en los correos de notificación
+
 ## Conventions
 
 - Entity names are Spanish: activos (assets), compradores (buyers), vendedores (sellers), tareas (tasks), oportunidades (opportunities), notificaciones (notifications)

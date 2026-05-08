@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { createOferta } from "@/app/actions/ofertas";
 import { fetchCompradorByEmail, ensureCompradorForEmail } from "@/app/actions/compradores";
+import { enviarSolicitudInformacion } from "@/app/actions/email-info-request";
 import { usePortalAuth } from "@/hooks/usePortalAuth";
 import { InteractiveMap } from "@/components/InteractiveMap";
 
@@ -39,6 +40,8 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
   const { sensitiveVisible, isStaff, currentUser, userResolved } = usePortalAuth();
   const [activeSection, setActiveSection] = useState<string>("descripcion");
   const [contactSent, setContactSent] = useState(false);
+  const [contactSubmitting, setContactSubmitting] = useState(false);
+  const [contactError, setContactError] = useState("");
   const [contactForm, setContactForm] = useState({ nombre: "", email: "", telefono: "", mensaje: "" });
 
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -74,11 +77,30 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
     sectionRefs.current[sectionId]?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
-  const handleContactSubmit = useCallback((e: React.FormEvent) => {
+  const handleContactSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    setContactSent(true);
-    setTimeout(() => setContactSent(false), 3000);
-  }, []);
+    setContactError("");
+    setContactSubmitting(true);
+    try {
+      const result = await enviarSolicitudInformacion({
+        assetId: asset.id,
+        nombre: contactForm.nombre,
+        email: contactForm.email,
+        telefono: contactForm.telefono || undefined,
+        mensaje: contactForm.mensaje,
+      });
+      if (result.ok) {
+        setContactSent(true);
+        setContactForm({ nombre: "", email: "", telefono: "", mensaje: "" });
+      } else {
+        setContactError(result.error ?? "No se pudo enviar la solicitud");
+      }
+    } catch (err) {
+      setContactError(err instanceof Error ? err.message : "Error inesperado");
+    } finally {
+      setContactSubmitting(false);
+    }
+  }, [asset.id, contactForm]);
 
   return (
     <>
@@ -412,11 +434,18 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
                         <a href="#" className="font-medium text-navy underline underline-offset-2">Política de Privacidad</a>
                       </span>
                     </label>
+                    {contactError && (
+                      <div className="flex items-start gap-1.5 rounded-md bg-red/10 px-3 py-2 text-[11px] text-red">
+                        <AlertCircle size={12} className="mt-0.5 shrink-0" /> <span>{contactError}</span>
+                      </div>
+                    )}
                     <button
                       type="submit"
-                      className="flex items-center justify-center gap-1.5 rounded-lg bg-gold py-2.5 text-xs font-medium text-white hover:bg-gold2"
+                      disabled={contactSubmitting}
+                      className="flex items-center justify-center gap-1.5 rounded-lg bg-gold py-2.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
                     >
-                      <Send size={12} /> Enviar solicitud
+                      {contactSubmitting ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                      {contactSubmitting ? "Enviando..." : "Enviar solicitud"}
                     </button>
                   </form>
                 )}

@@ -9,6 +9,7 @@ import type { Asset, Comprador } from "@/lib/types";
 import Link from "next/link";
 import { FileText, CheckCircle2, XCircle, Send, Loader2, AlertCircle, Euro } from "lucide-react";
 import { fmt } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 
 export default function OfertasPage() {
   const { assets } = useApp();
@@ -51,9 +52,10 @@ export default function OfertasPage() {
     try {
       await updateOfertaEstado(ofertaId, nuevoEstado);
       await loadData();
+      toast.success("Estado de oferta actualizado", { description: `Nuevo estado: ${nuevoEstado}` });
     } catch (err) {
       console.error("Error updating estado:", err);
-      alert(err instanceof Error ? err.message : "Error al actualizar estado");
+      toast.error("Error al actualizar el estado de la oferta", { description: err instanceof Error ? err.message : String(err) });
     }
   }
 

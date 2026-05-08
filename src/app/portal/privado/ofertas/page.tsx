@@ -9,6 +9,7 @@ import type { Asset } from "@/lib/types";
 import Link from "next/link";
 import { ArrowLeft, FileText, CheckCircle2, Clock, XCircle, Loader2, Euro, AlertCircle, PenTool } from "lucide-react";
 import { fmt } from "@/lib/utils";
+import { toast } from "@/lib/toast";
 
 export default function MisOfertasPage() {
   const [ofertas, setOfertas] = useState<OfertaRow[]>([]);
@@ -55,8 +56,9 @@ export default function MisOfertasPage() {
     try {
       await firmarNDA(ofertaId);
       await loadData();
+      toast.success("NDA firmado", { description: "Tu acuerdo de confidencialidad quedó registrado." });
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Error al firmar el NDA");
+      toast.error("Error al firmar el NDA", { description: err instanceof Error ? err.message : String(err) });
     } finally {
       setFirmando(null);
     }
