@@ -74,6 +74,37 @@ export default function ActivosPage() {
     return res;
   }, [assets, q, fCat, fProv, fPob, fTipo, fFase, favOnly, sortCol, sortDir]);
 
+  const catOptions = useMemo(
+    () => [...new Set(assets.map(a => a.cat))]
+      .sort((a, b) => a.localeCompare(b, "es")),
+    [assets]
+  );
+  const provOptions = useMemo(
+    () => [...new Set(assets.map(a => a.prov))]
+      .sort((a, b) => a.localeCompare(b, "es")),
+    [assets]
+  );
+  const pobOptions = useMemo(() => {
+    const src = fProv ? assets.filter(a => a.prov === fProv) : assets;
+    return [...new Set(src.map(a => a.pob))]
+      .sort((a, b) => a.localeCompare(b, "es"));
+  }, [assets, fProv]);
+  const tipOptions = useMemo(
+    () => [...new Set(assets.map(a => a.tip))]
+      .sort((a, b) => a.localeCompare(b, "es")),
+    [assets]
+  );
+  const faseOptions = useMemo(
+    () => [...new Set(assets.map(a => a.fase))]
+      .sort((a, b) => a.localeCompare(b, "es")),
+    [assets]
+  );
+
+  const handleProvChange = (v: string) => {
+    setFProv(v);
+    if (fPob) setFPob("");
+  };
+
   const handleSort = (col: SortCol) => {
     if (sortCol === col) setSortDir(d => d === 1 ? -1 : 1);
     else { setSortCol(col); setSortDir(1); }
@@ -163,11 +194,11 @@ export default function ActivosPage() {
         {/* Filters */}
         <div className="mb-3 rounded-lg border border-border bg-white p-3.5 shadow-sm">
           <div className="flex flex-wrap items-end gap-2.5">
-            <FilterSelect label="Categoría" value={fCat} onChange={setFCat} options={["NPL", "REO"]} />
-            <FilterSelect label="Provincia" value={fProv} onChange={setFProv} options={[...new Set(assets.map(a => a.prov))]} />
-            <FilterSelect label="Población" value={fPob} onChange={setFPob} options={[...new Set(assets.map(a => a.pob))]} />
-            <FilterSelect label="Tipología" value={fTipo} onChange={setFTipo} options={["Vivienda", "Garaje", "Trastero", "Comercial", "Casa / Chalet", "Piso", "Nave", "Oficina", "Suelo", "Edificio"]} />
-            <FilterSelect label="Situación" value={fFase} onChange={setFFase} options={["Publicado", "Suspendido"]} />
+            <FilterSelect label="Categoría" value={fCat} onChange={setFCat} options={catOptions} />
+            <FilterSelect label="Provincia" value={fProv} onChange={handleProvChange} options={provOptions} />
+            <FilterSelect label="Población" value={fPob} onChange={setFPob} options={pobOptions} />
+            <FilterSelect label="Tipología" value={fTipo} onChange={setFTipo} options={tipOptions} />
+            <FilterSelect label="Situación" value={fFase} onChange={setFFase} options={faseOptions} />
             <div className="flex min-w-[90px] flex-col gap-1">
               <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Favoritos</label>
               <button
