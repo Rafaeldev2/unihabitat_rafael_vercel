@@ -24,6 +24,16 @@ function sleep(ms: number): Promise<void> {
 const CONCURRENCY = 5;
 const BATCH_DELAY_MS = 200;
 
+function applyCatastroOverwrite(asset: Asset, partial: Partial<Asset>): Asset {
+  const enriched: Asset = { ...asset, ...partial, adm: { ...asset.adm } };
+  if (partial.catRef) enriched.adm.cref = partial.catRef;
+  if (partial.prov) enriched.adm.prov = String(partial.prov).toUpperCase();
+  if (partial.pob) enriched.adm.city = partial.pob;
+  if (partial.cp) enriched.adm.zip = partial.cp;
+  if (partial.fullAddr) enriched.adm.addr = partial.fullAddr;
+  return enriched;
+}
+
 /**
  * Completa ficha con datos del Catastro (DNP) y geocodificación Geoapify para el mapa.
  * Respeta datos ya informados en el Excel (fusión fill-empty).
@@ -150,17 +160,9 @@ export async function refreshAssetCatastro(
 
   const partial = catastroParsedToPartialAsset(row, mapUrl);
 
-  let enriched: Asset;
-  if (opts?.forceOverwrite) {
-    enriched = { ...asset, ...partial, adm: { ...asset.adm } };
-    if (partial.catRef) enriched.adm.cref = partial.catRef;
-    if (partial.prov) enriched.adm.prov = String(partial.prov).toUpperCase();
-    if (partial.pob) enriched.adm.city = partial.pob;
-    if (partial.cp) enriched.adm.zip = partial.cp;
-    if (partial.fullAddr) enriched.adm.addr = partial.fullAddr;
-  } else {
-    enriched = mergePartialIntoAssetFillEmpty(asset, partial);
-  }
+  const enriched: Asset = opts?.forceOverwrite
+    ? applyCatastroOverwrite(asset, partial)
+    : mergePartialIntoAssetFillEmpty(asset, partial);
 
   const updatedFields = Object.keys(partial).filter(k => k !== "map" || mapUrl);
   const dbRow = assetToRow(enriched);
@@ -219,7 +221,7 @@ export async function enrichAssetsBatch(assets: Asset[]): Promise<{
 
         const partial = catastroParsedToPartialAsset(row, mapUrl);
         ok++;
-        return mergePartialIntoAssetFillEmpty(asset, partial);
+        return applyCatastroOverwrite(asset, partial);
       })
     );
     out.push(...batch);
