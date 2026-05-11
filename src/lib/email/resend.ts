@@ -18,4 +18,4 @@ export const EMAIL_FROM =
 export const EMAIL_SUPPORT =
   process.env.EMAIL_SUPPORT ?? "info@unihabitat.es";
 
-export const EMAIL_DRY_RUN = process.env.EMAIL_DRY_RUN === "false";
+export const EMAIL_DRY_RUN = process.env.EMAIL_DRY_RUN === "true";
