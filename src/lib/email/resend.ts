@@ -13,9 +13,9 @@ export function getResend(): Resend {
 }
 
 export const EMAIL_FROM =
-  process.env.EMAIL_FROM ?? "Unihabitat <info@unihabitat.es>";
+  process.env.EMAIL_FROM ?? "Unihabitat <info@unihabitat.net>";
 
 export const EMAIL_SUPPORT =
-  process.env.EMAIL_SUPPORT ?? "info@unihabitat.es";
+  process.env.EMAIL_SUPPORT ?? "info@unihabitat.net";
 
 export const EMAIL_DRY_RUN = process.env.EMAIL_DRY_RUN === "true";

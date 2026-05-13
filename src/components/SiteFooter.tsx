@@ -63,7 +63,7 @@ export function SiteFooter() {
               </li>
               <li className="flex items-center gap-2">
                 <Mail size={13} className="shrink-0 text-gold" />
-                <a href="mailto:soporte@unihabitat.com" className="text-xs text-white/50 transition-colors hover:text-white">soporte@unihabitat.com</a>
+                <a href="mailto:info@unihabitat.net" className="text-xs text-white/50 transition-colors hover:text-white">info@unihabitat.net</a>
               </li>
             </ul>
           </div>

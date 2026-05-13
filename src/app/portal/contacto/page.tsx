@@ -172,7 +172,7 @@ export default function ContactoPage() {
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-navy">Email</div>
-                  <a href="mailto:soporte@unihabitat.com" className="text-xs text-muted hover:text-navy">soporte@unihabitat.com</a>
+                  <a href="mailto:info@unihabitat.net" className="text-xs text-muted hover:text-navy">info@unihabitat.net</a>
                 </div>
               </div>
             </div>

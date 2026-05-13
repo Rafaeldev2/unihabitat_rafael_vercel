@@ -113,8 +113,8 @@ export function PrivacyPolicyBody() {
         </p>
         <p>
           Más información:{" "}
-          <a href="mailto:soporte@unihabitat.com" className="font-semibold text-gold underline">
-            soporte@unihabitat.com
+          <a href="mailto:info@unihabitat.net" className="font-semibold text-gold underline">
+            info@unihabitat.net
           </a>{" "}
           o, según corresponda,{" "}
           <a href="https://legatik.es/" className="text-gold underline" target="_blank" rel="noopener noreferrer">
@@ -161,8 +161,8 @@ export function PrivacyPolicyBody() {
         <p>
           Si prestó consentimiento para fines publicitarios y desea dejar de recibir publicidad, puede revocar el
           consentimiento en cualquier momento escribiendo a{" "}
-          <a href="mailto:soporte@unihabitat.com" className="font-semibold text-gold underline">
-            soporte@unihabitat.com
+          <a href="mailto:info@unihabitat.net" className="font-semibold text-gold underline">
+            info@unihabitat.net
           </a>
           .
         </p>
@@ -244,15 +244,15 @@ export function PrivacyPolicyBody() {
         <p>
           De acuerdo con la normativa vigente, puede ejercer los derechos de acceso, rectificación, supresión,
           limitación, portabilidad y oposición dirigiendo su petición a la dirección postal del responsable o a{" "}
-          <a href="mailto:soporte@unihabitat.com" className="font-semibold text-gold underline">
-            soporte@unihabitat.com
+          <a href="mailto:info@unihabitat.net" className="font-semibold text-gold underline">
+            info@unihabitat.net
           </a>
           . El solicitante deberá estar suficientemente identificado.
         </p>
         <p>
           Para reclamaciones:{" "}
-          <a href="mailto:soporte@unihabitat.com" className="text-gold underline">
-            soporte@unihabitat.com
+          <a href="mailto:info@unihabitat.net" className="text-gold underline">
+            info@unihabitat.net
           </a>
           . Asimismo puede dirigirse a sus asesores en materia de protección de datos:{" "}
           <a href="mailto:clientes@legatik.es" className="text-gold underline">
