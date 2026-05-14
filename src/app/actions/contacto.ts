@@ -34,7 +34,9 @@ export async function enviarContacto(data: ContactFormData): Promise<{ ok: boole
   });
 
   if (!result.ok) {
-    return { ok: false, error: "No se pudo enviar el mensaje. Inténtalo de nuevo más tarde." };
+    console.error("[contacto] sendEmail failed:", { error: result.error, to: EMAIL_SUPPORT });
+    const detail = result.error ? ` (${result.error})` : "";
+    return { ok: false, error: `No se pudo enviar el mensaje.${detail}` };
   }
   return { ok: true };
 }
