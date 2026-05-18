@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { useApp } from "@/lib/context";
-import { parseExcelFile, extractRawPreview, parseWithMapping, parseExcelHeuristic, type ParseExcelResult, type SheetDiagEntry } from "@/lib/normalize-excel";
+import { parseExcelFile, extractRawPreview, parseWithMapping, parseExcelHeuristic, mergeHeuristicIntoMapped, type ParseExcelResult, type SheetDiagEntry } from "@/lib/normalize-excel";
 import { enrichAssetsBatch } from "@/app/actions/catastro";
 import type { CatastroEnrichFailure } from "@/app/actions/catastro";
 import { validateAssetsBatch } from "@/app/actions/claude";
@@ -248,57 +248,101 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
         elapsed: Date.now() - t0,
       });
 
-      // ── Step 1b: AI Format Detection (solo si parse devolvió 0) ─────────
-      // Si la IA falla o no detecta formato, NO abortamos: caemos al
-      // parseo heurístico (sin Claude) para que siempre se cargue algo.
+      // ── Step 1b: sin formato conocido ────────────────────────────────────
+      // Plantillas libres pasan primer parseExcelFile con format=unknown (0 rows).
+      // Estrategia: heurística por cabeceras SIEMPRE, y fusión con el mapeo de
+      // Claude cuando exista — la IA suele omitir cat/addr; la heuristica sí
+      // reconoce "Categoria", "ADDRESS", etc., y así no quedan "—".
       if (parsed.length === 0) {
         const t1 = Date.now();
-        updateStep("ai-detect", { status: "active", detail: "Enviando cabeceras a Claude…" });
-        let aiUsed = false;
+        updateStep("ai-detect", { status: "active", detail: "Cabeceras: heuristica + detección IA…" });
+
+        let heuristicAssets: Asset[] = [];
+        try {
+          const h = await parseExcelHeuristic(file);
+          heuristicAssets = h.assets;
+          pushLog(
+            "info",
+            `Heurística previa fusión: ${heuristicAssets.length} activos · ${h.totalRows} filas · hojas: ${h.sheets.join(", ")}`,
+          );
+        } catch (err) {
+          pushLog("error", `Heurística falló: ${err instanceof Error ? err.message : String(err)}`);
+        }
+
+        let mappedFromAi: Asset[] = [];
+
         try {
           const preview = await extractRawPreview(file);
           pushLog("info", `Detección IA: enviando cabeceras de ${preview.length} hoja(s)`);
           const detection = await detectFormatWithClaude(preview);
-          pushLog("info", `Detección IA: confidence=${detection.confidence}, descripción="${detection.description}"`);
+          pushLog(
+            "info",
+            `Detección IA: confidence=${detection.confidence}, descripción="${detection.description}"`,
+          );
 
           if (detection.confidence > 0.5 && Object.keys(detection.mapping).length > 0) {
-            updateStep("ai-detect", { status: "active", detail: `Formato detectado (${detection.description}). Parseando…` });
-            const aiParsed = await parseWithMapping(file, detection.mapping);
-            if (aiParsed.length > 0) {
-              parsed = aiParsed;
-              aiUsed = true;
-              updateStep("ai-detect", { status: "done", detail: `${parsed.length} activo(s) extraídos con IA`, elapsed: Date.now() - t1 });
-            } else {
-              updateStep("ai-detect", { status: "skipped", detail: `IA detectó formato pero no extrajo filas — uso heurística`, elapsed: Date.now() - t1 });
-              pushLog("warn", "IA detectó formato pero parseWithMapping devolvió 0 filas; cayendo a heurística");
+            updateStep("ai-detect", {
+              status: "active",
+              detail: `Mapeo IA (${detection.description}). Parseando…`,
+            });
+            mappedFromAi = await parseWithMapping(file, detection.mapping);
+            if (mappedFromAi.length === 0) {
+              pushLog(
+                "warn",
+                "IA devolvió mapeo pero 0 filas — se usará sólo heurística si la hubo.",
+              );
             }
           } else {
-            updateStep("ai-detect", { status: "skipped", detail: `IA no detectó formato (conf=${detection.confidence.toFixed(2)}) — uso heurística`, elapsed: Date.now() - t1 });
-            pushLog("warn", `IA confidence ${detection.confidence} bajo umbral 0.5; cayendo a heurística`);
+            pushLog(
+              "warn",
+              `IA confidence ${detection.confidence.toFixed(2)} o mapping vacío — sin parseWithMapping.`,
+            );
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          updateStep("ai-detect", { status: "error", detail: `IA no disponible: ${msg.slice(0, 80)} — uso heurística`, elapsed: Date.now() - t1 });
           pushLog("error", `Detección IA falló: ${msg}`);
         }
 
-        // ── Step 1c: Fallback heurístico SIN Claude ──────────────────────
-        // Funciona aunque la IA esté caída, la clave sea inválida o no haya internet.
-        if (!aiUsed) {
-          try {
-            const heuristic = await parseExcelHeuristic(file);
-            pushLog("info", `Heurística: ${heuristic.assets.length} activos extraídos de ${heuristic.totalRows} filas en ${heuristic.sheets.length} hoja(s)`);
-            if (heuristic.assets.length > 0) {
-              parsed = heuristic.assets;
-            }
-          } catch (err) {
-            pushLog("error", `Heurística falló: ${err instanceof Error ? err.message : String(err)}`);
-          }
+        parsed = mergeHeuristicIntoMapped(mappedFromAi, heuristicAssets);
+
+        const elapsed = Date.now() - t1;
+        if (parsed.length === 0) {
+          updateStep("ai-detect", {
+            status: "error",
+            detail: "Ni IA ni heurística extrajeron filas válidas.",
+            elapsed,
+          });
+        } else if (!mappedFromAi.length && heuristicAssets.length > 0) {
+          updateStep("ai-detect", {
+            status: "skipped",
+            detail: `Sólo heurística: ${parsed.length} activo(s)`,
+            elapsed,
+          });
+        } else if (mappedFromAi.length > 0 && heuristicAssets.length > 0) {
+          updateStep("ai-detect", {
+            status: "done",
+            detail: `IA fusionada con cabeceras · ${parsed.length} activo(s)`,
+            elapsed,
+          });
+        } else if (mappedFromAi.length > 0) {
+          updateStep("ai-detect", {
+            status: "done",
+            detail: `${parsed.length} activo(s) con mapeo IA`,
+            elapsed,
+          });
+        } else {
+          updateStep("ai-detect", {
+            status: "skipped",
+            detail: `${parsed.length} activo(s) (heurística o fusión marginal)`,
+            elapsed,
+          });
         }
 
         if (parsed.length === 0) {
           setStatus("error");
-          setMessage("No se encontraron filas válidas en el archivo. Comprueba que tenga datos con cabeceras reconocibles.");
+          setMessage(
+            "No se encontraron filas válidas en el archivo. Comprueba cabeceras (ID/Categoría/Dirección) y datos.",
+          );
           return;
         }
       } else {

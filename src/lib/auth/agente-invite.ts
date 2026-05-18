@@ -2,6 +2,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { EMAIL_SUPPORT } from "@/lib/email/resend";
 import { agentInviteTemplate } from "@/lib/email/templates";
+import { getPublicAppOrigin } from "@/lib/app-public-url";
 
 export interface InviteAgenteInput {
   email: string;
@@ -31,14 +32,6 @@ export interface InviteAgenteResult {
  */
 function generateOpaquePassword(): string {
   return `tmp_${crypto.randomUUID().replace(/-/g, "")}${Date.now().toString(36)}`;
-}
-
-function getAppUrl(): string {
-  const raw =
-    process.env.NEXT_PUBLIC_APP_URL?.trim() ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
-    "http://localhost:3000";
-  return raw.replace(/\/+$/, "");
 }
 
 /**
@@ -73,7 +66,7 @@ export async function inviteAgenteByEmail(
   }
 
   const admin = await createServiceClient();
-  const redirectTo = `${getAppUrl()}/auth/set-password`;
+  const redirectTo = `${getPublicAppOrigin()}/auth/set-password`;
 
   let userId: string | null = null;
   let alreadyExisted = false;

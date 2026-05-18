@@ -77,7 +77,8 @@ Email (Resend):
 - `EMAIL_FROM` — remitente (default `"Unihabitat <info@unihabitat.net>"`). Debe usar un dominio verificado en Resend
 - `EMAIL_SUPPORT` — destinatario interno de los formularios "Contáctanos", "Solicitar información" y de las notificaciones de ofertas sin vendedor asignado (default `"info@unihabitat.net"`)
 - `EMAIL_DRY_RUN=true` — registra los envíos en consola sin llamar a Resend (útil en desarrollo y CI)
-- `NEXT_PUBLIC_APP_URL` — URL pública de la app, se inserta como CTA en los correos de notificación
+- `NEXT_PUBLIC_APP_URL` — URL pública de la app (CTA en correos, etc.). Si en un build de Vercel quedara apuntando a `localhost`, usar `APP_ORIGIN` con la URL HTTPS de producción.
+- `APP_ORIGIN` — (opcional) origen canónico **solo en servidor** (`https://www.unihabitat.net`). Prioridad sobre `NEXT_PUBLIC_APP_URL` en `getPublicAppOrigin()` para enlaces de Auth (invitación agentes, `redirect_to` de Supabase) y así evitar magic links a `localhost`.
 
 ## Conventions
 

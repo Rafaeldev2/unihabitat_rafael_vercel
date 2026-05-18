@@ -439,6 +439,44 @@ function mergeAssetsSameId(prev: Asset, curr: Asset): Asset {
 type SheetFormat = "prov1" | "prov2" | "prov3" | "enriquecido" | "unknown";
 
 /**
+ * Normaliza cabeceras Excel (mayúsculas + sin tilde / diacríticos) para que los
+ * regex de inferHeaderColumns funcionen igual con "Dirección" / "DIR." / inglés mixto.
+ */
+function foldHeaderLabel(raw: unknown): string {
+  return String(raw ?? "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+/** Misma activo: combina resultado de Claude (huecos) + heuristica sin perder ningún id. */
+export function mergeHeuristicIntoMapped(
+  mappedAssets: Asset[],
+  heuristicAssets: Asset[],
+): Asset[] {
+  if (mappedAssets.length === 0) return heuristicAssets.slice();
+  if (heuristicAssets.length === 0) return mappedAssets.slice();
+  const byHeurId = new Map(heuristicAssets.map((a) => [a.id, a]));
+  const mergedById = new Map<string, Asset>();
+  const orderIds: string[] = [];
+
+  for (const ai of mappedAssets) {
+    const hi = byHeurId.get(ai.id);
+    const merged = hi ? mergeAssetsSameId(ai, hi) : ai;
+    mergedById.set(ai.id, merged);
+    orderIds.push(ai.id);
+  }
+  for (const hi of heuristicAssets) {
+    if (!mergedById.has(hi.id)) {
+      mergedById.set(hi.id, hi);
+      orderIds.push(hi.id);
+    }
+  }
+  return orderIds.map((id) => mergedById.get(id)!);
+}
+
+/**
  * Heurística de columnas: dado el header crudo de una hoja, devuelve un mapa
  * { campoAsset → índiceColumna }. Cubre los nombres de cabecera más comunes
  * en español e inglés (UF, NDG, Asset ID, Provincia, Municipio, CP, Dirección,
@@ -459,7 +497,7 @@ function inferHeaderColumns(headerRow: unknown[]): Partial<Record<HeaderField, n
   const set = (k: HeaderField, idx: number) => { if (cols[k] === undefined) cols[k] = idx; };
 
   for (let c = 0; c < headerRow.length; c++) {
-    const h = String(headerRow[c] ?? "").toUpperCase().trim();
+    const h = foldHeaderLabel(headerRow[c]);
     if (!h) continue;
 
     if (cols.id === undefined && /\b(UF|NDG|ASSET ID|ID PRINEX|ID ACTIVO|REFERENCIA(?! CATASTRAL)|CONTRACT ID|DATA REF|^ID$|^ID\s|^ID\d+$|^ID\d+\s|CODIGO ACTIVO)\b/.test(h)) {

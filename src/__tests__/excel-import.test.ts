@@ -2,7 +2,12 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import * as XLSX from "xlsx";
-import { parseExcelFile, type ParseExcelResult } from "@/lib/normalize-excel";
+import {
+  parseExcelFile,
+  type ParseExcelResult,
+  parseExcelHeuristic,
+  mergeHeuristicIntoMapped,
+} from "@/lib/normalize-excel";
 
 const FIXTURES_DIR = join(__dirname, "fixtures");
 
@@ -88,6 +93,46 @@ describe.skipIf(!realFixturesPresent)("parseExcelFile — regresión de archivos
 });
 
 describe("parseExcelFile — sintéticos", () => {
+  it("heuristica fusiona huecos IA: cat y dirección vienen del parse por cabeceras", async () => {
+    const header = [
+      "Categoría",
+      "Dirección",
+      "ID1",
+      "Property Type",
+      "Town",
+      "Province",
+      "ZIP",
+      "Precio",
+    ];
+    const row = [
+      "Sinergia CRM",
+      "Calle Inventada 123",
+      "MERGE-UNIT-TEST",
+      "vivienda_bloque_piso",
+      "Las Rozas",
+      "Madrid",
+      "28230",
+      150000,
+    ];
+    const file = makeXlsxFile({ Sheet1: [header, row] });
+    const h = await parseExcelHeuristic(file);
+    expect(h.assets.length).toBe(1);
+    const heuristic = h.assets[0];
+    expect(heuristic.id).toBe("MERGE-UNIT-TEST");
+    expect(heuristic.cat).toBe("Sinergia CRM");
+    expect(heuristic.addr).toBe("Calle Inventada 123");
+
+    const fromAiGap = {
+      ...heuristic,
+      cat: "—",
+      addr: "—",
+      fullAddr: "—",
+    };
+    const merged = mergeHeuristicIntoMapped([fromAiGap], [heuristic]);
+    expect(merged[0].cat).toBe(heuristic.cat);
+    expect(merged[0].addr).toBe(heuristic.addr);
+  });
+
   it("hoja con nombre PROVEEDOR 1 y columnas con offset 3 detecta el offset", async () => {
     // Tres columnas extra antes del layout canónico de Proveedor 1.
     const header = [

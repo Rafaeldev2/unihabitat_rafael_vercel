@@ -3,6 +3,7 @@
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { notificationMirrorTemplate } from "@/lib/email/templates";
+import { getPublicAppOrigin } from "@/lib/app-public-url";
 
 export interface NotificacionRow {
   id: string;
@@ -40,7 +41,7 @@ async function mirrorNotificacionToEmail(params: {
 
     if (!EMAIL_RE.test(targetEmail)) return;
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL?.trim() || undefined;
+    const appUrl = getPublicAppOrigin();
     const tpl = notificationMirrorTemplate({
       tipo: params.tipo,
       mensaje: params.mensaje,
