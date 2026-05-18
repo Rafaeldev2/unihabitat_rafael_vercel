@@ -98,10 +98,19 @@ export async function createVendedor(input: VendedorInput): Promise<Vendedor> {
     estadoC: input.estadoC || "fp-pub",
   };
 
-  const row = { ...vendedorToRow(v), ...(userId ? { user_id: userId } : {}) };
-  const { error } = await sb
+  const baseRow = vendedorToRow(v);
+  const row = { ...baseRow, ...(userId ? { user_id: userId } : {}) };
+  let { error } = await sb
     .from("vendedores")
     .upsert(row, { onConflict: "id", ignoreDuplicates: false });
+
+  if (error && userId && /user_id/i.test(error.message) && /column|schema cache/i.test(error.message)) {
+    console.warn("[vendedores] tabla sin columna user_id; reintentando sin ella. Aplica supabase-migration-agentes.sql para vincular agente↔auth.users.");
+    ({ error } = await sb
+      .from("vendedores")
+      .upsert(baseRow, { onConflict: "id", ignoreDuplicates: false }));
+  }
+
   if (error) throw new Error(error.message);
   return v;
 }
@@ -142,7 +151,12 @@ export async function updateVendedor(
     }
   }
 
-  const { error } = await sb.from("vendedores").update(row).eq("id", id);
+  let { error } = await sb.from("vendedores").update(row).eq("id", id);
+  if (error && "user_id" in row && /user_id/i.test(error.message) && /column|schema cache/i.test(error.message)) {
+    console.warn("[vendedores] tabla sin columna user_id; reintentando update sin ella.");
+    const { user_id: _omit, ...rowNoUserId } = row;
+    ({ error } = await sb.from("vendedores").update(rowNoUserId).eq("id", id));
+  }
   if (error) throw new Error(error.message);
 }
 
