@@ -4,6 +4,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { rowToVendedor, vendedorToRow } from "@/lib/supabase/db";
 import { requireAdmin } from "@/lib/auth-server";
 import { createNotificacion } from "@/app/actions/notificaciones";
+import { inviteAgenteByEmail } from "@/lib/auth/agente-invite";
 import type { Vendedor } from "@/lib/types";
 
 /* ------------------------------------------------------------------ */
@@ -60,7 +61,18 @@ export interface VendedorInput {
   ini?: string;
 }
 
-export async function createVendedor(input: VendedorInput): Promise<Vendedor> {
+export interface CreateVendedorResult {
+  vendedor: Vendedor;
+  /** Estado de la invitación: 'sent' = email enviado; 'skipped' = sin email;
+   *  'reused' = el usuario ya tenía cuenta (también se reenvía recovery);
+   *  'failed' = no se pudo enviar (ver `inviteError`). */
+  invite: "sent" | "reused" | "skipped" | "failed";
+  inviteError?: string;
+}
+
+export async function createVendedor(
+  input: VendedorInput,
+): Promise<CreateVendedorResult> {
   await requireAdmin();
   const sb = await createServiceClient();
 
@@ -69,17 +81,21 @@ export async function createVendedor(input: VendedorInput): Promise<Vendedor> {
   const id = (input.id ?? crypto.randomUUID()).trim();
   const ini = (input.ini || deriveInitials(nombre)).toUpperCase().slice(0, 2);
 
-  // Si nos dan email, intentamos vincularlo con la cuenta Supabase Auth
-  // existente (si la hay).
-  let userId: string | null = null;
   const email = (input.email ?? "").trim().toLowerCase();
+
+  let invite: CreateVendedorResult["invite"] = "skipped";
+  let inviteError: string | undefined;
+  let userId: string | null = null;
+
   if (email) {
-    try {
-      const { data } = await sb.auth.admin.listUsers({ page: 1, perPage: 200 });
-      const u = data?.users?.find((x) => (x.email || "").toLowerCase() === email);
-      userId = u?.id ?? null;
-    } catch {
-      /* admin API no disponible — seguimos sin user_id */
+    const result = await inviteAgenteByEmail({ email, nombre });
+    userId = result.userId;
+    if (result.ok) {
+      invite = result.alreadyExisted ? "reused" : "sent";
+    } else {
+      invite = "failed";
+      inviteError = result.error;
+      console.warn("[vendedores.create] invitación falló:", result.error);
     }
   }
 
@@ -112,7 +128,76 @@ export async function createVendedor(input: VendedorInput): Promise<Vendedor> {
   }
 
   if (error) throw new Error(error.message);
-  return v;
+  return { vendedor: v, invite, inviteError };
+}
+
+/**
+ * Reenvía un nuevo enlace seguro al email del agente para que (re)defina su
+ * contraseña. Crea la cuenta de Auth si no existía. Devuelve detalle del
+ * resultado para que la UI pueda mostrarlo.
+ */
+export interface ReinviteVendedorResult {
+  ok: boolean;
+  message: string;
+  alreadyExisted: boolean;
+}
+
+export async function reinviteVendedor(
+  vendedorId: string,
+): Promise<ReinviteVendedorResult> {
+  await requireAdmin();
+  const sb = await createServiceClient();
+
+  const { data: vRow, error: vErr } = await sb
+    .from("vendedores")
+    .select("email, nombre")
+    .eq("id", vendedorId)
+    .maybeSingle();
+
+  if (vErr) {
+    return { ok: false, message: vErr.message, alreadyExisted: false };
+  }
+  if (!vRow) {
+    return { ok: false, message: "Agente no encontrado.", alreadyExisted: false };
+  }
+  const email = ((vRow.email as string | undefined) ?? "").trim().toLowerCase();
+  const nombre = ((vRow.nombre as string | undefined) ?? "").trim();
+  if (!email) {
+    return {
+      ok: false,
+      message: "Este agente no tiene email. Añádelo antes de reenviar la invitación.",
+      alreadyExisted: false,
+    };
+  }
+
+  const result = await inviteAgenteByEmail({ email, nombre, isReinvite: true });
+
+  if (result.userId) {
+    try {
+      await sb
+        .from("vendedores")
+        .update({ user_id: result.userId })
+        .eq("id", vendedorId);
+    } catch {
+      /* columna user_id puede no existir; ignoramos */
+    }
+  }
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      message: result.error ?? "No se pudo reenviar la invitación.",
+      alreadyExisted: result.alreadyExisted,
+    };
+  }
+
+  return {
+    ok: true,
+    message: result.alreadyExisted
+      ? `Nuevo enlace seguro enviado a ${email}.`
+      : `Cuenta creada y enlace de bienvenida enviado a ${email}.`,
+    alreadyExisted: result.alreadyExisted,
+  };
 }
 
 export async function updateVendedor(

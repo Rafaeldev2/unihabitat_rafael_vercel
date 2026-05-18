@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, Search, X, ChevronRight, Loader2, AlertCircle, UserCog } from "lucide-react";
+import { Plus, Search, X, ChevronRight, Loader2, AlertCircle, UserCog, Mail } from "lucide-react";
 import { useApp } from "@/lib/context";
-import { createVendedor } from "@/app/actions/vendedores";
+import { createVendedor, type CreateVendedorResult } from "@/app/actions/vendedores";
+import { toast } from "@/lib/toast";
 
 const pillClass: Record<string, string> = {
   "fp-pub": "bg-green/8 text-green",
@@ -240,7 +241,7 @@ function NewAgenteDialog({
     }
     setSaving(true);
     try {
-      await createVendedor({
+      const result: CreateVendedorResult = await createVendedor({
         nombre: nombre.trim(),
         email: email.trim(),
         tel: tel.trim(),
@@ -248,6 +249,29 @@ function NewAgenteDialog({
         estado,
         estadoC: estado === "Activo" ? "fp-pub" : estado === "Inactivo" ? "fp-sus" : "fp-seg",
       });
+
+      switch (result.invite) {
+        case "sent":
+          toast.success("Agente creado", {
+            description: `Le hemos enviado un email a ${result.vendedor.email} para que defina su contraseña.`,
+          });
+          break;
+        case "reused":
+          toast.success("Agente creado", {
+            description: `Ya existía una cuenta para ${result.vendedor.email}. Le hemos enviado un enlace para restablecer su contraseña.`,
+          });
+          break;
+        case "skipped":
+          toast.success("Agente creado", {
+            description: "Sin email asociado: no se ha enviado invitación de acceso.",
+          });
+          break;
+        case "failed":
+          toast.error("Agente creado, pero falló la invitación", {
+            description: result.inviteError ?? "Usa \"Reenviar invitación\" desde el detalle del agente.",
+          });
+          break;
+      }
       onCreated();
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo crear el agente");
@@ -316,6 +340,15 @@ function NewAgenteDialog({
               ))}
             </select>
           </Field>
+
+          {email.trim() && (
+            <div className="flex items-start gap-2 rounded-md border border-gold/30 bg-gold/5 p-2 text-[11px] text-text">
+              <Mail size={14} className="mt-0.5 flex-shrink-0 text-gold" />
+              <span>
+                Al crear el agente se enviará un email a <strong>{email.trim()}</strong> con un enlace seguro para que defina su contraseña.
+              </span>
+            </div>
+          )}
 
           {error && (
             <div className="flex items-start gap-2 rounded-md border border-red/30 bg-red/5 p-2 text-xs text-red">

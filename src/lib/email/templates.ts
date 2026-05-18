@@ -284,7 +284,66 @@ export function offerTemplate(input: OfferInput): EmailTemplate {
   return { subject, html, text };
 }
 
-// ── 4. Notificación in-system (mirror) ────────────────────────────────────
+// ── 4. Invitación a agente ────────────────────────────────────────────────
+export interface AgentInviteInput {
+  nombre: string;
+  actionUrl: string;
+  isReinvite?: boolean;
+  expiresInHours?: number;
+}
+
+export function agentInviteTemplate(input: AgentInviteInput): EmailTemplate {
+  const titulo = input.isReinvite
+    ? "Restablece tu acceso a Unihabitat"
+    : "Te damos la bienvenida a Unihabitat";
+  const subject = input.isReinvite
+    ? "[Unihabitat] Restablece tu contraseña de agente"
+    : "[Unihabitat] Activa tu cuenta de agente";
+  const cta = input.isReinvite ? "Restablecer contraseña" : "Activar mi cuenta";
+  const intro = input.isReinvite
+    ? "Hemos generado un nuevo enlace seguro para que vuelvas a definir tu contraseña."
+    : "El equipo de Unihabitat te ha dado de alta como agente. Define tu contraseña para acceder al panel de gestión.";
+  const expires = input.expiresInHours ?? 24;
+
+  const bodyHtml = `
+    <p style="margin:0 0 14px 0;font-size:15px;">Hola ${escapeHtml(input.nombre || "agente")},</p>
+    <p style="margin:0 0 18px 0;">${escapeHtml(intro)}</p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
+      <tr>
+        <td align="center">
+          <a href="${escapeHtml(input.actionUrl)}" style="display:inline-block;background-color:${NAVY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:6px;font-size:14px;font-weight:bold;letter-spacing:0.3px;">${escapeHtml(cta)}</a>
+        </td>
+      </tr>
+    </table>
+    <p style="margin:0 0 8px 0;color:${MUTED};font-size:12px;">Si el botón no funciona, copia y pega este enlace en tu navegador:</p>
+    <p style="margin:0 0 18px 0;word-break:break-all;font-size:12px;"><a href="${escapeHtml(input.actionUrl)}" style="color:${NAVY};">${escapeHtml(input.actionUrl)}</a></p>
+    <div style="padding:14px;border-left:3px solid ${GOLD};background-color:${CREAM};border-radius:4px;color:${TEXT};font-size:13px;">
+      <strong style="color:${NAVY};">Importante:</strong> este enlace caduca en ${expires} horas y solo puede usarse una vez. Si caducó, pide a tu administrador que te reenvíe la invitación.
+    </div>
+    <p style="margin:22px 0 0 0;color:${MUTED};font-size:12px;">Si no esperabas este correo, puedes ignorarlo de forma segura.</p>
+  `;
+
+  const html = baseLayout({
+    preheader: titulo,
+    banner: input.isReinvite ? "Restablecer acceso" : "Bienvenida",
+    bodyHtml,
+  });
+
+  const text = [
+    `Hola ${input.nombre || "agente"},`,
+    "",
+    intro,
+    "",
+    `${cta}: ${input.actionUrl}`,
+    "",
+    `Este enlace caduca en ${expires} horas y solo puede usarse una vez.`,
+    "Si no esperabas este correo, puedes ignorarlo.",
+  ].join("\n");
+
+  return { subject, html, text };
+}
+
+// ── 5. Notificación in-system (mirror) ────────────────────────────────────
 const TIPO_LABEL: Record<string, string> = {
   match: "Nuevo match con activo",
   invitacion: "Activo compartido contigo",

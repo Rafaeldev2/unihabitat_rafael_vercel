@@ -12,6 +12,7 @@ import {
   Users,
   Building2,
   AlertCircle,
+  Mail,
 } from "lucide-react";
 import { useApp } from "@/lib/context";
 import {
@@ -26,6 +27,7 @@ import {
   deleteVendedor,
   setCompradorAgente,
   setAssetAgente,
+  reinviteVendedor,
 } from "@/app/actions/vendedores";
 import { ADMIN_SECTIONS, type VendorPermission, type SectionId } from "@/lib/permissions";
 
@@ -109,6 +111,34 @@ export default function AgenteDetailPage({
       window.location.href = "/admin/agentes";
     } catch (err) {
       toast.error("No se pudo eliminar el agente", { description: err instanceof Error ? err.message : String(err) });
+    }
+  };
+
+  const [reinviting, setReinviting] = useState(false);
+  const handleReinvite = async () => {
+    if (!v) return;
+    if (!v.email) {
+      toast.error("Sin email", { description: "Guarda primero un email para este agente." });
+      return;
+    }
+    const ok = confirm(
+      `Se enviará un nuevo enlace seguro a ${v.email} para que (re)defina su contraseña. ¿Continuar?`,
+    );
+    if (!ok) return;
+    setReinviting(true);
+    try {
+      const result = await reinviteVendedor(v.id);
+      if (result.ok) {
+        toast.success("Invitación enviada", { description: result.message });
+      } else {
+        toast.error("No se pudo enviar la invitación", { description: result.message });
+      }
+    } catch (err) {
+      toast.error("No se pudo enviar la invitación", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setReinviting(false);
     }
   };
 
@@ -388,27 +418,46 @@ export default function AgenteDetailPage({
                 </div>
               )}
 
-              <div className="mt-4 flex justify-between">
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
                 <button
                   onClick={handleDelete}
                   className="flex items-center gap-1.5 rounded-md border border-red/30 bg-red/5 px-3 py-1.5 text-xs font-medium text-red hover:bg-red/10"
                 >
                   <Trash2 size={12} /> Eliminar agente
                 </button>
-                <button
-                  onClick={handleSaveDatos}
-                  disabled={savingDatos}
-                  className="flex items-center gap-1.5 rounded-md bg-gold px-3.5 py-1.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
-                >
-                  {savingDatos ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : datosSaved ? (
-                    <CheckCircle size={12} />
-                  ) : (
-                    <Save size={12} />
-                  )}
-                  {datosSaved ? "Guardado" : "Guardar cambios"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleReinvite}
+                    disabled={reinviting || !email}
+                    title={
+                      email
+                        ? "Envía un nuevo enlace seguro al email del agente para definir su contraseña"
+                        : "Añade un email antes de reenviar la invitación"
+                    }
+                    className="flex items-center gap-1.5 rounded-md border border-navy/20 bg-white px-3 py-1.5 text-xs font-medium text-navy hover:bg-cream disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {reinviting ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <Mail size={12} />
+                    )}
+                    Reenviar invitación
+                  </button>
+                  <button
+                    onClick={handleSaveDatos}
+                    disabled={savingDatos}
+                    className="flex items-center gap-1.5 rounded-md bg-gold px-3.5 py-1.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
+                  >
+                    {savingDatos ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : datosSaved ? (
+                      <CheckCircle size={12} />
+                    ) : (
+                      <Save size={12} />
+                    )}
+                    {datosSaved ? "Guardado" : "Guardar cambios"}
+                  </button>
+                </div>
               </div>
             </div>
           )}
