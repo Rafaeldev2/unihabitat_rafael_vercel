@@ -42,7 +42,9 @@ export async function getServerSession(): Promise<UserSession | null> {
 
     let vendedorId: string | undefined;
     if (role === "vendedor" && user.email) {
-      const { data: vRow } = await supabase
+      const { createServiceClient } = await import("./supabase/server");
+      const sb = await createServiceClient();
+      const { data: vRow } = await sb
         .from("vendedores")
         .select("id")
         .or(`user_id.eq.${user.id},email.ilike.${user.email}`)

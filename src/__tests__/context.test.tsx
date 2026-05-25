@@ -24,6 +24,9 @@ vi.mock("@/app/actions/permissions", () => ({
   fetchVendorAssignedAssetIds: vi.fn(async () => []),
   fetchVendorAssignedCompradorIds: vi.fn(async () => []),
 }));
+vi.mock("@/app/actions/session", () => ({
+  fetchCurrentSession: vi.fn(async () => null),
+}));
 vi.mock("@/lib/auth-helpers", () => ({
   getDevAuthFromDocument: () => null,
 }));

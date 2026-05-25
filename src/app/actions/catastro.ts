@@ -30,7 +30,11 @@ function applyCatastroOverwrite(asset: Asset, partial: Partial<Asset>): Asset {
   if (partial.prov) enriched.adm.prov = String(partial.prov).toUpperCase();
   if (partial.pob) enriched.adm.city = partial.pob;
   if (partial.cp) enriched.adm.zip = partial.cp;
-  if (partial.fullAddr) enriched.adm.addr = partial.fullAddr;
+  if (partial.fullAddr && partial.fullAddr !== "—") {
+    enriched.fullAddr = partial.fullAddr;
+    enriched.addr = partial.fullAddr;
+    enriched.adm.addr = partial.fullAddr;
+  }
   return enriched;
 }
 

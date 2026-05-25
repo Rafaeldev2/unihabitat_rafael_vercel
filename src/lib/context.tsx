@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef, ty
 import { usePathname } from "next/navigation";
 import type { Asset, Comprador, Vendedor, Tarea } from "./types";
 import type { VendorPermission, UserSession } from "./permissions";
+import { defaultVendorPermissions } from "./permissions";
 // `assets` y `compradores` de mock-data ya NO se usan como semilla inicial;
 // los datos llegan de Supabase. Vendedores y tareas conservan su semilla
 // mientras no estén dentro del alcance de esta corrección.
@@ -14,6 +15,7 @@ import { fetchVendedores } from "@/app/actions/vendedores";
 import { backfillMissingMaps } from "@/app/actions/maps";
 import { shouldBackfillMapFromAddress } from "@/lib/map-default";
 import { getDevAuthFromDocument } from "@/lib/auth-helpers";
+import { fetchCurrentSession } from "@/app/actions/session";
 import { fetchVendorPermissions, fetchVendorAssignedAssetIds, fetchVendorAssignedCompradorIds } from "@/app/actions/permissions";
 
 interface AppState {
@@ -31,6 +33,7 @@ interface AppState {
 
 interface AppContextType extends AppState {
   session: UserSession | null;
+  sessionResolved: boolean;
   permissions: VendorPermission[];
   assignedAssetIds: string[];
   assignedCompradorIds: string[];
@@ -77,6 +80,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
 
   const [session, setSession] = useState<UserSession | null>(null);
+  const [sessionResolved, setSessionResolved] = useState(false);
   const [permissions, setPermissions] = useState<VendorPermission[]>([]);
   const [assignedAssetIds, setAssignedAssetIds] = useState<string[]>([]);
   const [assignedCompradorIds, setAssignedCompradorIds] = useState<string[]>([]);
@@ -206,12 +210,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    // Re-read the dev-auth cookie on every navigation so that signing out and
-    // logging in under a different role (admin ↔ vendedor) refreshes the
-    // session immediately. AppProvider lives in the root layout and never
-    // remounts, so a one-shot mount effect would leave `session` stuck at
-    // whatever it was on first page load.
-    setSession(getDevAuthFromDocument());
+    let cancelled = false;
+
+    const devSession = getDevAuthFromDocument();
+    if (devSession) {
+      setSession(devSession);
+      setSessionResolved(true);
+      return;
+    }
+
+    setSessionResolved(false);
+    fetchCurrentSession()
+      .then((s) => {
+        if (!cancelled) setSession(s);
+      })
+      .catch(() => {
+        if (!cancelled) setSession(null);
+      })
+      .finally(() => {
+        if (!cancelled) setSessionResolved(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [pathname]);
 
   useEffect(() => {
@@ -242,11 +264,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
 
   useEffect(() => {
-    if (!session) return;
-    if (session.role !== "vendedor" || !session.vendedorId) return;
+    if (!session) {
+      setPermissions([]);
+      return;
+    }
+    if (session.role !== "vendedor") {
+      setPermissions([]);
+      return;
+    }
+    if (!session.vendedorId) {
+      setPermissions(defaultVendorPermissions());
+      return;
+    }
     let cancelled = false;
     const vid = session.vendedorId;
-    fetchVendorPermissions(vid).then((p) => !cancelled && setPermissions(p)).catch(() => {});
+    fetchVendorPermissions(vid).then((p) => !cancelled && setPermissions(p)).catch(() => {
+      if (!cancelled) setPermissions(defaultVendorPermissions());
+    });
     fetchVendorAssignedAssetIds(vid).then((ids) => !cancelled && setAssignedAssetIds(ids)).catch(() => {});
     fetchVendorAssignedCompradorIds(vid).then((ids) => !cancelled && setAssignedCompradorIds(ids)).catch(() => {});
     return () => { cancelled = true; };
@@ -345,6 +379,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       vendedoresLoading: state.vendedoresLoading,
       vendedoresError: state.vendedoresError,
       session,
+      sessionResolved,
       permissions,
       assignedAssetIds,
       assignedCompradorIds,

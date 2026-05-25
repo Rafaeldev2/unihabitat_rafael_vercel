@@ -1,16 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 import {
   Building2, ShoppingCart, Handshake, CheckSquare, BarChart3,
   Settings, LogOut, FileText, type LucideIcon,
 } from "lucide-react";
 import { signOut } from "@/app/login/actions";
-import { getDevAuthFromDocument } from "@/lib/auth-helpers";
-import { fetchVendorPermissions } from "@/app/actions/permissions";
-import type { VendorPermission, SectionId, UserSession } from "@/lib/permissions";
+import { canViewSection } from "@/lib/auth-helpers";
+import { hrefToSection } from "@/lib/permissions";
+import type { SectionId } from "@/lib/permissions";
+import { useApp } from "@/lib/context";
 import { AssetsErrorBanner } from "@/components/AssetsErrorBanner";
 
 interface NavItem {
@@ -24,7 +25,7 @@ interface NavItem {
 const ALL_NAV_ITEMS: NavItem[] = [
   { href: "/admin",              label: "Activos",     icon: Building2,    sectionId: "activos" },
   { href: "/admin/compradores",  label: "Compradores", icon: ShoppingCart,  sectionId: "compradores" },
-  { href: "/admin/agentes",   label: "Agentes",  icon: Handshake,    sectionId: "agentes" },
+  { href: "/admin/agentes",      label: "Agentes",     icon: Handshake,    sectionId: "agentes" },
   { href: "/admin/tareas",       label: "Tareas",      icon: CheckSquare,  sectionId: "tareas", sep: true },
   { href: "/admin/ofertas",      label: "Ofertas",     icon: FileText,     sectionId: "ofertas" },
   { href: "/admin/informes",     label: "Informes",    icon: BarChart3,    sectionId: "informes" },
@@ -33,23 +34,8 @@ const ALL_NAV_ITEMS: NavItem[] = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [session, setSession] = useState<UserSession | null>(null);
-  const [permissions, setPermissions] = useState<VendorPermission[]>([]);
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    const s = getDevAuthFromDocument();
-    setSession(s);
-
-    if (s?.role === "vendedor" && s.vendedorId) {
-      fetchVendorPermissions(s.vendedorId)
-        .then(setPermissions)
-        .catch(() => setPermissions([]))
-        .finally(() => setReady(true));
-    } else {
-      setReady(true);
-    }
-  }, []);
+  const router = useRouter();
+  const { session, sessionResolved, permissions } = useApp();
 
   const isActive = (href: string) => {
     if (href === "/admin") return pathname === "/admin" || pathname.startsWith("/admin/assets");
@@ -57,13 +43,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   const visibleNav = ALL_NAV_ITEMS.filter((item) => {
-    if (!session || session.role === "admin") return true;
-    if (item.sectionId === "config") return false;
-    const perm = permissions.find((p) => p.section === item.sectionId);
-    return perm?.canView ?? false;
+    if (!sessionResolved || !session) return false;
+    return canViewSection(session, item.sectionId, permissions);
   });
 
-  if (!ready) return null;
+  const currentSection = hrefToSection(pathname);
+  const sectionAllowed =
+    !sessionResolved ||
+    !session ||
+    session.role === "admin" ||
+    !currentSection ||
+    currentSection === "config" ||
+    canViewSection(session, currentSection, permissions);
+
+  useEffect(() => {
+    if (!sessionResolved || !session || session.role === "admin") return;
+    if (currentSection && !canViewSection(session, currentSection, permissions)) {
+      router.replace("/admin");
+    }
+  }, [sessionResolved, session, currentSection, permissions, router]);
+
+  if (!sessionResolved) return null;
 
   return (
     <div className="flex min-h-screen">
@@ -124,7 +124,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       <main className="ml-[72px] flex flex-1 flex-col min-h-screen">
         <AssetsErrorBanner />
-        {children}
+        {sectionAllowed ? (
+          children
+        ) : (
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 text-muted">
+            <p className="text-lg font-medium text-navy">Sin acceso</p>
+            <p className="text-sm">No tienes permisos para ver esta sección.</p>
+            <Link href="/admin" className="rounded-lg bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy3">
+              Volver a Activos
+            </Link>
+          </div>
+        )}
       </main>
     </div>
   );

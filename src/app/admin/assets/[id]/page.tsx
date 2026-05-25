@@ -113,7 +113,6 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
       <div className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-border bg-white px-6">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold text-navy">{asset.pob}, {asset.prov}</h1>
-          <span className="rounded-md bg-cream px-2.5 py-0.5 text-xs text-muted">{asset.id}</span>
         </div>
         <div className="flex items-center gap-2">
           <Link

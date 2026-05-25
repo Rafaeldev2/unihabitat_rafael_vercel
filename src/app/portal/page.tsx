@@ -3,6 +3,14 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useApp } from "@/lib/context";
 import { fmt, fmtM, shortAddr } from "@/lib/utils";
+import {
+  buildCatFilterOptions,
+  buildProvFilterOptions,
+  buildPobFilterOptions,
+  buildTipFilterOptions,
+  buildFaseFilterOptions,
+  assetMatchesListFilters,
+} from "@/lib/asset-filters";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -40,6 +48,7 @@ function PortalContent() {
   const [fProv, setFProv] = useState(searchParams.get("prov") ?? "");
   const [fPob, setFPob] = useState("");
   const [fTipo, setFTipo] = useState(searchParams.get("tipo") ?? "");
+  const [fFase, setFFase] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("none");
   const [compradorId, setCompradorId] = useState<string | null>(null);
   const { isFavorito, toggleFavorito } = useFavoritos(compradorId);
@@ -77,14 +86,31 @@ function PortalContent() {
     return () => { cancelled = true; };
   }, []);
 
+  const catOptions = useMemo(() => buildCatFilterOptions(publicAssets), [publicAssets]);
+  const provOptions = useMemo(() => buildProvFilterOptions(publicAssets), [publicAssets]);
+  const pobOptions = useMemo(
+    () => buildPobFilterOptions(publicAssets, fProv),
+    [publicAssets, fProv],
+  );
+  const tipOptions = useMemo(() => buildTipFilterOptions(publicAssets), [publicAssets]);
+  const faseOptions = useMemo(() => buildFaseFilterOptions(publicAssets), [publicAssets]);
+
+  const handleProvChange = (v: string) => {
+    setFProv(v);
+    if (fPob) setFPob("");
+  };
+
   const filtered = useMemo(() => {
     const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
 
     const result = publicAssets.filter(a => {
-      if (fCat && a.cat !== fCat) return false;
-      if (fProv && a.prov !== fProv) return false;
-      if (fPob && a.pob !== fPob) return false;
-      if (fTipo && a.tip !== fTipo) return false;
+      if (!assetMatchesListFilters(a, {
+        cat: fCat,
+        prov: fProv,
+        pob: fPob,
+        tipo: fTipo,
+        fase: fFase,
+      })) return false;
       if (terms.length === 0) return true;
 
       const searchable = [
@@ -107,12 +133,12 @@ function PortalContent() {
     else if (sortBy === "pob_az") result.sort((a, b) => (a.pob || "").localeCompare(b.pob || ""));
 
     return result;
-  }, [publicAssets, q, fCat, fProv, fPob, fTipo, sortBy, sensitiveVisible]);
+  }, [publicAssets, q, fCat, fProv, fPob, fTipo, fFase, sortBy, sensitiveVisible]);
 
-  const hasFilters = Boolean(q || fCat || fProv || fPob || fTipo);
+  const hasFilters = Boolean(q || fCat || fProv || fPob || fTipo || fFase);
 
   const clearFilters = useCallback(() => {
-    setQ(""); setFCat(""); setFProv(""); setFPob(""); setFTipo("");
+    setQ(""); setFCat(""); setFProv(""); setFPob(""); setFTipo(""); setFFase("");
   }, []);
 
   // Group assets by contract ID for "X inmuebles asociados" badge
@@ -156,6 +182,8 @@ function PortalContent() {
               fCat ? { label: fCat, clear: () => setFCat("") } : null,
               fTipo ? { label: fTipo, clear: () => setFTipo("") } : null,
               fProv ? { label: fProv, clear: () => setFProv("") } : null,
+              fPob ? { label: fPob, clear: () => setFPob("") } : null,
+              fFase ? { label: fFase, clear: () => setFFase("") } : null,
             ] as const).filter((c): c is { label: string; clear: () => void } => c !== null)
               .map((chip) => (
                 <span key={chip.label} className="flex items-center gap-1 rounded-full bg-gold/20 px-3 py-1.5 text-xs font-medium text-gold">
@@ -169,25 +197,11 @@ function PortalContent() {
         {/* ── Filter bar (dentro del hero) ── */}
         <div className="mt-6 w-full max-w-full rounded-lg border border-border bg-white p-3.5 shadow-sm">
           <div className="flex flex-wrap items-end gap-2.5">
-            <FilterSelect label="Categoría" value={fCat} onChange={setFCat} options={["CDR", "NPL", "REO"]} />
-            <FilterSelect
-              label="Provincia"
-              value={fProv}
-              onChange={setFProv}
-              options={[...new Set(publicAssets.map(a => a.prov).filter(Boolean))].sort((a, b) => a.localeCompare(b))}
-            />
-            <FilterSelect
-              label="Población"
-              value={fPob}
-              onChange={setFPob}
-              options={[...new Set(publicAssets.map(a => a.pob).filter(Boolean))].sort((a, b) => a.localeCompare(b))}
-            />
-            <FilterSelect
-              label="Tipología"
-              value={fTipo}
-              onChange={setFTipo}
-              options={["Vivienda", "Garaje", "Trastero", "Comercial", "Casa / Chalet", "Piso", "Nave", "Oficina", "Suelo", "Edificio"]}
-            />
+            <FilterSelect label="Categoría" value={fCat} onChange={setFCat} options={catOptions} />
+            <FilterSelect label="Provincia" value={fProv} onChange={handleProvChange} options={provOptions} />
+            <FilterSelect label="Población" value={fPob} onChange={setFPob} options={pobOptions} />
+            <FilterSelect label="Tipología" value={fTipo} onChange={setFTipo} options={tipOptions} />
+            <FilterSelect label="Situación" value={fFase} onChange={setFFase} options={faseOptions} />
             <div className="h-8 w-px self-end bg-border2" />
             <div className="flex gap-1.5 self-end">
               <button

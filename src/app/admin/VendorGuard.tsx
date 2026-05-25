@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { getDevAuthFromDocument } from "@/lib/auth-helpers";
+import { fetchCurrentSession } from "@/app/actions/session";
 import { fetchVendorPermissions } from "@/app/actions/permissions";
+import { canViewSection } from "@/lib/auth-helpers";
 import type { VendorPermission, SectionId, UserSession } from "@/lib/permissions";
 import { ShieldOff } from "lucide-react";
 import Link from "next/link";
@@ -16,17 +17,26 @@ export function VendorGuard({ sectionId, children }: VendorGuardProps) {
   const [state, setState] = useState<"loading" | "allowed" | "denied">("loading");
 
   useEffect(() => {
-    const s = getDevAuthFromDocument() as UserSession | null;
-    if (!s) { setState("denied"); return; }
-    if (s.role === "admin") { setState("allowed"); return; }
-    if (s.role !== "vendedor" || !s.vendedorId) { setState("denied"); return; }
+    let cancelled = false;
 
-    fetchVendorPermissions(s.vendedorId)
-      .then((perms: VendorPermission[]) => {
-        const perm = perms.find((p) => p.section === sectionId);
-        setState(perm?.canView ? "allowed" : "denied");
+    fetchCurrentSession()
+      .then(async (s: UserSession | null) => {
+        if (cancelled) return;
+        if (!s) { setState("denied"); return; }
+        if (s.role === "admin") { setState("allowed"); return; }
+        if (s.role !== "vendedor" || !s.vendedorId) { setState("denied"); return; }
+
+        const perms: VendorPermission[] = await fetchVendorPermissions(s.vendedorId);
+        if (cancelled) return;
+        setState(canViewSection(s, sectionId, perms) ? "allowed" : "denied");
       })
-      .catch(() => setState("denied"));
+      .catch(() => {
+        if (!cancelled) setState("denied");
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [sectionId]);
 
   if (state === "loading") return null;

@@ -64,6 +64,26 @@ export function formatFullAddress(a: {
   return composed || clean(a.fullAddr) || "";
 }
 
+/** Dirección para listados: compuesta (Catastro) o, en su defecto, addr del Excel. */
+export function displayAssetAddress(a: {
+  addr?: string;
+  fullAddr?: string;
+  tvia?: string;
+  nvia?: string;
+  num?: string;
+  cp?: string;
+  pob?: string;
+  prov?: string;
+}): string {
+  const formatted = formatFullAddress(a);
+  if (formatted) return formatted;
+  const addr = (a.addr ?? "").trim();
+  if (addr && addr !== "—") return addr;
+  const full = (a.fullAddr ?? "").trim();
+  if (full && full !== "—") return full;
+  return "—";
+}
+
 /**
  * Devuelve la descripción del activo. Si `desc` está vacío o es una copia
  * del endereço (problema histórico de la importación Excel, donde algunos

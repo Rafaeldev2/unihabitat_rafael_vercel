@@ -2,7 +2,15 @@
 
 import { useState, useMemo } from "react";
 import { useApp } from "@/lib/context";
-import { fmt, fmtM } from "@/lib/utils";
+import { fmt, fmtM, displayAssetAddress } from "@/lib/utils";
+import {
+  buildCatFilterOptions,
+  buildProvFilterOptions,
+  buildPobFilterOptions,
+  buildTipFilterOptions,
+  buildFaseFilterOptions,
+  assetMatchesListFilters,
+} from "@/lib/asset-filters";
 import Link from "next/link";
 import type { Asset } from "@/lib/types";
 import { Search, Star, X, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Trash2, RefreshCw } from "lucide-react";
@@ -10,6 +18,7 @@ import { UploadActivosModal } from "./UploadActivosModal";
 import { FilterSelect } from "@/components/FilterSelect";
 import { deleteAllAssets, deleteAssetsByIds } from "@/app/actions/assets";
 import { forceRefreshAssetsCatastro, type ForceCatastroResult } from "@/app/actions/catastro";
+import { isAdmin } from "@/lib/auth-helpers";
 import { toast } from "@/lib/toast";
 
 type SortCol = "prov" | "pob" | "sqm" | "precio" | "cat" | "addr" | "cp" | "tip" | "fase";
@@ -28,6 +37,7 @@ const pillClass: Record<string, string> = {
 
 export default function ActivosPage() {
   const { assets, toggleFav, toggleChk, toggleChkAll, session, clearAssets, removeAssetsByIds } = useApp();
+  const userIsAdmin = isAdmin(session);
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -44,11 +54,13 @@ export default function ActivosPage() {
 
   const filtered = useMemo(() => {
     let res = assets.filter(a => {
-      if (fCat && a.cat !== fCat) return false;
-      if (fProv && a.prov !== fProv) return false;
-      if (fPob && a.pob !== fPob) return false;
-      if (fTipo && (a.tip ?? "").toUpperCase() !== fTipo) return false;
-      if (fFase && a.fase !== fFase) return false;
+      if (!assetMatchesListFilters(a, {
+        cat: fCat,
+        prov: fProv,
+        pob: fPob,
+        tipo: fTipo,
+        fase: fFase,
+      })) return false;
       if (favOnly && !a.fav) return false;
       if (q) {
         const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
@@ -66,8 +78,8 @@ export default function ActivosPage() {
       return true;
     });
     res.sort((a, b) => {
-      const va = a[sortCol as keyof Asset];
-      const vb = b[sortCol as keyof Asset];
+      const va = sortCol === "addr" ? displayAssetAddress(a) : a[sortCol as keyof Asset];
+      const vb = sortCol === "addr" ? displayAssetAddress(b) : b[sortCol as keyof Asset];
       if (va === null || va === undefined) return sortDir;
       if (vb === null || vb === undefined) return -sortDir;
       if (typeof va === "string" && typeof vb === "string") return va.localeCompare(vb) * sortDir;
@@ -77,31 +89,14 @@ export default function ActivosPage() {
     return res;
   }, [assets, q, fCat, fProv, fPob, fTipo, fFase, favOnly, sortCol, sortDir]);
 
-  const catOptions = useMemo(
-    () => [...new Set(assets.map(a => a.cat))]
-      .sort((a, b) => a.localeCompare(b, "es")),
-    [assets]
+  const catOptions = useMemo(() => buildCatFilterOptions(assets), [assets]);
+  const provOptions = useMemo(() => buildProvFilterOptions(assets), [assets]);
+  const pobOptions = useMemo(
+    () => buildPobFilterOptions(assets, fProv),
+    [assets, fProv],
   );
-  const provOptions = useMemo(
-    () => [...new Set(assets.map(a => a.prov))]
-      .sort((a, b) => a.localeCompare(b, "es")),
-    [assets]
-  );
-  const pobOptions = useMemo(() => {
-    const src = fProv ? assets.filter(a => a.prov === fProv) : assets;
-    return [...new Set(src.map(a => a.pob))]
-      .sort((a, b) => a.localeCompare(b, "es"));
-  }, [assets, fProv]);
-  const tipOptions = useMemo(
-    () => [...new Set(assets.map(a => (a.tip ?? "").toUpperCase()).filter(Boolean))]
-      .sort((a, b) => a.localeCompare(b, "es")),
-    [assets]
-  );
-  const faseOptions = useMemo(
-    () => [...new Set(assets.map(a => a.fase))]
-      .sort((a, b) => a.localeCompare(b, "es")),
-    [assets]
-  );
+  const tipOptions = useMemo(() => buildTipFilterOptions(assets), [assets]);
+  const faseOptions = useMemo(() => buildFaseFilterOptions(assets), [assets]);
 
   const handleProvChange = (v: string) => {
     setFProv(v);
@@ -226,14 +221,16 @@ export default function ActivosPage() {
           <span className="rounded-md bg-cream px-2.5 py-0.5 text-xs font-medium text-muted">{assets.length} activos</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="rounded-md bg-gold/10 px-2.5 py-1 text-xs font-medium text-gold">{session?.role === "admin" ? "Admin" : "Agente"}</span>
-          <button
-            type="button"
-            onClick={() => setUploadOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-navy px-3.5 py-2 text-xs font-medium text-white transition-colors hover:bg-navy3"
-          >
-            <Plus size={14} /> Nuevo Activo
-          </button>
+          <span className="rounded-md bg-gold/10 px-2.5 py-1 text-xs font-medium text-gold">{userIsAdmin ? "Admin" : "Agente"}</span>
+          {userIsAdmin && (
+            <button
+              type="button"
+              onClick={() => setUploadOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg bg-navy px-3.5 py-2 text-xs font-medium text-white transition-colors hover:bg-navy3"
+            >
+              <Plus size={14} /> Nuevo Activo
+            </button>
+          )}
         </div>
       </div>
 
@@ -291,7 +288,7 @@ export default function ActivosPage() {
                 {label} <SortIcon col={col} />
               </button>
             ))}
-            {session?.role === "admin" && (
+            {userIsAdmin && (
               <>
                 <div className="mx-0.5 hidden h-4 w-px self-center bg-border2 sm:block" aria-hidden />
                 <button
@@ -362,7 +359,7 @@ export default function ActivosPage() {
                 <span className="truncate text-xs">{a.cat}</span>
                 <span className="truncate text-xs">{a.prov}</span>
                 <span className="truncate text-xs">{a.pob}</span>
-                <span className="truncate text-xs text-muted">{a.addr}</span>
+                <span className="truncate text-xs text-muted">{displayAssetAddress(a)}</span>
                 <span className="font-mono text-[11px] text-muted">{a.cp}</span>
                 <span className="text-xs text-muted">{fmtM(a.sqm)}</span>
                 <span className={`inline-flex w-fit rounded-md px-2 py-0.5 text-[10px] font-semibold ${pillClass[a.tipC] || ""}`}>{a.tip}</span>
