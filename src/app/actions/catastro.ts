@@ -110,21 +110,25 @@ export async function enrichAssetsWithCatastro(assets: Asset[]): Promise<{
   return { assets: out, ok, skipped, failed, supabase };
 }
 
+type SupabaseLike = Awaited<ReturnType<typeof import("@/lib/supabase/server").createServiceClient>>;
+
 /**
- * Re-enrich a single asset from Catastro by its ID.
- * Used by the "Actualizar Catastro" button in the asset detail view.
+ * Internal: refresh one asset by id against an already-resolved supabase client.
+ * Shared between refreshAssetCatastro (single) and forceRefreshAssetsCatastro (bulk),
+ * so the per-asset behavior of "Forzar" is identical in both code paths.
  */
-export async function refreshAssetCatastro(
+async function doRefreshOne(
+  supabase: SupabaseLike,
   assetId: string,
   opts?: { forceOverwrite?: boolean }
-): Promise<{ success: boolean; error?: string; updatedFields?: string[] }> {
-  const { requireAdmin } = await import("@/lib/auth-server");
-  await requireAdmin();
-
-  const { createServiceClient } = await import("@/lib/supabase/server");
+): Promise<{
+  success: boolean;
+  error?: string;
+  updatedFields?: string[];
+  ref?: string;
+}> {
   const { rowToAsset, assetToRow } = await import("@/lib/supabase/db");
 
-  const supabase = await createServiceClient();
   const { data, error: fetchErr } = await supabase
     .from("assets")
     .select("*")
@@ -137,13 +141,13 @@ export async function refreshAssetCatastro(
   const rawRef = asset.catRef && asset.catRef !== "—" ? asset.catRef : asset.adm.cref;
 
   if (!isPlausibleCadastralRef(String(rawRef))) {
-    return { success: false, error: `Referencia catastral no válida: "${rawRef}"` };
+    return { success: false, error: `Referencia catastral no válida: "${rawRef}"`, ref: String(rawRef ?? "") };
   }
 
   const ref = normalizeCadastralRef(String(rawRef));
   const row = await fetchConsultaDnprc(ref);
   if (row.error) {
-    return { success: false, error: row.error };
+    return { success: false, error: row.error, ref };
   }
 
   const query = buildGeocodeQuery({
@@ -170,9 +174,27 @@ export async function refreshAssetCatastro(
     .from("assets")
     .update(dbRow)
     .eq("id", assetId);
-  if (updateErr) return { success: false, error: updateErr.message };
+  if (updateErr) return { success: false, error: updateErr.message, ref };
 
-  return { success: true, updatedFields };
+  return { success: true, updatedFields, ref };
+}
+
+/**
+ * Re-enrich a single asset from Catastro by its ID.
+ * Used by the "Actualizar Catastro" / "Forzar" buttons in the asset detail view.
+ */
+export async function refreshAssetCatastro(
+  assetId: string,
+  opts?: { forceOverwrite?: boolean }
+): Promise<{ success: boolean; error?: string; updatedFields?: string[] }> {
+  const { requireAdmin } = await import("@/lib/auth-server");
+  await requireAdmin();
+
+  const { createServiceClient } = await import("@/lib/supabase/server");
+  const supabase = await createServiceClient();
+
+  const r = await doRefreshOne(supabase, assetId, opts);
+  return { success: r.success, error: r.error, updatedFields: r.updatedFields };
 }
 
 /**
@@ -229,4 +251,80 @@ export async function enrichAssetsBatch(assets: Asset[]): Promise<{
   }
 
   return { assets: out, ok, skipped, failed };
+}
+
+export type ForceCatastroItem = {
+  id: string;
+  ref: string;
+  success: boolean;
+  updatedFields?: string[];
+  error?: string;
+  ms: number;
+};
+
+export type ForceCatastroResult = {
+  total: number;
+  ok: number;
+  failed: number;
+  results: ForceCatastroItem[];
+  startedAt: string;
+  finishedAt: string;
+};
+
+/**
+ * Bulk equivalent of the per-asset "Forzar" button: re-applies Catastro data
+ * to every selected asset using the SAME internal flow as refreshAssetCatastro
+ * with forceOverwrite:true. Per-item failures do not abort the batch.
+ */
+export async function forceRefreshAssetsCatastro(ids: string[]): Promise<ForceCatastroResult> {
+  const { requireAdmin } = await import("@/lib/auth-server");
+  await requireAdmin();
+
+  const { createServiceClient } = await import("@/lib/supabase/server");
+  const supabase = await createServiceClient();
+
+  const unique = Array.from(new Set((ids ?? []).map(s => String(s ?? "").trim()).filter(Boolean)));
+  const startedAt = new Date().toISOString();
+  const results: ForceCatastroItem[] = [];
+
+  for (let i = 0; i < unique.length; i += CONCURRENCY) {
+    const slice = unique.slice(i, i + CONCURRENCY);
+    const batch = await Promise.all(
+      slice.map(async (id): Promise<ForceCatastroItem> => {
+        const t0 = Date.now();
+        try {
+          const r = await doRefreshOne(supabase, id, { forceOverwrite: true });
+          return {
+            id,
+            ref: r.ref ?? "",
+            success: r.success,
+            updatedFields: r.updatedFields,
+            error: r.error,
+            ms: Date.now() - t0,
+          };
+        } catch (e) {
+          return {
+            id,
+            ref: "",
+            success: false,
+            error: e instanceof Error ? e.message : String(e),
+            ms: Date.now() - t0,
+          };
+        }
+      })
+    );
+    results.push(...batch);
+    if (i + CONCURRENCY < unique.length) await sleep(BATCH_DELAY_MS);
+  }
+
+  const ok = results.filter(r => r.success).length;
+  const failed = results.length - ok;
+  return {
+    total: unique.length,
+    ok,
+    failed,
+    results,
+    startedAt,
+    finishedAt: new Date().toISOString(),
+  };
 }

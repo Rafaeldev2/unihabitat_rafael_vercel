@@ -5,10 +5,11 @@ import { useApp } from "@/lib/context";
 import { fmt, fmtM } from "@/lib/utils";
 import Link from "next/link";
 import type { Asset } from "@/lib/types";
-import { Search, Star, X, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Trash2 } from "lucide-react";
+import { Search, Star, X, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Trash2, RefreshCw } from "lucide-react";
 import { UploadActivosModal } from "./UploadActivosModal";
 import { FilterSelect } from "@/components/FilterSelect";
 import { deleteAllAssets, deleteAssetsByIds } from "@/app/actions/assets";
+import { forceRefreshAssetsCatastro, type ForceCatastroResult } from "@/app/actions/catastro";
 import { toast } from "@/lib/toast";
 
 type SortCol = "prov" | "pob" | "sqm" | "precio" | "cat" | "addr" | "cp" | "tip" | "fase";
@@ -30,6 +31,7 @@ export default function ActivosPage() {
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [forcing, setForcing] = useState(false);
   const [q, setQ] = useState("");
   const [fCat, setFCat] = useState("");
   const [fProv, setFProv] = useState("");
@@ -152,6 +154,61 @@ export default function ActivosPage() {
     }
   };
 
+  const buildForceLogText = (result: ForceCatastroResult): string => {
+    const header = [
+      "PropCRM — Forzar Datos Catastrales (operación masiva)",
+      `Inicio:   ${result.startedAt}`,
+      `Fin:      ${result.finishedAt}`,
+      `Total:    ${result.total}`,
+      `Forzados: ${result.ok}`,
+      `Fallidos: ${result.failed}`,
+      "",
+      "--- DETALLE ---",
+    ];
+    const lines = result.results.map(r => {
+      const tag = r.success ? "[OK]  " : "[FAIL]";
+      const ref = r.ref ? ` ref=${r.ref}` : "";
+      const fields = r.success && r.updatedFields?.length ? ` fields=${r.updatedFields.join(",")}` : "";
+      const err = !r.success && r.error ? ` error=${JSON.stringify(r.error)}` : "";
+      return `${tag} ${r.id}${ref}${fields}${err} (${r.ms} ms)`;
+    });
+    return [...header, ...lines, ""].join("\n");
+  };
+
+  const downloadForceLog = (text: string) => {
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `propcrm-forzar-catastro-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleForceSelected = async () => {
+    if (selectedCount === 0) return;
+    if (!window.confirm(`¿Forzar la carga de Datos Catastrales para ${selectedCount} activo(s) seleccionado(s)?\n\nSe sobrescribirán los campos catastrales y de localización con datos frescos del Catastro. Esto puede tardar varios segundos.`)) return;
+    setForcing(true);
+    try {
+      const result = await forceRefreshAssetsCatastro(selectedInFiltered);
+      try { downloadForceLog(buildForceLogText(result)); } catch { /* descarga opcional */ }
+      try { window.dispatchEvent(new Event("propcrm-assets-updated")); } catch { /* ignore */ }
+      const desc = `${result.ok} de ${result.total} activo(s) actualizado(s)` +
+        (result.failed > 0 ? `. ${result.failed} con error — revisa el log.` : ".");
+      if (result.ok === 0 && result.failed > 0) {
+        toast.error("Forzado sin actualizaciones", { description: desc });
+      } else {
+        toast.success("Forzado completado", { description: desc });
+      }
+    } catch (err) {
+      toast.error("Error al forzar los activos seleccionados", { description: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setForcing(false);
+    }
+  };
+
   const allChk = filtered.length > 0 && filtered.every(a => a.chk);
 
   const SortIcon = ({ col }: { col: SortCol }) => {
@@ -239,8 +296,17 @@ export default function ActivosPage() {
                 <div className="mx-0.5 hidden h-4 w-px self-center bg-border2 sm:block" aria-hidden />
                 <button
                   type="button"
+                  onClick={handleForceSelected}
+                  disabled={forcing || deleting || selectedCount === 0}
+                  title="Sobrescribir Datos Catastrales y Localización con datos frescos del Catastro para los activos seleccionados"
+                  className="flex items-center gap-1.5 rounded-md border border-gold/30 bg-gold/5 px-2.5 py-1 text-[11px] font-medium text-gold transition-colors hover:bg-gold/10 disabled:opacity-40"
+                >
+                  <RefreshCw size={12} className={forcing ? "animate-spin" : ""} /> Forzar seleccionados{selectedCount > 0 ? ` (${selectedCount})` : ""}
+                </button>
+                <button
+                  type="button"
                   onClick={handleDeleteSelected}
-                  disabled={deleting || selectedCount === 0}
+                  disabled={deleting || forcing || selectedCount === 0}
                   className="flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-600 transition-colors hover:bg-red-100 disabled:opacity-40"
                 >
                   <Trash2 size={12} /> Borrar seleccionados{selectedCount > 0 ? ` (${selectedCount})` : ""}
@@ -248,7 +314,7 @@ export default function ActivosPage() {
                 <button
                   type="button"
                   onClick={handleDeleteAll}
-                  disabled={deleting || assets.length === 0}
+                  disabled={deleting || forcing || assets.length === 0}
                   className="flex items-center gap-1.5 rounded-md border border-red-300 bg-white px-2.5 py-1 text-[11px] font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-40"
                 >
                   <Trash2 size={12} /> Borrar todos
