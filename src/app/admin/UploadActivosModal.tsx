@@ -3,8 +3,9 @@
 import { useState, useRef, useCallback } from "react";
 import { useApp } from "@/lib/context";
 import { parseExcelFile, extractRawPreview, parseWithMapping, parseExcelHeuristic, mergeHeuristicIntoMapped, type ParseExcelResult, type SheetDiagEntry } from "@/lib/normalize-excel";
-import { enrichAssetsBatch } from "@/app/actions/catastro";
+import { enrichAssetsBatch, retryCatastroForIds } from "@/app/actions/catastro";
 import type { CatastroEnrichFailure } from "@/app/actions/catastro";
+import { classifyCatastroError, type CatastroFailureCategory } from "@/lib/catastro/errors";
 import { validateAssetsBatch } from "@/app/actions/claude";
 import type { ClaudeAssetResult } from "@/app/actions/claude";
 import { upsertAssets, fetchAssetsByIds } from "@/app/actions/assets";
@@ -29,6 +30,46 @@ const DB_CONCURRENCY = 4;          // upserts paralelos
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface FailedUpsert { id: string; reason: string; }
+
+const TRANSIENT_CATEGORIES = new Set<CatastroFailureCategory>([
+  "http_5xx_429", "timeout", "network_error",
+]);
+
+const CATEGORY_LABELS: Record<CatastroFailureCategory, string> = {
+  http_5xx_429: "throttle (5xx/429)",
+  http_4xx: "4xx",
+  timeout: "timeout",
+  ref_not_found: "ref no encontrada",
+  structure_unknown: "estructura desconocida",
+  network_error: "red/DNS",
+  other: "otros",
+};
+
+function emptyCategoryTotals(): Record<CatastroFailureCategory, number> {
+  return { http_5xx_429: 0, http_4xx: 0, timeout: 0, ref_not_found: 0, structure_unknown: 0, network_error: 0, other: 0 };
+}
+
+function addCategoryTotals(
+  a: Record<CatastroFailureCategory, number>,
+  b: Record<CatastroFailureCategory, number>,
+): Record<CatastroFailureCategory, number> {
+  return {
+    http_5xx_429: a.http_5xx_429 + b.http_5xx_429,
+    http_4xx: a.http_4xx + b.http_4xx,
+    timeout: a.timeout + b.timeout,
+    ref_not_found: a.ref_not_found + b.ref_not_found,
+    structure_unknown: a.structure_unknown + b.structure_unknown,
+    network_error: a.network_error + b.network_error,
+    other: a.other + b.other,
+  };
+}
+
+function formatCategoryBreakdown(t: Record<CatastroFailureCategory, number>): string {
+  return (Object.entries(t) as [CatastroFailureCategory, number][])
+    .filter(([, n]) => n > 0)
+    .map(([cat, n]) => `${n} ${CATEGORY_LABELS[cat]}`)
+    .join(", ");
+}
 
 type LogLevel = "info" | "warn" | "error";
 interface LogEntry { ts: string; level: LogLevel; msg: string; }
@@ -157,6 +198,10 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
   const [sheetDiag, setSheetDiag] = useState<SheetDiagEntry[]>([]);
   const [failedUpserts, setFailedUpserts] = useState<FailedUpsert[]>([]);
   const [failedOpen, setFailedOpen] = useState(false);
+  const [catFailedList, setCatFailedList] = useState<CatastroEnrichFailure[]>([]);
+  const [catFailureTotals, setCatFailureTotals] = useState<Record<CatastroFailureCategory, number>>(emptyCategoryTotals);
+  const [catRetrying, setCatRetrying] = useState(false);
+  const [catRetryMsg, setCatRetryMsg] = useState<string | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const cancelledRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -211,6 +256,10 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
     setAiWarnings([]);
     setFailedUpserts([]);
     setFailedOpen(false);
+    setCatFailedList([]);
+    setCatFailureTotals(emptyCategoryTotals());
+    setCatRetrying(false);
+    setCatRetryMsg(null);
     setLogs([]);
     logsRef.current = [];
     setParsedCount(0);
@@ -360,17 +409,29 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
         const rawBatches = chunkArray(parsed, DB_BATCH_SIZE);
         let rawSaved = 0;
         const dbErrors: string[] = [];
+        const dupTotals = new Map<string, number>();
         await runConcurrent(rawBatches, async (batch) => {
           const result = await upsertAssets(batch);
           if (result.errors.length > 0) {
             dbErrors.push(...result.errors);
           }
           rawSaved += result.inserted + result.updated;
+          for (const [id, n] of Object.entries(result.duplicatesMerged ?? {})) {
+            dupTotals.set(id, Math.max(dupTotals.get(id) ?? 0, n));
+          }
           if (result.errors.length > 0) {
             pushLog("error", `upsertAssets batch error: ${result.errors.join(" | ")}`);
           }
           updateStep("db-raw", { status: "active", detail: `${rawSaved}/${parsed.length} activos guardados…` });
         }, DB_CONCURRENCY);
+
+        if (dupTotals.size > 0) {
+          const exampleIds = Array.from(dupTotals.keys()).slice(0, 5);
+          pushLog(
+            "warn",
+            `Filas duplicadas en el Excel: ${dupTotals.size} ID(s) aparecían más de una vez (se mantuvo la última fusionada). Ej: ${exampleIds.join(", ")}${dupTotals.size > 5 ? "…" : ""}`,
+          );
+        }
 
         if (rawSaved > 0) {
           await refreshAssets();
@@ -478,6 +539,7 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
         let catDone = 0;
         let catOk = 0, catSkipped = 0;
         const catFailed: CatastroEnrichFailure[] = [];
+        let catFailureTotalsLocal = emptyCategoryTotals();
         // Mantener resultados en orden de índice de batch
         const enrichedByBatch: Asset[][] = new Array(catBatches.length);
 
@@ -495,6 +557,7 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
           catOk += result.ok;
           catSkipped += result.skipped;
           catFailed.push(...result.failed);
+          catFailureTotalsLocal = addCategoryTotals(catFailureTotalsLocal, result.failuresByCategory);
           catDone++;
 
           // Solo actualizar contexto React (sin llamada a BD por lote — se guarda al final)
@@ -512,15 +575,39 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
         }, CATASTRO_CONCURRENCY);
 
         const allEnriched = enrichedByBatch.flat();
+        const catBreakdown = formatCategoryBreakdown(catFailureTotalsLocal);
         parts.push(`${toEnrich.length} nuevo(s): ${catOk} enriquecido(s) con Catastro.`);
         if (catSkipped > 0) parts.push(`${catSkipped} sin ref. catastral.`);
-        if (catFailed.length > 0) parts.push(`${catFailed.length} error(es).`);
+        if (catFailed.length > 0) {
+          parts.push(
+            catBreakdown
+              ? `${catFailed.length} error(es): ${catBreakdown}.`
+              : `${catFailed.length} error(es).`,
+          );
+        }
+
+        // Guardar los fallos categorizados en estado para el banner de retry
+        // en el resumen final.
+        setCatFailedList(catFailed);
+        setCatFailureTotals(catFailureTotalsLocal);
+        if (catFailed.length > 0) {
+          const transients = TRANSIENT_CATEGORIES;
+          const transientCount = (Object.entries(catFailureTotalsLocal) as [CatastroFailureCategory, number][])
+            .filter(([cat]) => transients.has(cat))
+            .reduce((acc, [, n]) => acc + n, 0);
+          pushLog(
+            "warn",
+            `Catastro: ${catFailed.length} errores — ${catBreakdown}. ${transientCount} reintentables.`,
+          );
+        }
 
         updateStep("catastro", {
           status: cancelledRef.current ? "error" : "done",
           detail: cancelledRef.current
             ? `Cancelado — ${catDone}/${catBatches.length} lotes procesados`
-            : `${catOk} enriquecido(s), ${catSkipped} omitido(s), ${catFailed.length} error(es)`,
+            : catBreakdown && catFailed.length > 0
+              ? `${catOk} enriquecido(s), ${catSkipped} omitido(s), ${catFailed.length} error(es): ${catBreakdown}`
+              : `${catOk} enriquecido(s), ${catSkipped} omitido(s), ${catFailed.length} error(es)`,
           elapsed: Date.now() - tCat,
         });
 
@@ -666,6 +753,43 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
   };
 
   const handleCancel = useCallback(() => { cancelledRef.current = true; }, []);
+
+  const handleRetryCatastro = useCallback(async () => {
+    const transientIds = catFailedList
+      .filter(f => TRANSIENT_CATEGORIES.has(classifyCatastroError(f.error)))
+      .map(f => f.id);
+    if (transientIds.length === 0) {
+      setCatRetryMsg("No hay errores reintentables (los restantes son refs no encontradas o 4xx permanentes).");
+      return;
+    }
+    setCatRetrying(true);
+    setCatRetryMsg(null);
+    try {
+      pushLog("info", `Catastro retry: reintentando ${transientIds.length} ID(s) transitorios…`);
+      const r = await retryCatastroForIds(transientIds);
+      const breakdown = formatCategoryBreakdown(r.failuresByCategory);
+      pushLog(
+        "info",
+        `Catastro retry: ${r.ok}/${r.attempted} OK, ${r.skipped} omitidos, ${r.failed.length} aún fallan${breakdown ? ` (${breakdown})` : ""}.`,
+      );
+      if (r.upsertErrors.length > 0) {
+        pushLog("error", `Catastro retry: errores al persistir — ${r.upsertErrors.slice(0, 2).join(" | ")}`);
+      }
+      // Reemplazar la lista de fallos por la nueva (sólo los que aún fallan).
+      setCatFailedList(r.failed);
+      setCatFailureTotals(r.failuresByCategory);
+      setCatRetryMsg(
+        `${r.ok} de ${r.attempted} reintentos OK${r.failed.length > 0 ? ` · ${r.failed.length} aún fallan (${breakdown})` : ""}.`,
+      );
+      await refreshAssets();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      pushLog("error", `Catastro retry falló: ${msg}`);
+      setCatRetryMsg(`Retry falló: ${msg}`);
+    } finally {
+      setCatRetrying(false);
+    }
+  }, [catFailedList, pushLog, refreshAssets]);
 
   const handleClose = () => {
     if (status === "loading") {
@@ -889,6 +1013,15 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
                 </div>
               )}
               <SheetDiagBanner diag={sheetDiag} />
+              {catFailedList.length > 0 && (
+                <CatastroRetryBanner
+                  failures={catFailedList}
+                  totals={catFailureTotals}
+                  retrying={catRetrying}
+                  retryMsg={catRetryMsg}
+                  onRetry={handleRetryCatastro}
+                />
+              )}
               {aiWarnings.length > 0 && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50">
                   <button
@@ -1014,6 +1147,59 @@ function SheetDiagBanner({ diag }: { diag: SheetDiagEntry[] }) {
           <p className="mt-1 text-[10px] text-amber-700">
             Posibles causas: ID vacío, ID duplicado entre hojas, o cabecera no reconocida.
           </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CatastroRetryBanner({
+  failures,
+  totals,
+  retrying,
+  retryMsg,
+  onRetry,
+}: {
+  failures: CatastroEnrichFailure[];
+  totals: Record<CatastroFailureCategory, number>;
+  retrying: boolean;
+  retryMsg: string | null;
+  onRetry: () => void;
+}) {
+  const breakdown = formatCategoryBreakdown(totals);
+  const transientCount = (Object.entries(totals) as [CatastroFailureCategory, number][])
+    .filter(([cat]) => TRANSIENT_CATEGORIES.has(cat))
+    .reduce((acc, [, n]) => acc + n, 0);
+  return (
+    <div className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-2.5">
+      <div className="flex items-start gap-2">
+        <AlertCircle size={16} className="mt-0.5 shrink-0 text-orange-500" />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold text-orange-800">
+            Catastro: {failures.length} activo(s) con error
+          </p>
+          {breakdown && (
+            <p className="mt-0.5 text-[11px] text-orange-700">{breakdown}</p>
+          )}
+          {retryMsg && (
+            <p className="mt-1 text-[11px] font-medium text-orange-900">{retryMsg}</p>
+          )}
+          {transientCount > 0 && (
+            <button
+              type="button"
+              onClick={onRetry}
+              disabled={retrying}
+              className={`mt-2 inline-flex items-center gap-1.5 rounded-md border border-orange-300 bg-white px-2.5 py-1 text-[11px] font-medium text-orange-700 transition-colors ${
+                retrying ? "cursor-not-allowed opacity-60" : "hover:bg-orange-100"
+              }`}
+              title="Reintenta sólo los errores reintentables (timeouts, 5xx, 429, red)"
+            >
+              {retrying
+                ? <><Loader2 size={11} className="animate-spin" /> Reintentando…</>
+                : <><Zap size={11} /> Reintentar {transientCount} fallido(s) transitorios</>
+              }
+            </button>
+          )}
         </div>
       </div>
     </div>

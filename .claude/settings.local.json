@@ -13,7 +13,15 @@
       "mcp__plugin_vercel_vercel__get_deployment_build_logs",
       "mcp__plugin_vercel_vercel__deploy_to_vercel",
       "mcp__plugin_vercel_vercel__get_deployment",
-      "mcp__plugin_vercel_vercel__list_deployments"
+      "mcp__plugin_vercel_vercel__list_deployments",
+      "Bash(awk '{print $9, $5}'])",
+      "Bash(cp /tmp/dump-xlsx.cjs ./_dump-xlsx.cjs)",
+      "Bash(node ./_dump-xlsx.cjs)",
+      "Bash(rm -f ./_dump-xlsx.cjs)",
+      "Bash(ls _dump-xlsx.cjs)",
+      "Bash(npx vitest *)",
+      "Bash(git stash *)",
+      "Bash(npx next *)"
     ]
   }
 }

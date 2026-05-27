@@ -8,6 +8,30 @@ export type Json = Record<string, unknown> | unknown[] | string | number | boole
 const DNP_URL =
   "https://ovc.catastro.meh.es/OVCServWeb/OVCWcfCallejero/COVCCallejero.svc/json/Consulta_DNPRC";
 
+const TRANSIENT_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+const MAX_RETRIES = 2; // total: 3 intentos
+const RETRY_BASE_MS = 600;
+
+function isTransientError(msg: string): boolean {
+  const m = msg.toLowerCase();
+  return (
+    m.includes("abort") ||
+    m.includes("timeout") ||
+    m.includes("tiempo de espera") ||
+    m.includes("fetch failed") ||
+    m.includes("network") ||
+    m.includes("econnreset") ||
+    m.includes("econnrefused") ||
+    m.includes("enotfound") ||
+    m.includes("etimedout") ||
+    m.includes("socket hang up")
+  );
+}
+
+function sleepDnp(ms: number): Promise<void> {
+  return new Promise(r => setTimeout(r, ms));
+}
+
 export interface CatastroDnprcParsed {
   referencia: string;
   clase: string;
@@ -117,14 +141,16 @@ export function isPlausibleCadastralRef(raw: string): boolean {
   return /^[0-9A-Z]+$/i.test(n);
 }
 
-export async function fetchConsultaDnprc(refCat: string): Promise<CatastroDnprcParsed> {
-  const ref = normalizeCadastralRef(refCat);
-  if (!isPlausibleCadastralRef(ref)) {
-    return emptyResult(ref, "Referencia catastral no válida o ausente");
-  }
+/**
+ * Resultado interno: además del parsed, indica si la causa de error es
+ * transitoria (vale la pena reintentar) o permanente. Sólo se usa dentro de
+ * fetchConsultaDnprc para decidir el retry; el caller externo recibe siempre
+ * CatastroDnprcParsed con `error` (string vacío si OK).
+ */
+type DnpAttempt = { parsed: CatastroDnprcParsed; transient: boolean };
 
+async function fetchConsultaDnprcOnce(ref: string): Promise<DnpAttempt> {
   const url = `${DNP_URL}?RefCat=${encodeURIComponent(ref)}`;
-
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; PropCRM/1.0)" },
@@ -132,12 +158,16 @@ export async function fetchConsultaDnprc(refCat: string): Promise<CatastroDnprcP
       cache: "no-store",
     });
     if (!res.ok) {
-      return emptyResult(ref, `HTTP ${res.status}`);
+      const transient = TRANSIENT_HTTP_STATUSES.has(res.status);
+      return { parsed: emptyResult(ref, `HTTP ${res.status}`), transient };
     }
     const data = (await res.json()) as Record<string, unknown>;
 
     if (!("consulta_dnprcResult" in data)) {
-      return emptyResult(ref, `Estructura no reconocida. Claves: ${Object.keys(data).join(", ")}`);
+      return {
+        parsed: emptyResult(ref, `Estructura no reconocida. Claves: ${Object.keys(data).join(", ")}`),
+        transient: false,
+      };
     }
 
     const root = data.consulta_dnprcResult as Record<string, unknown>;
@@ -146,7 +176,10 @@ export async function fetchConsultaDnprc(refCat: string): Promise<CatastroDnprcP
     const finca = (bico.finca ?? {}) as Record<string, unknown>;
 
     if (!bi || Object.keys(bi).length === 0) {
-      return emptyResult(ref, "No se encontró información del bien inmueble");
+      return {
+        parsed: emptyResult(ref, "No se encontró información del bien inmueble"),
+        transient: false,
+      };
     }
 
     const idbi = (bi.idbi ?? {}) as Record<string, unknown>;
@@ -256,32 +289,58 @@ export async function fetchConsultaDnprc(refCat: string): Promise<CatastroDnprcP
     const puertaFinal = traducirValor(puerta, "puerta", tipoBienPrincipal);
 
     return {
-      referencia: ref,
-      clase,
-      uso,
-      bien: tipoBienPrincipal,
-      provincia,
-      municipio,
-      codigoPostal: dp,
-      direccionCompleta,
-      tipoVia,
-      nombreVia,
-      numero,
-      escalera,
-      planta: plantaFinal,
-      puerta: puertaFinal,
-      superficieConstruida,
-      superficieGrafica,
-      antiguedad,
-      coeficiente: coefPart,
-      descripcion,
-      error: "",
+      parsed: {
+        referencia: ref,
+        clase,
+        uso,
+        bien: tipoBienPrincipal,
+        provincia,
+        municipio,
+        codigoPostal: dp,
+        direccionCompleta,
+        tipoVia,
+        nombreVia,
+        numero,
+        escalera,
+        planta: plantaFinal,
+        puerta: puertaFinal,
+        superficieConstruida,
+        superficieGrafica,
+        antiguedad,
+        coeficiente: coefPart,
+        descripcion,
+        error: "",
+      },
+      transient: false,
     };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.includes("abort") || msg.includes("Timeout")) {
-      return emptyResult(ref, `Error de conexión: tiempo de espera agotado`);
+      return {
+        parsed: emptyResult(ref, "Error de conexión: tiempo de espera agotado"),
+        transient: true,
+      };
     }
-    return emptyResult(ref, `Error al procesar: ${msg}`);
+    return {
+      parsed: emptyResult(ref, `Error al procesar: ${msg}`),
+      transient: isTransientError(msg),
+    };
   }
+}
+
+export async function fetchConsultaDnprc(refCat: string): Promise<CatastroDnprcParsed> {
+  const ref = normalizeCadastralRef(refCat);
+  if (!isPlausibleCadastralRef(ref)) {
+    return emptyResult(ref, "Referencia catastral no válida o ausente");
+  }
+
+  let last: DnpAttempt | null = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    last = await fetchConsultaDnprcOnce(ref);
+    if (!last.parsed.error) return last.parsed;
+    if (!last.transient || attempt === MAX_RETRIES) return last.parsed;
+    const backoff = RETRY_BASE_MS * Math.pow(2, attempt) + Math.floor(Math.random() * 200);
+    await sleepDnp(backoff);
+  }
+  return (last ?? { parsed: emptyResult(ref, "Sin respuesta"), transient: false }).parsed;
 }

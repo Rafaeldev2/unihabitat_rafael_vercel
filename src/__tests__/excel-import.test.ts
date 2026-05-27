@@ -6,8 +6,11 @@ import {
   parseExcelFile,
   type ParseExcelResult,
   parseExcelHeuristic,
+  parseWithMapping,
   mergeHeuristicIntoMapped,
+  dedupAssetsByIdWithCount,
 } from "@/lib/normalize-excel";
+import type { Asset, AssetAdmin } from "@/lib/types";
 
 const FIXTURES_DIR = join(__dirname, "fixtures");
 
@@ -172,6 +175,96 @@ describe("parseExcelFile — sintéticos", () => {
     expect(result.sheetDiag[0].offset).toBe(0);
     expect(result.sheetDiag[0].parsed).toBe(1);
     expect(result.assets[0]?.id).toBe("TEST-CANONICAL");
+  });
+
+  it("parseExcelHeuristic deduplica filas con el mismo id (evita ON CONFLICT en upsert)", async () => {
+    const header = ["ID1", "Provincia", "Localidad", "Precio"];
+    const file = makeXlsxFile({
+      Hoja1: [
+        header,
+        ["DUP-A", "Madrid", "Madrid", 100000],
+        ["DUP-B", "Barcelona", "Barcelona", 200000],
+        ["DUP-A", "Madrid", "Las Rozas", 110000], // mismo id que la primera
+      ],
+    });
+    const h = await parseExcelHeuristic(file);
+    expect(h.assets.length).toBe(2);
+    const ids = h.assets.map(a => a.id).sort();
+    expect(ids).toEqual(["DUP-A", "DUP-B"]);
+    // El segundo valor (no vacío) gana para los campos string en el merge.
+    const dupA = h.assets.find(a => a.id === "DUP-A")!;
+    expect(dupA.pob).toBe("Las Rozas");
+  });
+
+  it("parseWithMapping deduplica filas con el mismo id", async () => {
+    const file = makeXlsxFile({
+      Hoja1: [
+        ["Codigo", "Provincia", "Municipio"],
+        ["X-1", "Madrid", "Madrid"],
+        ["X-2", "Barcelona", "Barcelona"],
+        ["X-1", "Madrid", "Alcalá"], // duplicado
+      ],
+    });
+    const assets = await parseWithMapping(file, { 0: "id", 1: "prov", 2: "pob" });
+    expect(assets.length).toBe(2);
+    expect(new Set(assets.map(a => a.id))).toEqual(new Set(["X-1", "X-2"]));
+  });
+
+  it("mergeHeuristicIntoMapped no duplica cuando mappedAssets contiene el mismo id dos veces", () => {
+    const makeAsset = (id: string, prov: string): Asset => ({
+      id,
+      cat: "—", prov, pob: "—", cp: "—", addr: "—",
+      tip: "Vivienda", tipC: "tp-viv", fase: "—", faseC: "fp-nd",
+      precio: null, fav: false, chk: false, sqm: null,
+      tvia: "—", nvia: "—", num: "—", esc: "—", pla: "—", pta: "—",
+      map: "", catRef: "—", clase: "—", uso: "—", bien: "—",
+      supC: "—", supG: "—", coef: "—", ccaa: "—",
+      fullAddr: "—", desc: "—",
+      ownerName: "—", ownerTel: "—", ownerMail: "—",
+      adm: {
+        pip: "—", lin: "—", cat: "—", car: "—", cli: "—", id1: "—", con: "—", aid: id, loans: "—",
+        tcol: "—", scol: "—", ccaa: "—", prov: "—", city: "—", zip: "—", addr: "—", finca: "—", reg: "—",
+        cref: "—", ejud: "—", ejmap: "—", eneg: "—", ob: "—", sub: "—", deu: "—", cprev: "—", cpost: "—",
+        dtot: "—", pest: "—", str: "—", liq: "—", avj: "—", mmap: "—", buck: "—", lbuck: "—", smf: "—",
+        rsub: "—", conn: "—", conn2: "—",
+      } satisfies AssetAdmin,
+      pub: false,
+    });
+    const merged = mergeHeuristicIntoMapped(
+      [makeAsset("A", "Madrid"), makeAsset("A", "Barcelona"), makeAsset("B", "Sevilla")],
+      [],
+    );
+    expect(merged.length).toBe(2);
+    expect(merged.map(a => a.id).sort()).toEqual(["A", "B"]);
+  });
+
+  it("dedupAssetsByIdWithCount reporta el conteo de duplicatas", () => {
+    const make = (id: string): Asset => ({
+      id,
+      cat: "—", prov: "—", pob: "—", cp: "—", addr: "—",
+      tip: "Vivienda", tipC: "tp-viv", fase: "—", faseC: "fp-nd",
+      precio: null, fav: false, chk: false, sqm: null,
+      tvia: "—", nvia: "—", num: "—", esc: "—", pla: "—", pta: "—",
+      map: "", catRef: "—", clase: "—", uso: "—", bien: "—",
+      supC: "—", supG: "—", coef: "—", ccaa: "—",
+      fullAddr: "—", desc: "—",
+      ownerName: "—", ownerTel: "—", ownerMail: "—",
+      adm: {
+        pip: "—", lin: "—", cat: "—", car: "—", cli: "—", id1: "—", con: "—", aid: id, loans: "—",
+        tcol: "—", scol: "—", ccaa: "—", prov: "—", city: "—", zip: "—", addr: "—", finca: "—", reg: "—",
+        cref: "—", ejud: "—", ejmap: "—", eneg: "—", ob: "—", sub: "—", deu: "—", cprev: "—", cpost: "—",
+        dtot: "—", pest: "—", str: "—", liq: "—", avj: "—", mmap: "—", buck: "—", lbuck: "—", smf: "—",
+        rsub: "—", conn: "—", conn2: "—",
+      } satisfies AssetAdmin,
+      pub: false,
+    });
+    const { assets, duplicates } = dedupAssetsByIdWithCount([
+      make("A"), make("A"), make("A"), make("B"), make("C"), make("C"),
+    ]);
+    expect(assets.length).toBe(3);
+    expect(duplicates.get("A")).toBe(3);
+    expect(duplicates.get("C")).toBe(2);
+    expect(duplicates.has("B")).toBe(false);
   });
 
   it("filas con ID vacío son contadas en (rows - parsed) para diagnóstico", async () => {

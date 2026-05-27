@@ -4,6 +4,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { rowToAsset, rowToAssetPublic, assetToRow, mergeExcelRawMaps } from "@/lib/supabase/db";
 import type { Asset } from "@/lib/types";
 import { buildStaticMapUrl } from "@/lib/catastro/geoapify";
+import { dedupAssetsByIdWithCount } from "@/lib/normalize-excel";
 import { requireAdmin, requireAdminOrVendor, requireEditPermission, requireAssetAccess } from "@/lib/auth-server";
 
 /** Lectura completa para el panel admin (login demo sin JWT Supabase: el anon no pasa RLS). */
@@ -200,16 +201,33 @@ function applyMapFromLatLng(row: Record<string, any>): void {
     `&zoom=15&size=600x400`;
 }
 
-export async function upsertAssets(assets: Asset[]): Promise<{ inserted: number; updated: number; errors: string[] }> {
+export interface UpsertAssetsResult {
+  inserted: number;
+  updated: number;
+  errors: string[];
+  /** Ids duplicados en el array de entrada y conteo de cuántas veces aparecieron (≥2). */
+  duplicatesMerged: Record<string, number>;
+}
+
+export async function upsertAssets(assets: Asset[]): Promise<UpsertAssetsResult> {
   await requireAdmin();
   const supabase = await createServiceClient();
   const errors: string[] = [];
   let inserted = 0;
   let updated = 0;
 
+  // Dedup defensivo: si el caller pasa el mismo id dos veces en un solo array,
+  // el upsert de Postgres con onConflict=id revienta con
+  // "ON CONFLICT DO UPDATE command cannot affect row a second time" y rechaza
+  // el batch entero. Fusionamos las duplicatas (last-wins por campo no vacío)
+  // antes de batchear.
+  const { assets: deduped, duplicates } = dedupAssetsByIdWithCount(assets);
+  const duplicatesMerged: Record<string, number> = {};
+  for (const [id, n] of duplicates) duplicatesMerged[id] = n;
+
   const BATCH_SIZE = 50;
-  for (let i = 0; i < assets.length; i += BATCH_SIZE) {
-    const batch = assets.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < deduped.length; i += BATCH_SIZE) {
+    const batch = deduped.slice(i, i + BATCH_SIZE);
     const batchIds = batch.map(a => a.id);
 
     // Fetch full existing rows for smart merge
@@ -249,7 +267,7 @@ export async function upsertAssets(assets: Asset[]): Promise<{ inserted: number;
     }
   }
 
-  return { inserted, updated, errors };
+  return { inserted, updated, errors, duplicatesMerged };
 }
 
 export async function toggleAssetPub(id: string): Promise<boolean> {

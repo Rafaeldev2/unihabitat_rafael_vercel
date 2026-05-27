@@ -407,8 +407,40 @@ function mergeAdmPreferNonEmpty(a: AssetAdmin, b: AssetAdmin): AssetAdmin {
   return out;
 }
 
+/**
+ * Deduplica una lista de Assets por id, fusionando duplicados con
+ * mergeAssetsSameId. Preserva el orden de primera aparición. Devuelve la lista
+ * deduplicada y un Map con el conteo de cuántas veces cada id estaba duplicado
+ * (≥2 → entrada en el map). Útil para reportar al usuario y para evitar el
+ * error de Postgres ON CONFLICT cuando el mismo id va a un upsert.
+ */
+export function dedupAssetsById(
+  assets: Asset[],
+): Asset[] {
+  return dedupAssetsByIdWithCount(assets).assets;
+}
+
+export function dedupAssetsByIdWithCount(
+  assets: Asset[],
+): { assets: Asset[]; duplicates: Map<string, number> } {
+  const byId = new Map<string, Asset>();
+  const order: string[] = [];
+  const counts = new Map<string, number>();
+  for (const a of assets) {
+    const prev = byId.get(a.id);
+    if (prev) {
+      byId.set(a.id, mergeAssetsSameId(prev, a));
+      counts.set(a.id, (counts.get(a.id) ?? 1) + 1);
+    } else {
+      byId.set(a.id, a);
+      order.push(a.id);
+    }
+  }
+  return { assets: order.map(id => byId.get(id)!), duplicates: counts };
+}
+
 /** Mismo activo (id) aparece en varias hojas: combinar sin perder CRM de Proveedor 2 ni datos de 1/3. */
-function mergeAssetsSameId(prev: Asset, curr: Asset): Asset {
+export function mergeAssetsSameId(prev: Asset, curr: Asset): Asset {
   const adm = mergeAdmPreferNonEmpty(prev.adm, curr.adm);
   const excelRaw = mergeExcelRawMaps(prev.excelRaw, curr.excelRaw);
   const pickStr = (p: string, c: string) => (c && c !== "—" ? c : p && p !== "—" ? p : c || p || "—");
@@ -455,23 +487,36 @@ export function mergeHeuristicIntoMapped(
   mappedAssets: Asset[],
   heuristicAssets: Asset[],
 ): Asset[] {
-  if (mappedAssets.length === 0) return heuristicAssets.slice();
-  if (heuristicAssets.length === 0) return mappedAssets.slice();
+  // Nota: NO usamos early-returns; aunque uno de los arrays venga vacío, el
+  // otro puede traer ids duplicados que también hay que fusionar (mismo bug
+  // de ON CONFLICT al upsert).
   const byHeurId = new Map(heuristicAssets.map((a) => [a.id, a]));
   const mergedById = new Map<string, Asset>();
   const orderIds: string[] = [];
 
   for (const ai of mappedAssets) {
+    // Si el mismo id aparece más de una vez en mappedAssets, fusionar en lugar
+    // de pushear el id dos veces.
+    const existing = mergedById.get(ai.id);
+    if (existing) {
+      mergedById.set(ai.id, mergeAssetsSameId(existing, ai));
+      continue;
+    }
     const hi = byHeurId.get(ai.id);
     const merged = hi ? mergeAssetsSameId(ai, hi) : ai;
     mergedById.set(ai.id, merged);
     orderIds.push(ai.id);
   }
   for (const hi of heuristicAssets) {
-    if (!mergedById.has(hi.id)) {
-      mergedById.set(hi.id, hi);
-      orderIds.push(hi.id);
+    const existing = mergedById.get(hi.id);
+    if (existing) {
+      // Heurística repite un id ya presente (sólo posible si heuristicAssets
+      // trae duplicados internos): fusionar en vez de descartar.
+      mergedById.set(hi.id, mergeAssetsSameId(existing, hi));
+      continue;
     }
+    mergedById.set(hi.id, hi);
+    orderIds.push(hi.id);
   }
   return orderIds.map((id) => mergedById.get(id)!);
 }
@@ -856,7 +901,11 @@ export function parseExcelHeuristic(
           }
         }
 
-        resolve({ assets, totalRows, sheets });
+        // Dedup por id: si el Excel trae el mismo id en varias filas (o varias
+        // hojas), evitamos enviar duplicados al upsert (Postgres rechaza con
+        // "ON CONFLICT DO UPDATE command cannot affect row a second time").
+        const deduped = dedupAssetsById(assets);
+        resolve({ assets: deduped, totalRows, sheets });
       } catch (err) {
         reject(err instanceof Error ? err : new Error("Error en parseo heurístico"));
       }
@@ -1206,7 +1255,7 @@ export function parseWithMapping(
           }
         }
 
-        resolve(assets);
+        resolve(dedupAssetsById(assets));
       } catch (err) {
         reject(err instanceof Error ? err : new Error("Error al parsear con mapeo"));
       }

@@ -15,14 +15,22 @@ import { catastroParsedToPartialAsset } from "@/lib/catastro/to-partial-asset";
 import { mergePartialIntoAssetFillEmpty } from "@/lib/merge-asset-partial";
 import { upsertAssets } from "@/app/actions/assets";
 
+import {
+  type CatastroFailureCategory,
+  tallyCatastroFailures as tallyFailures,
+} from "@/lib/catastro/errors";
+export type { CatastroFailureCategory } from "@/lib/catastro/errors";
+
 export type CatastroEnrichFailure = { id: string; ref: string; error: string };
 
 function sleep(ms: number): Promise<void> {
   return new Promise(r => setTimeout(r, ms));
 }
 
-const CONCURRENCY = 5;
-const BATCH_DELAY_MS = 200;
+// CONCURRENCY reducido 5→3 y delay 200→500 ms para respetar el throttling
+// del Catastro DNP (HTTP 503/429 al pasar de ~5 req/s sostenidos).
+const CONCURRENCY = 3;
+const BATCH_DELAY_MS = 500;
 
 function applyCatastroOverwrite(asset: Asset, partial: Partial<Asset>): Asset {
   const enriched: Asset = { ...asset, ...partial, adm: { ...asset.adm } };
@@ -210,6 +218,7 @@ export async function enrichAssetsBatch(assets: Asset[]): Promise<{
   ok: number;
   skipped: number;
   failed: CatastroEnrichFailure[];
+  failuresByCategory: Record<CatastroFailureCategory, number>;
 }> {
   const failed: CatastroEnrichFailure[] = [];
   let ok = 0;
@@ -254,7 +263,70 @@ export async function enrichAssetsBatch(assets: Asset[]): Promise<{
     if (i + CONCURRENCY < assets.length) await sleep(BATCH_DELAY_MS);
   }
 
-  return { assets: out, ok, skipped, failed };
+  return { assets: out, ok, skipped, failed, failuresByCategory: tallyFailures(failed) };
+}
+
+/**
+ * Reintenta el enriquecimiento Catastro sólo para los ids dados (típicamente
+ * los que fallaron en un upload previo con errores transitorios HTTP 5xx/429
+ * o timeouts). Carga los assets actuales desde la BD, ejecuta enrichAssetsBatch
+ * y persiste los enriquecidos vía upsertAssets. Devuelve estadísticas listas
+ * para mostrar en la UI.
+ */
+export async function retryCatastroForIds(ids: string[]): Promise<{
+  attempted: number;
+  ok: number;
+  skipped: number;
+  failed: CatastroEnrichFailure[];
+  failuresByCategory: Record<CatastroFailureCategory, number>;
+  upsertErrors: string[];
+}> {
+  const { requireAdmin } = await import("@/lib/auth-server");
+  await requireAdmin();
+  const { createServiceClient } = await import("@/lib/supabase/server");
+  const { rowToAsset } = await import("@/lib/supabase/db");
+
+  const unique = Array.from(new Set((ids ?? []).map(s => String(s ?? "").trim()).filter(Boolean)));
+  if (unique.length === 0) {
+    return {
+      attempted: 0, ok: 0, skipped: 0, failed: [],
+      failuresByCategory: tallyFailures([]),
+      upsertErrors: [],
+    };
+  }
+
+  const supabase = await createServiceClient();
+  const { data, error } = await supabase.from("assets").select("*").in("id", unique);
+  if (error) {
+    return {
+      attempted: unique.length, ok: 0, skipped: 0,
+      failed: unique.map(id => ({ id, ref: "", error: error.message })),
+      failuresByCategory: tallyFailures(unique.map(id => ({ id, ref: "", error: error.message }))),
+      upsertErrors: [error.message],
+    };
+  }
+
+  const assets = (data ?? []).map(rowToAsset);
+  const result = await enrichAssetsBatch(assets);
+
+  const upsertErrors: string[] = [];
+  if (result.assets.length > 0) {
+    try {
+      const r = await upsertAssets(result.assets);
+      if (r.errors.length > 0) upsertErrors.push(...r.errors);
+    } catch (e) {
+      upsertErrors.push(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  return {
+    attempted: unique.length,
+    ok: result.ok,
+    skipped: result.skipped,
+    failed: result.failed,
+    failuresByCategory: result.failuresByCategory,
+    upsertErrors,
+  };
 }
 
 export type ForceCatastroItem = {
