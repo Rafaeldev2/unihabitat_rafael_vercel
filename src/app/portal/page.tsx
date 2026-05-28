@@ -17,6 +17,7 @@ import {
   Search, MapPin, Building, SlidersHorizontal, X,
   ArrowUpDown,
   Ruler, Tag, Layers, Star,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { Suspense } from "react";
 import { FilterSelect } from "@/components/FilterSelect";
@@ -37,6 +38,9 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "pob_az", label: "Población: A → Z" },
 ];
 
+const PAGE_SIZE_OPTIONS = [50, 100, 200] as const;
+type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
+
 function PortalContent() {
   const { assets } = useApp();
   const { sensitiveVisible } = usePortalAuth();
@@ -50,6 +54,8 @@ function PortalContent() {
   const [fTipo, setFTipo] = useState(searchParams.get("tipo") ?? "");
   const [fFase, setFFase] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("none");
+  const [pageSize, setPageSize] = useState<PageSize>(50);
+  const [page, setPage] = useState(1);
   const [compradorId, setCompradorId] = useState<string | null>(null);
   const { isFavorito, toggleFavorito } = useFavoritos(compradorId);
 
@@ -135,6 +141,25 @@ function PortalContent() {
     return result;
   }, [publicAssets, q, fCat, fProv, fPob, fTipo, fFase, sortBy, sensitiveVisible]);
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+
+  const paginated = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, safePage, pageSize]);
+
+  const rangeStart = filtered.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(safePage * pageSize, filtered.length);
+
+  useEffect(() => {
+    setPage(1);
+  }, [q, fCat, fProv, fPob, fTipo, fFase, sortBy, pageSize]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
   const hasFilters = Boolean(q || fCat || fProv || fPob || fTipo || fFase);
 
   const clearFilters = useCallback(() => {
@@ -217,19 +242,43 @@ function PortalContent() {
         </div>
       </div>
 
-      {/* ── Results bar with sort ── */}
+      {/* ── Results bar with sort + pagination ── */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-muted">
-          <span className="font-semibold text-navy">{filtered.length}</span>{" "}
-          {filtered.length === 1 ? "propiedad publicada" : "propiedades publicadas"}
+          {filtered.length === 0 ? (
+            <>0 propiedades publicadas</>
+          ) : (
+            <>
+              Mostrando{" "}
+              <span className="font-semibold text-navy">{rangeStart}–{rangeEnd}</span>
+              {" "}de <span className="font-semibold text-navy">{filtered.length}</span>
+              {filtered.length === 1 ? " propiedad" : " propiedades"}
+              {totalPages > 1 && (
+                <span> · página <span className="font-semibold text-navy">{safePage}</span> de {totalPages}</span>
+              )}
+            </>
+          )}
           {hasFilters && <span> · filtros activos</span>}
         </p>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {hasFilters && (
             <button type="button" onClick={clearFilters} className="flex items-center gap-1 text-xs font-medium text-muted hover:text-navy">
               <X size={12} /> Limpiar
             </button>
           )}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted">Por página</span>
+            <select
+              value={pageSize}
+              onChange={e => setPageSize(Number(e.target.value) as PageSize)}
+              className="cursor-pointer appearance-none rounded-md border border-border bg-white px-2.5 py-1.5 text-xs text-text outline-none transition-all focus:border-navy"
+              aria-label="Propiedades por página"
+            >
+              {PAGE_SIZE_OPTIONS.map(n => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+          </div>
           <div className="flex items-center gap-1.5">
             <ArrowUpDown size={12} className="text-muted" />
             <select
@@ -247,8 +296,9 @@ function PortalContent() {
 
       {/* ── Property grid ── */}
       {filtered.length > 0 ? (
+        <>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map(a => (
+          {paginated.map(a => (
             <Link
               key={a.id}
               href={`/portal/${a.id}`}
@@ -339,6 +389,34 @@ function PortalContent() {
             </Link>
           ))}
         </div>
+
+        {totalPages > 1 && (
+          <nav
+            className="mt-8 flex flex-wrap items-center justify-center gap-2"
+            aria-label="Paginación de propiedades"
+          >
+            <button
+              type="button"
+              disabled={safePage <= 1}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              className="flex items-center gap-1 rounded-md border border-border bg-white px-3 py-1.5 text-xs font-medium text-navy transition-colors hover:border-navy disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ChevronLeft size={14} /> Anterior
+            </button>
+            <span className="px-2 text-xs text-muted">
+              Página <span className="font-semibold text-navy">{safePage}</span> de {totalPages}
+            </span>
+            <button
+              type="button"
+              disabled={safePage >= totalPages}
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              className="flex items-center gap-1 rounded-md border border-border bg-white px-3 py-1.5 text-xs font-medium text-navy transition-colors hover:border-navy disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Siguiente <ChevronRight size={14} />
+            </button>
+          </nav>
+        )}
+        </>
       ) : (
         <div className="py-20 text-center">
           <Building size={40} strokeWidth={1} className="mx-auto text-border" />
