@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useApp } from "@/lib/context";
 import { fmt, fmtM, displayAssetAddress } from "@/lib/utils";
 import {
@@ -22,6 +22,9 @@ import { isAdmin } from "@/lib/auth-helpers";
 import { toast } from "@/lib/toast";
 
 type SortCol = "prov" | "pob" | "sqm" | "precio" | "cat" | "addr" | "cp" | "tip" | "fase";
+
+const PAGE_SIZE_OPTIONS = [250, 500, 1000] as const;
+const DEFAULT_PAGE_SIZE = 500;
 
 const pillClass: Record<string, string> = {
   "tp-viv": "bg-blue/8 text-blue",
@@ -51,6 +54,8 @@ export default function ActivosPage() {
   const [favOnly, setFavOnly] = useState(false);
   const [sortCol, setSortCol] = useState<SortCol>("prov");
   const [sortDir, setSortDir] = useState<1 | -1>(1);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const filtered = useMemo(() => {
     let res = assets.filter(a => {
@@ -88,6 +93,19 @@ export default function ActivosPage() {
     });
     return res;
   }, [assets, q, fCat, fProv, fPob, fTipo, fFase, favOnly, sortCol, sortDir]);
+
+  // Reinicia a la página 1 cuando cambian filtros, búsqueda, orden o pageSize:
+  // evita quedar "atrapado" en página 5 tras filtrar a 3 resultados.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [q, fCat, fProv, fPob, fTipo, fFase, favOnly, sortCol, sortDir, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+  const paged = useMemo(
+    () => filtered.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [filtered, safePage, pageSize],
+  );
 
   const catOptions = useMemo(() => buildCatFilterOptions(assets), [assets]);
   const provOptions = useMemo(() => buildProvFilterOptions(assets), [assets]);
@@ -274,7 +292,10 @@ export default function ActivosPage() {
 
         {/* Results bar */}
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-0.5">
-          <p className="text-xs text-muted">Mostrando <strong className="font-semibold text-navy">{filtered.length}</strong> de {assets.length} activos</p>
+          <p className="text-xs text-muted">
+            Mostrando <strong className="font-semibold text-navy">{paged.length}</strong> de {filtered.length} activos
+            {filtered.length !== assets.length && <> (filtrado de {assets.length})</>}
+          </p>
           <div className="flex flex-wrap items-center justify-end gap-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-muted">Ordenar:</span>
             {([["prov", "Provincia"], ["pob", "Población"], ["sqm", "m²"], ["precio", "Precio"]] as const).map(([col, label]) => (
@@ -340,7 +361,7 @@ export default function ActivosPage() {
           {filtered.length === 0 ? (
             <div className="py-12 text-center text-sm text-muted">No se encontraron activos</div>
           ) : (
-            filtered.map(a => (
+            paged.map(a => (
               <Link
                 key={a.id}
                 href={`/admin/assets/${a.id}`}
@@ -372,12 +393,37 @@ export default function ActivosPage() {
         </div>
 
         {/* Pagination */}
-        <div className="mt-3 flex items-center justify-between px-0.5">
-          <p className="text-xs text-muted">Página 1 de 1</p>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 px-0.5">
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-muted">Página <strong className="font-semibold text-navy">{safePage}</strong> de {totalPages}</p>
+            <div className="flex items-center gap-1">
+              <label htmlFor="pageSize" className="text-[10px] font-semibold uppercase tracking-wider text-muted">Por página:</label>
+              <select
+                id="pageSize"
+                value={pageSize}
+                onChange={e => setPageSize(Number(e.target.value))}
+                className="rounded-md border border-border bg-white px-1.5 py-0.5 text-xs text-text outline-none transition-colors hover:border-navy/30 focus:border-navy"
+              >
+                {PAGE_SIZE_OPTIONS.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+          </div>
           <div className="flex gap-1">
-            <button className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-white text-xs text-muted">&lsaquo;</button>
-            <button className="flex h-7 w-7 items-center justify-center rounded-md bg-navy text-xs font-semibold text-white">1</button>
-            <button className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-white text-xs text-muted">&rsaquo;</button>
+            <button
+              type="button"
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={safePage <= 1}
+              aria-label="Página anterior"
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-white text-xs text-muted transition-colors hover:border-navy/30 hover:text-navy disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:text-muted"
+            >&lsaquo;</button>
+            <span className="flex h-7 min-w-[1.75rem] items-center justify-center rounded-md bg-navy px-2 text-xs font-semibold text-white">{safePage}</span>
+            <button
+              type="button"
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={safePage >= totalPages}
+              aria-label="Página siguiente"
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-border bg-white text-xs text-muted transition-colors hover:border-navy/30 hover:text-navy disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:text-muted"
+            >&rsaquo;</button>
           </div>
         </div>
       </div>

@@ -7,18 +7,50 @@ import { buildStaticMapUrl } from "@/lib/catastro/geoapify";
 import { dedupAssetsByIdWithCount } from "@/lib/normalize-excel";
 import { requireAdmin, requireAdminOrVendor, requireEditPermission, requireAssetAccess } from "@/lib/auth-server";
 
-/** Lectura completa para el panel admin (login demo sin JWT Supabase: el anon no pasa RLS). */
+// PostgREST (Supabase) aplica `db-max-rows = 1000` por request. `.range(0, N)` con
+// N > 1000 NO destraba el límite: el servidor trunca igualmente y devuelve
+// `Content-Range: 0-999/*` con `Status: 206 Partial Content`. Para leer tablas
+// > 1000 filas hay que paginar manualmente.
+const POSTGREST_PAGE_SIZE = 1000;
+const MAX_PAGES = 100; // techo defensivo (100k filas). Evita loops infinitos.
+
+/**
+ * Pagina una query Supabase en chunks de 1000 hasta agotar la tabla. La
+ * función `buildQuery` debe devolver una nueva instancia del query builder
+ * en cada llamada (no se pueden reutilizar después de ejecutar `.range`).
+ *
+ * Devuelve todas las filas concatenadas en orden de página.
+ */
+async function fetchAllPaginated<Row>(
+  label: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  buildQuery: () => any,
+): Promise<Row[]> {
+  const all: Row[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const from = page * POSTGREST_PAGE_SIZE;
+    const to = from + POSTGREST_PAGE_SIZE - 1;
+    const { data, error } = await buildQuery().range(from, to);
+    if (error) {
+      console.error(`[${label}] Supabase error en página ${page} (range ${from}-${to}):`, error.message);
+      throw new Error(error.message);
+    }
+    const batch = (data ?? []) as Row[];
+    all.push(...batch);
+    if (batch.length < POSTGREST_PAGE_SIZE) break;
+  }
+  return all;
+}
+
+/** Lectura completa para el panel admin (login demo sin JWT Supabase: el anon no pasa RLS).
+ *  Pagina en chunks de 1000 para superar el `db-max-rows` del PostgREST. */
 export async function fetchAssets(): Promise<Asset[]> {
   const supabase = await createServiceClient();
-  const { data, error } = await supabase
-    .from("assets")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error) {
-    console.error("[fetchAssets] Supabase error:", error.message);
-    throw new Error(error.message);
-  }
-  return (data ?? []).map(rowToAsset);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = await fetchAllPaginated<any>("fetchAssets", () =>
+    supabase.from("assets").select("*").order("created_at", { ascending: false }),
+  );
+  return rows.map(rowToAsset);
 }
 
 /**
@@ -28,28 +60,40 @@ export async function fetchAssets(): Promise<Asset[]> {
  */
 export async function fetchPublicAssets(): Promise<Asset[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("assets")
-    .select("*")
-    .eq("pub", true)
-    .order("created_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  return (data ?? []).map(rowToAssetPublic);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = await fetchAllPaginated<any>("fetchPublicAssets", () =>
+    supabase.from("assets").select("*").eq("pub", true).order("created_at", { ascending: false }),
+  );
+  return rows.map(rowToAssetPublic);
 }
 
 /**
  * Listado público por IDs (zona privada del cliente, dedup en uploads).
  * Devuelve datos sanitizados — no incluye PII del propietario.
+ *
+ * El upload de Excel puede llamar con > 1000 IDs (verificación post-upload):
+ * troceamos la lista de IDs en bloques de 1000 y agregamos los resultados,
+ * de forma que `db-max-rows` del PostgREST nunca trunca silenciosamente.
  */
 export async function fetchAssetsByIds(ids: string[]): Promise<Asset[]> {
   if (ids.length === 0) return [];
   const supabase = await createServiceClient();
-  const { data, error } = await supabase
-    .from("assets")
-    .select("*")
-    .in("id", ids);
-  if (error) throw new Error(error.message);
-  return (data ?? []).map(rowToAssetPublic);
+  const CHUNK = POSTGREST_PAGE_SIZE;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const collected: any[] = [];
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const slice = ids.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from("assets")
+      .select("*")
+      .in("id", slice);
+    if (error) {
+      console.error(`[fetchAssetsByIds] error en chunk ${i}/${ids.length}:`, error.message);
+      throw new Error(error.message);
+    }
+    if (data) collected.push(...data);
+  }
+  return collected.map(rowToAssetPublic);
 }
 
 /**
