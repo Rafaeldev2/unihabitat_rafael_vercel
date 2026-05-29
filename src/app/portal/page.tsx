@@ -17,7 +17,7 @@ import {
   Search, MapPin, Building, SlidersHorizontal, X,
   ArrowUpDown,
   Ruler, Tag, Layers, Star,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Loader2,
 } from "lucide-react";
 import { Suspense } from "react";
 import { FilterSelect } from "@/components/FilterSelect";
@@ -41,8 +41,39 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
 const PAGE_SIZE_OPTIONS = [50, 100, 200] as const;
 type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
 
+const SKELETON_CARD_COUNT = 6;
+
+function PortalPropertyCardSkeleton() {
+  return (
+    <div
+      className="overflow-hidden rounded-xl border border-border bg-white shadow-sm"
+      aria-hidden
+    >
+      <div className="relative h-[180px] overflow-hidden bg-cream2">
+        <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-cream2 via-white to-cream2" />
+        <div className="absolute left-3 top-3 flex gap-1.5">
+          <div className="h-5 w-14 animate-pulse rounded-md bg-border2" />
+          <div className="h-5 w-16 animate-pulse rounded-md bg-border2" />
+        </div>
+      </div>
+      <div className="space-y-3 p-4">
+        <div className="h-3 w-3/4 max-w-[200px] animate-pulse rounded bg-cream2" />
+        <div className="h-4 w-full animate-pulse rounded bg-cream2" />
+        <div className="flex gap-3">
+          <div className="h-3 w-12 animate-pulse rounded bg-cream2" />
+          <div className="h-3 w-20 animate-pulse rounded bg-cream2" />
+        </div>
+        <div className="flex items-end justify-between border-t border-border/50 pt-3">
+          <div className="h-6 w-24 animate-pulse rounded bg-cream2" />
+          <div className="h-3 w-14 animate-pulse rounded bg-cream2" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PortalContent() {
-  const { assets } = useApp();
+  const { assets, assetsLoading, assetsError } = useApp();
   const { sensitiveVisible } = usePortalAuth();
   const searchParams = useSearchParams();
   const publicAssets = useMemo(() => assets.filter(a => a.pub), [assets]);
@@ -245,7 +276,12 @@ function PortalContent() {
       {/* ── Results bar with sort + pagination ── */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-muted">
-          {filtered.length === 0 ? (
+          {assetsLoading ? (
+            <span className="inline-flex items-center gap-1.5">
+              <Loader2 size={13} className="animate-spin text-gold" aria-hidden />
+              Cargando propiedades…
+            </span>
+          ) : filtered.length === 0 ? (
             <>0 propiedades publicadas</>
           ) : (
             <>
@@ -271,7 +307,8 @@ function PortalContent() {
             <select
               value={pageSize}
               onChange={e => setPageSize(Number(e.target.value) as PageSize)}
-              className="cursor-pointer appearance-none rounded-md border border-border bg-white px-2.5 py-1.5 text-xs text-text outline-none transition-all focus:border-navy"
+              disabled={assetsLoading}
+              className="cursor-pointer appearance-none rounded-md border border-border bg-white px-2.5 py-1.5 text-xs text-text outline-none transition-all focus:border-navy disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Propiedades por página"
             >
               {PAGE_SIZE_OPTIONS.map(n => (
@@ -284,7 +321,8 @@ function PortalContent() {
             <select
               value={sortBy}
               onChange={e => setSortBy(e.target.value as SortKey)}
-              className="cursor-pointer appearance-none rounded-md border border-border bg-white px-2.5 py-1.5 text-xs text-text outline-none transition-all focus:border-navy"
+              disabled={assetsLoading}
+              className="cursor-pointer appearance-none rounded-md border border-border bg-white px-2.5 py-1.5 text-xs text-text outline-none transition-all focus:border-navy disabled:cursor-not-allowed disabled:opacity-50"
             >
               {SORT_OPTIONS.map(o => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -295,7 +333,22 @@ function PortalContent() {
       </div>
 
       {/* ── Property grid ── */}
-      {filtered.length > 0 ? (
+      {assetsLoading ? (
+        <div
+          className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3"
+          aria-busy="true"
+          aria-label="Cargando propiedades"
+        >
+          {Array.from({ length: SKELETON_CARD_COUNT }, (_, i) => (
+            <PortalPropertyCardSkeleton key={i} />
+          ))}
+        </div>
+      ) : assetsError ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-6 py-12 text-center">
+          <p className="text-sm font-medium text-red-800">No se pudieron cargar las propiedades</p>
+          <p className="mt-1 text-xs text-red-600/90">{assetsError}</p>
+        </div>
+      ) : filtered.length > 0 ? (
         <>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {paginated.map(a => (
