@@ -3,23 +3,19 @@ import { resolve } from "node:path";
 import { describe, it, expect } from "vitest";
 import type { Asset } from "@/lib/types";
 import {
+  buildAssetListFilterOptions,
   buildCatFilterOptions,
-  buildProvFilterOptions,
   buildPobFilterOptions,
-  buildTipFilterOptions,
-  buildFaseFilterOptions,
   assetMatchesListFilters,
+  portalCatalogAssets,
+  countAssetsMatchingListFilters,
   matchesFilterValue,
   uniqueFilterOptions,
   type AssetListFilters,
 } from "@/lib/asset-filters";
 
 const SHARED_FILTER_SYMBOLS = [
-  "buildCatFilterOptions",
-  "buildProvFilterOptions",
-  "buildPobFilterOptions",
-  "buildTipFilterOptions",
-  "buildFaseFilterOptions",
+  "buildAssetListFilterOptions",
   "assetMatchesListFilters",
 ] as const;
 
@@ -117,24 +113,19 @@ function filterPortalAssets(assets: Asset[], filters: AssetListFilters): Asset[]
   return publicAssets.filter((a) => assetMatchesListFilters(a, filters));
 }
 
-function buildAdminFilterOptions(assets: Asset[], fProv = "") {
-  return {
-    cat: buildCatFilterOptions(assets),
-    prov: buildProvFilterOptions(assets),
-    pob: buildPobFilterOptions(assets, fProv),
-    tip: buildTipFilterOptions(assets),
-    fase: buildFaseFilterOptions(assets),
-  };
+function buildAdminFilterOptions(assets: Asset[], active: AssetListFilters = {}) {
+  return buildAssetListFilterOptions(assets, active);
 }
 
-function buildPortalFilterOptions(assets: Asset[], fProv = "") {
-  const publicAssets = assets.filter((a) => a.pub);
+function buildPortalFilterOptions(assets: Asset[], active: AssetListFilters = {}) {
+  const catalog = portalCatalogAssets(assets, false);
+  const scoped = buildAssetListFilterOptions(catalog, active);
   return {
-    cat: buildCatFilterOptions(publicAssets),
-    prov: buildProvFilterOptions(publicAssets),
-    pob: buildPobFilterOptions(publicAssets, fProv),
-    tip: buildTipFilterOptions(publicAssets),
-    fase: buildFaseFilterOptions(publicAssets),
+    cat: buildCatFilterOptions(assets),
+    prov: scoped.prov,
+    pob: scoped.pob,
+    tip: scoped.tip,
+    fase: scoped.fase,
   };
 }
 
@@ -192,36 +183,50 @@ describe("paridad admin vs portal", () => {
     expect(portalIds).toEqual(expectedIds);
   });
 
-  it("cada opción del portal existe en admin con la misma clave normalizada", () => {
-    const admin = buildAdminFilterOptions(FIXTURE_ASSETS, "Alicante");
-    const portal = buildPortalFilterOptions(FIXTURE_ASSETS, "Alicante");
-
-    for (const key of ["cat", "prov", "pob", "tip", "fase"] as const) {
-      for (const portalOpt of portal[key]) {
-        const hasAdminEquivalent = admin[key].some((adminOpt) =>
-          key === "tip"
-            ? adminOpt.toUpperCase() === portalOpt.toUpperCase()
-            : matchesFilterValue(adminOpt, portalOpt),
-        );
-        expect(hasAdminEquivalent, `portal.${key}="${portalOpt}"`).toBe(true);
-      }
-    }
+  it("portal expone las mismas categorías que admin aunque el listado sea solo publicado", () => {
+    const admin = buildAdminFilterOptions(FIXTURE_ASSETS, { prov: "Alicante" });
+    const portal = buildPortalFilterOptions(FIXTURE_ASSETS, { prov: "Alicante" });
+    expect(portal.cat).toEqual(admin.cat);
   });
 
-  it("genera las mismas opciones deduplicadas cuando el dataset es solo publicado", () => {
-    const publishedOnly = FIXTURE_ASSETS.filter((a) => a.pub);
-    const admin = buildAdminFilterOptions(publishedOnly);
-    const portal = buildPortalFilterOptions(FIXTURE_ASSETS);
+  it("restringe provincias y poblaciones cuando hay categoría activa", () => {
+    const all = buildAdminFilterOptions(FIXTURE_ASSETS);
+    const npl = buildAdminFilterOptions(FIXTURE_ASSETS, { cat: "NPL" });
+    const cdr = buildAdminFilterOptions(FIXTURE_ASSETS, { cat: "CDR" });
 
-    expect(portal).toEqual(admin);
+    expect(npl.prov).toEqual(["A CORUÑA", "Albacete", "Alicante"]);
+    expect(cdr.prov).toEqual(["A Coruña", "ALICANTE"]);
+    expect(cdr.prov).not.toEqual(npl.prov);
+    expect(npl.pob).toEqual(["Alicante", "Bonete", "FERROL"]);
+    expect(cdr.pob).toEqual(["ALICANTE/ALACANT", "Ferrol"]);
+    expect(cdr.pob).not.toContain("Bonete");
+    expect(npl.pob).not.toContain("ALICANTE/ALACANT");
+    expect(all.prov.length).toBeGreaterThanOrEqual(npl.prov.length);
+  });
+
+  it("staff en portal ve el catálogo completo; visitantes solo publicados", () => {
+    expect(portalCatalogAssets(FIXTURE_ASSETS, true).map((a) => a.id).sort()).toEqual(
+      FIXTURE_ASSETS.map((a) => a.id).sort(),
+    );
+    expect(portalCatalogAssets(FIXTURE_ASSETS, false).map((a) => a.id).sort()).toEqual(
+      FIXTURE_ASSETS.filter((a) => a.pub).map((a) => a.id).sort(),
+    );
+  });
+
+  it("cuenta inmuebles suspendidos que coinciden con el filtro de categoría", () => {
+    const suspendedNpl = countAssetsMatchingListFilters(
+      FIXTURE_ASSETS.filter((a) => !a.pub),
+      { cat: "NPL" },
+    );
+    expect(suspendedNpl).toBe(1);
   });
 
   it("filtra población por provincia con la misma lógica en admin y portal", () => {
-    const adminPob = buildPobFilterOptions(FIXTURE_ASSETS, "A Coruña");
-    const portalPob = buildPobFilterOptions(
+    const adminPob = buildAssetListFilterOptions(FIXTURE_ASSETS, { prov: "A Coruña" }).pob;
+    const portalPob = buildAssetListFilterOptions(
       FIXTURE_ASSETS.filter((a) => a.pub),
-      "A CORUÑA",
-    );
+      { prov: "A CORUÑA" },
+    ).pob;
 
     expect(portalPob).toEqual(["Ferrol"]);
     expect(adminPob).toEqual(["Ferrol"]);

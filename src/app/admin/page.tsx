@@ -4,11 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useApp } from "@/lib/context";
 import { fmt, fmtM, displayAssetAddress } from "@/lib/utils";
 import {
-  buildCatFilterOptions,
-  buildProvFilterOptions,
-  buildPobFilterOptions,
-  buildTipFilterOptions,
-  buildFaseFilterOptions,
+  buildAssetListFilterOptions,
   assetMatchesListFilters,
 } from "@/lib/asset-filters";
 import Link from "next/link";
@@ -109,14 +105,19 @@ export default function ActivosPage() {
     [filtered, safePage, pageSize],
   );
 
-  const catOptions = useMemo(() => buildCatFilterOptions(assets), [assets]);
-  const provOptions = useMemo(() => buildProvFilterOptions(assets), [assets]);
-  const pobOptions = useMemo(
-    () => buildPobFilterOptions(assets, fProv),
-    [assets, fProv],
+  const activeListFilters = useMemo(
+    () => ({ cat: fCat, prov: fProv, pob: fPob, tipo: fTipo, fase: fFase }),
+    [fCat, fProv, fPob, fTipo, fFase],
   );
-  const tipOptions = useMemo(() => buildTipFilterOptions(assets), [assets]);
-  const faseOptions = useMemo(() => buildFaseFilterOptions(assets), [assets]);
+
+  const { cat: catOptions, prov: provOptions, pob: pobOptions, tip: tipOptions, fase: faseOptions } =
+    useMemo(() => buildAssetListFilterOptions(assets, activeListFilters), [assets, activeListFilters]);
+
+  const handleCatChange = (v: string) => {
+    setFCat(v);
+    setFProv("");
+    setFPob("");
+  };
 
   const handleProvChange = (v: string) => {
     setFProv(v);
@@ -217,7 +218,7 @@ export default function ActivosPage() {
         {/* Filters */}
         <div className="mb-3 rounded-lg border border-border bg-white p-3.5 shadow-sm">
           <div className="flex flex-wrap items-end gap-2.5">
-            <FilterSelect label="Categoría" value={fCat} onChange={setFCat} options={catOptions} />
+            <FilterSelect label="Categoría" value={fCat} onChange={handleCatChange} options={catOptions} />
             <FilterSelect label="Provincia" value={fProv} onChange={handleProvChange} options={provOptions} />
             <FilterSelect label="Población" value={fPob} onChange={setFPob} options={pobOptions} />
             <FilterSelect label="Tipología" value={fTipo} onChange={setFTipo} options={tipOptions} />

@@ -4,12 +4,11 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { useApp } from "@/lib/context";
 import { fmt, fmtM, shortAddr } from "@/lib/utils";
 import {
+  buildAssetListFilterOptions,
   buildCatFilterOptions,
-  buildProvFilterOptions,
-  buildPobFilterOptions,
-  buildTipFilterOptions,
-  buildFaseFilterOptions,
   assetMatchesListFilters,
+  portalCatalogAssets,
+  countAssetsMatchingListFilters,
 } from "@/lib/asset-filters";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -74,9 +73,12 @@ function PortalPropertyCardSkeleton() {
 
 function PortalContent() {
   const { assets, assetsLoading, assetsError } = useApp();
-  const { sensitiveVisible } = usePortalAuth();
+  const { sensitiveVisible, isStaff, userResolved } = usePortalAuth();
   const searchParams = useSearchParams();
-  const publicAssets = useMemo(() => assets.filter(a => a.pub), [assets]);
+  const catalogAssets = useMemo(
+    () => portalCatalogAssets(assets, userResolved && isStaff),
+    [assets, isStaff, userResolved],
+  );
 
   const [q, setQ] = useState(searchParams.get("pob") ?? "");
   const [fCat, setFCat] = useState(searchParams.get("cat") ?? "");
@@ -123,14 +125,24 @@ function PortalContent() {
     return () => { cancelled = true; };
   }, []);
 
-  const catOptions = useMemo(() => buildCatFilterOptions(publicAssets), [publicAssets]);
-  const provOptions = useMemo(() => buildProvFilterOptions(publicAssets), [publicAssets]);
-  const pobOptions = useMemo(
-    () => buildPobFilterOptions(publicAssets, fProv),
-    [publicAssets, fProv],
+  const activeListFilters = useMemo(
+    () => ({ cat: fCat, prov: fProv, pob: fPob, tipo: fTipo, fase: fFase }),
+    [fCat, fProv, fPob, fTipo, fFase],
   );
-  const tipOptions = useMemo(() => buildTipFilterOptions(publicAssets), [publicAssets]);
-  const faseOptions = useMemo(() => buildFaseFilterOptions(publicAssets), [publicAssets]);
+
+  // Categorías: mismo listado que /admin. Resto de filtros en cascada según catálogo visible.
+  const listFilterOptions = useMemo(
+    () => buildAssetListFilterOptions(catalogAssets, activeListFilters),
+    [catalogAssets, activeListFilters],
+  );
+  const catOptions = useMemo(() => buildCatFilterOptions(assets), [assets]);
+  const { prov: provOptions, pob: pobOptions, tip: tipOptions, fase: faseOptions } = listFilterOptions;
+
+  const handleCatChange = (v: string) => {
+    setFCat(v);
+    setFProv("");
+    setFPob("");
+  };
 
   const handleProvChange = (v: string) => {
     setFProv(v);
@@ -140,7 +152,7 @@ function PortalContent() {
   const filtered = useMemo(() => {
     const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
 
-    const result = publicAssets.filter(a => {
+    const result = catalogAssets.filter(a => {
       if (!assetMatchesListFilters(a, {
         cat: fCat,
         prov: fProv,
@@ -173,7 +185,15 @@ function PortalContent() {
     else if (sortBy === "pob_az") result.sort((a, b) => (a.pob || "").localeCompare(b.pob || ""));
 
     return result;
-  }, [publicAssets, q, fCat, fProv, fPob, fTipo, fFase, sortBy, sensitiveVisible]);
+  }, [catalogAssets, q, fCat, fProv, fPob, fTipo, fFase, sortBy, sensitiveVisible]);
+
+  const suspendedMatchCount = useMemo(() => {
+    if (isStaff || filtered.length > 0) return 0;
+    return countAssetsMatchingListFilters(
+      assets.filter((a) => !a.pub),
+      activeListFilters,
+    );
+  }, [assets, isStaff, filtered.length, activeListFilters]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -203,7 +223,7 @@ function PortalContent() {
   // Group assets by activo (loan) ID for "X inmuebles asociados" badge.
   const groupsByContract = useMemo(() => {
     const map: Record<string, string[]> = {};
-    for (const a of publicAssets) {
+    for (const a of catalogAssets) {
       const activo = a.propiedades[0]?.activoId;
       if (activo && activo !== "—" && activo.trim()) {
         if (!map[activo]) map[activo] = [];
@@ -211,7 +231,7 @@ function PortalContent() {
       }
     }
     return map;
-  }, [publicAssets]);
+  }, [catalogAssets]);
 
   return (
     <div className="mx-auto max-w-7xl px-6 pb-16 pt-8">
@@ -256,7 +276,7 @@ function PortalContent() {
         {/* ── Filter bar (dentro del hero) ── */}
         <div className="mt-6 w-full max-w-full rounded-lg border border-border bg-white p-3.5 shadow-sm">
           <div className="flex flex-wrap items-end gap-2.5">
-            <FilterSelect label="Categoría" value={fCat} onChange={setFCat} options={catOptions} />
+            <FilterSelect label="Categoría" value={fCat} onChange={handleCatChange} options={catOptions} />
             <FilterSelect label="Provincia" value={fProv} onChange={handleProvChange} options={provOptions} />
             <FilterSelect label="Población" value={fPob} onChange={setFPob} options={pobOptions} />
             <FilterSelect label="Tipología" value={fTipo} onChange={setFTipo} options={tipOptions} />
@@ -482,7 +502,15 @@ function PortalContent() {
         <div className="py-20 text-center">
           <Building size={40} strokeWidth={1} className="mx-auto text-border" />
           <p className="mt-3 text-sm font-medium text-navy">No hay propiedades que coincidan</p>
-          <p className="mt-1 text-xs text-muted">Prueba a ajustar los filtros de búsqueda</p>
+          {suspendedMatchCount > 0 ? (
+            <p className="mx-auto mt-1 max-w-md text-xs text-muted">
+              Hay {suspendedMatchCount} inmueble{suspendedMatchCount === 1 ? "" : "s"} con estos filtros
+              {fCat ? ` (${fCat})` : ""} en el CRM, pero ninguno está publicado.
+              Actívalos desde <Link href="/admin" className="font-medium text-gold hover:text-gold2">Admin → Propiedades</Link>.
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-muted">Prueba a ajustar los filtros de búsqueda</p>
+          )}
           {hasFilters && (
             <button onClick={clearFilters} className="mx-auto mt-4 flex items-center gap-1.5 text-xs font-semibold text-gold hover:text-gold2">
               <SlidersHorizontal size={12} /> Limpiar todos los filtros

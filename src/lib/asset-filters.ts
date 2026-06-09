@@ -78,6 +78,54 @@ export interface AssetListFilters {
   fase?: string;
 }
 
+export interface AssetFilterOptionSet {
+  cat: string[];
+  prov: string[];
+  pob: string[];
+  tip: string[];
+  fase: string[];
+}
+
+type FilterOptionField = keyof AssetListFilters;
+
+/** Activos que cumplen los filtros activos, excluyendo el campo cuyas opciones se construyen. */
+export function assetsForFilterOptions(
+  assets: Asset[],
+  active: AssetListFilters,
+  except: FilterOptionField,
+): Asset[] {
+  const scoped: AssetListFilters = { ...active };
+  delete scoped[except];
+  return assets.filter((a) => assetMatchesListFilters(a, scoped));
+}
+
+/** Opciones en cascada: cada select se calcula con el resto de filtros ya aplicados. */
+export function buildAssetListFilterOptions(
+  assets: Asset[],
+  active: AssetListFilters = {},
+): AssetFilterOptionSet {
+  const fProv = active.prov ?? "";
+  return {
+    cat: buildCatFilterOptions(assetsForFilterOptions(assets, active, "cat")),
+    prov: buildProvFilterOptions(assetsForFilterOptions(assets, active, "prov")),
+    pob: buildPobFilterOptions(assetsForFilterOptions(assets, active, "pob"), fProv),
+    tip: buildTipFilterOptions(assetsForFilterOptions(assets, active, "tipo")),
+    fase: buildFaseFilterOptions(assetsForFilterOptions(assets, active, "fase")),
+  };
+}
+
+/** Inmuebles visibles en el portal: todo el catálogo para staff, solo publicados para visitantes. */
+export function portalCatalogAssets(assets: Asset[], isStaff: boolean): Asset[] {
+  return isStaff ? assets : assets.filter((a) => a.pub);
+}
+
+export function countAssetsMatchingListFilters(
+  assets: Asset[],
+  filters: AssetListFilters,
+): number {
+  return assets.filter((a) => assetMatchesListFilters(a, filters)).length;
+}
+
 /** Misma lógica de filtrado que el listado principal de /admin. */
 export function assetMatchesListFilters(a: Asset, f: AssetListFilters): boolean {
   if (f.cat) {
