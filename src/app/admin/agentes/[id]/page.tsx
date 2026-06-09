@@ -268,7 +268,7 @@ export default function AgenteDetailPage({
     const lower = qA.toLowerCase();
     return assets
       .filter((a) =>
-        [a.id, a.prov, a.pob, a.addr, a.cat].join(" ").toLowerCase().includes(lower),
+        [a.id, a.prov, a.pob, a.addr, a.propiedades[0]?.categoria ?? ""].join(" ").toLowerCase().includes(lower),
       )
       .slice(0, 200);
   }, [assets, qA]);
@@ -544,7 +544,7 @@ export default function AgenteDetailPage({
                       />
                       <div className="flex-1 overflow-hidden">
                         <div className="truncate text-xs font-medium text-text">
-                          {a.id} · {a.cat}
+                          {a.id} · {a.propiedades[0]?.categoria ?? "—"}
                         </div>
                         <div className="truncate text-[10px] text-muted">
                           {a.prov} · {a.addr !== "—" ? a.addr : a.pob}

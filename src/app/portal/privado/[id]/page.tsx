@@ -78,7 +78,7 @@ export default function PortalPrivadoDetailPage({ params }: { params: Promise<{ 
                 <InfoPill label="CCAA" value={asset.ccaa} />
                 <InfoPill label="C.P." value={asset.cp} />
                 <InfoPill label="Superficie" value={asset.supC || fmtM(asset.sqm)} />
-                <InfoPill label="Ref. Catastral" value={asset.catRef} />
+                <InfoPill label="Ref. Catastral" value={asset.id} />
                 <InfoPill label="Clase" value={asset.clase} />
                 <InfoPill label="Uso" value={asset.uso} />
               </div>

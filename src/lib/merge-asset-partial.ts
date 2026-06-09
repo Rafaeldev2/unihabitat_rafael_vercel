@@ -5,11 +5,12 @@ function isEmptyStr(v: string | undefined | null): boolean {
 }
 
 /**
- * Fusiona campos del Catastro / Enriquecido sin pisar datos ya informados en el Excel.
+ * Fusiona campos del Catastro / Enriquecido sin pisar datos ya informados.
+ * Trabaja solo sobre el inmueble — los campos del propietario / fase ya no
+ * viven en Asset.
  */
 export function mergePartialIntoAssetFillEmpty(asset: Asset, partial: Partial<Asset>): Asset {
-  const next: Asset = { ...asset, adm: { ...asset.adm } };
-
+  const next: Asset = { ...asset };
   const rec = next as unknown as Record<string, unknown>;
 
   const assignIfEmpty = <K extends keyof Asset>(key: K, val: Asset[K] | undefined) => {
@@ -25,41 +26,15 @@ export function mergePartialIntoAssetFillEmpty(asset: Asset, partial: Partial<As
   };
 
   const stringKeys: (keyof Asset)[] = [
-    "catRef",
-    "clase",
-    "uso",
-    "bien",
-    "prov",
-    "pob",
-    "cp",
-    "addr",
-    "fullAddr",
-    "tvia",
-    "nvia",
-    "num",
-    "esc",
-    "pla",
-    "pta",
-    "supC",
-    "supG",
-    "age",
-    "coef",
-    "desc",
-    "map",
+    "clase", "uso", "bien", "prov", "pob", "cp", "addr", "fullAddr",
+    "tvia", "nvia", "num", "esc", "pla", "pta",
+    "supC", "supG", "age", "coef", "desc", "map",
   ];
   for (const k of stringKeys) {
     assignIfEmpty(k, partial[k] as string | undefined);
   }
   assignIfEmpty("sqm", partial.sqm ?? undefined);
 
-  const adm = next.adm;
-  if (partial.catRef && isEmptyStr(adm.cref)) adm.cref = partial.catRef;
-  if (partial.prov && isEmptyStr(adm.prov)) adm.prov = String(partial.prov).toUpperCase();
-  if (partial.pob && isEmptyStr(adm.city)) adm.city = partial.pob;
-  if (partial.cp && isEmptyStr(adm.zip)) adm.zip = partial.cp;
-  if (partial.fullAddr && isEmptyStr(adm.addr)) adm.addr = partial.fullAddr;
-
   if (partial.fullAddr && isEmptyStr(next.addr)) next.addr = partial.fullAddr;
-
   return next;
 }

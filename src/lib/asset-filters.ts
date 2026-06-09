@@ -39,8 +39,11 @@ function usableFieldValues(values: (string | undefined | null)[]): string[] {
     .filter((v) => v && v !== "—");
 }
 
+/** Categorías derivadas de las propiedades asociadas (CDR/NPL). */
 export function buildCatFilterOptions(assets: Asset[]): string[] {
-  return uniqueFilterOptions(assets.map((a) => a.cat));
+  const all: string[] = [];
+  for (const a of assets) for (const p of a.propiedades) all.push(p.categoria);
+  return uniqueFilterOptions(all);
 }
 
 export function buildProvFilterOptions(assets: Asset[]): string[] {
@@ -60,8 +63,11 @@ export function buildTipFilterOptions(assets: Asset[]): string[] {
   );
 }
 
+/** Fases derivadas de las propiedades asociadas. */
 export function buildFaseFilterOptions(assets: Asset[]): string[] {
-  return uniqueFilterOptions(assets.map((a) => a.fase));
+  const all: string[] = [];
+  for (const a of assets) for (const p of a.propiedades) all.push(p.faseInterna);
+  return uniqueFilterOptions(all);
 }
 
 export interface AssetListFilters {
@@ -74,10 +80,16 @@ export interface AssetListFilters {
 
 /** Misma lógica de filtrado que el listado principal de /admin. */
 export function assetMatchesListFilters(a: Asset, f: AssetListFilters): boolean {
-  if (f.cat && !matchesFilterValue(a.cat, f.cat)) return false;
+  if (f.cat) {
+    const matches = a.propiedades.some((p) => matchesFilterValue(p.categoria, f.cat!));
+    if (!matches) return false;
+  }
   if (f.prov && !matchesFilterValue(a.prov, f.prov)) return false;
   if (f.pob && !matchesFilterValue(a.pob, f.pob)) return false;
   if (f.tipo && (a.tip ?? "").toUpperCase() !== f.tipo) return false;
-  if (f.fase && !matchesFilterValue(a.fase, f.fase)) return false;
+  if (f.fase) {
+    const matches = a.propiedades.some((p) => matchesFilterValue(p.faseInterna, f.fase!));
+    if (!matches) return false;
+  }
   return true;
 }

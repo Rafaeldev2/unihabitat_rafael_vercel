@@ -150,14 +150,17 @@ function PortalContent() {
       })) return false;
       if (terms.length === 0) return true;
 
+      const propBlob = a.propiedades.map((p) => [
+        p.activoId, p.categoria, p.idPrinex, p.idProperty, p.collateralId,
+        p.mainLocalCcc14, p.portfolio,
+        ...(sensitiveVisible ? [p.propietario] : []),
+      ].join(" ")).join(" ");
       const searchable = [
         a.id, a.pob, a.prov, a.cp, a.ccaa,
         a.addr, a.fullAddr, a.tvia, a.nvia, a.num,
-        a.tip, a.cat, a.bien, a.clase, a.uso,
-        ...(sensitiveVisible ? [a.catRef, a.ownerName] : []),
+        a.tip, a.bien, a.clase, a.uso,
         a.precio != null ? String(a.precio) : "",
-        a.adm.aid, a.adm.id1, a.adm.con, a.adm.pip, a.adm.cref,
-        a.adm.car, a.adm.cli, a.adm.finca, a.adm.reg,
+        propBlob,
       ].filter(Boolean).join(" ").toLowerCase();
 
       return terms.every(t => searchable.includes(t));
@@ -197,14 +200,14 @@ function PortalContent() {
     setQ(""); setFCat(""); setFProv(""); setFPob(""); setFTipo(""); setFFase("");
   }, []);
 
-  // Group assets by contract ID for "X inmuebles asociados" badge
+  // Group assets by activo (loan) ID for "X inmuebles asociados" badge.
   const groupsByContract = useMemo(() => {
     const map: Record<string, string[]> = {};
     for (const a of publicAssets) {
-      const con = a.adm.con;
-      if (con && con !== "—" && con.trim()) {
-        if (!map[con]) map[con] = [];
-        map[con].push(a.id);
+      const activo = a.propiedades[0]?.activoId;
+      if (activo && activo !== "—" && activo.trim()) {
+        if (!map[activo]) map[activo] = [];
+        map[activo].push(a.id);
       }
     }
     return map;
@@ -369,13 +372,13 @@ function PortalContent() {
                 />
                 {/* NPL / REO badge */}
                 <div className="absolute left-3 top-3 flex gap-1.5">
-                  {a.cat && (
+                  {a.propiedades[0]?.categoria && (
                     <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                      a.cat === "NPL"
+                      a.propiedades[0].categoria === "NPL"
                         ? "bg-amber-500/90 text-white"
                         : "bg-emerald-600/90 text-white"
                     }`}>
-                      {a.cat}
+                      {a.propiedades[0].categoria}
                     </span>
                   )}
                   {a.tip && (
@@ -385,14 +388,19 @@ function PortalContent() {
                   )}
                 </div>
                 {/* Collateral group badge */}
-                {groupsByContract[a.adm.con]?.length > 1 && (
-                  <div className="absolute bottom-3 left-3">
-                    <span className="flex items-center gap-1 rounded-md bg-navy/85 px-2 py-1 text-[10px] font-semibold text-white backdrop-blur-sm">
-                      <Layers size={11} />
-                      {groupsByContract[a.adm.con].length} inmuebles asociados al {a.cat || "NPL"}
-                    </span>
-                  </div>
-                )}
+                {(() => {
+                  const activo = a.propiedades[0]?.activoId ?? "";
+                  const group = activo ? groupsByContract[activo] : undefined;
+                  if (!group || group.length <= 1) return null;
+                  return (
+                    <div className="absolute bottom-3 left-3">
+                      <span className="flex items-center gap-1 rounded-md bg-navy/85 px-2 py-1 text-[10px] font-semibold text-white backdrop-blur-sm">
+                        <Layers size={11} />
+                        {group.length} inmuebles asociados al {a.propiedades[0]?.categoria ?? "NPL"}
+                      </span>
+                    </div>
+                  );
+                })()}
                 {compradorId && (
                   <button
                     type="button"
@@ -421,10 +429,10 @@ function PortalContent() {
                       <Ruler size={11} /> {fmtM(a.sqm)}
                     </span>
                   )}
-                  {sensitiveVisible && a.catRef && (
+                  {sensitiveVisible && a.id && (
                     <span className="flex items-center gap-1 truncate">
                       <Tag size={10} />
-                      <span className="max-w-[120px] truncate font-mono text-[10px]">{a.catRef}</span>
+                      <span className="max-w-[120px] truncate font-mono text-[10px]">{a.id}</span>
                     </span>
                   )}
                 </div>

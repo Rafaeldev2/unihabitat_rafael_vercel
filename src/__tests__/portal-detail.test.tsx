@@ -23,36 +23,45 @@ vi.mock("leaflet", () => ({ default: {
   marker: vi.fn(() => ({ addTo: vi.fn(() => ({ bindPopup: vi.fn() })) })),
 } }));
 
-function makeAsset(overrides: Partial<Asset> = {}): Asset {
+function makeAsset(overrides: Partial<Asset> & { activoId?: string } = {}): Asset {
+  const { activoId, ...rest } = overrides;
+  const id = (rest.id as string | undefined) ?? "TEST-1";
   return {
-    id: "TEST-1",
-    cat: "NPL",
+    id,
     prov: "Málaga",
     pob: "Arriate",
     cp: "29350",
     addr: "C/ Test 1",
     tip: "Vivienda",
     tipC: "tp-viv",
-    fase: "Publicado",
-    faseC: "fp-pub",
     precio: 100000,
     fav: false,
     chk: false,
     sqm: 100,
     tvia: "CALLE", nvia: "TEST", num: "1", esc: "—", pla: "—", pta: "—",
-    map: null, lat: null, lng: null,
-    catRef: "—", clase: "URBANO", uso: "Residencial", bien: "VIVIENDA", supC: "100 m²", supG: "—", coef: "—", ccaa: "Andalucía",
+    map: "", lat: null, lng: null,
+    clase: "URBANO", uso: "Residencial", bien: "VIVIENDA",
+    supC: "100 m²", supG: "—", coef: "—", ccaa: "Andalucía",
     fullAddr: "C/ Test 1, Arriate",
     desc: "Activo de prueba",
-    ownerName: "—", ownerTel: "—", ownerMail: "—",
-    adm: { pip: "—", lin: "—", cat: "NPL", car: "—", cli: "—", id1: "—", con: "—", aid: "TEST-1",
-      loans: "—", tcol: "—", scol: "—", ccaa: "—", prov: "—", city: "—", zip: "—", addr: "—",
-      finca: "—", reg: "—", cref: "—", ejud: "—", ejmap: "—", eneg: "—", ob: "—", sub: "—",
-      deu: "—", cprev: "—", cpost: "—", dtot: "—", pest: "—", str: "—", liq: "—", avj: "—",
-      mmap: "—", buck: "—", lbuck: "—", smf: "—", rsub: "—", conn: "—", conn2: "—" },
     pub: true,
-    ...overrides,
-  } as Asset;
+    propiedades: [{
+      id: `${id}-P1`,
+      inmuebleId: id,
+      activoId: activoId ?? `ACT-${id}`,
+      categoria: "NPL",
+      propietario: "—", contacto: "—", telefono: "—", mail: "—",
+      faseInterna: "Publicado", faseC: "fp-pub",
+      proceso: "—", deuda: null, precioPublicacion: null, lien: "—",
+      collateralId: "", idPrinex: "", idPrinexCorto: "", idProperty: "", dataRef: "",
+      portfolio: "—", folder: "—", mainLocalCcc14: "—",
+      stageStatus: "—", stageSubstatus: "—", tipologia: "—",
+      juzgadoLarga: "—", codigoProcedimiento: "—", ultimaFaseCalculada: "—",
+      hitoJudicial: "—", fechaLanzamiento: "—", lanzamiento: "—", infoOcupantes: "—",
+      inscrito: "—", cargas: "—", registralmenteOk: "—",
+    }],
+    ...rest,
+  };
 }
 
 describe("PortalDetailClient", () => {
@@ -66,8 +75,8 @@ describe("PortalDetailClient", () => {
   });
 
   it("muestra la sección de colaterales cuando hay siblings", () => {
-    const sib = makeAsset({ id: "SIB-1", pob: "Otra Población", adm: { ...makeAsset().adm, con: "C-1" } });
-    const main = makeAsset({ adm: { ...makeAsset().adm, con: "C-1" } });
+    const sib = makeAsset({ id: "SIB-1", pob: "Otra Población", activoId: "ACT-COMMON" });
+    const main = makeAsset({ activoId: "ACT-COMMON" });
     render(<PortalDetailClient asset={main} siblings={[sib]} />);
     expect(screen.getByText(/Colaterales \(2\)/)).toBeInTheDocument();
   });

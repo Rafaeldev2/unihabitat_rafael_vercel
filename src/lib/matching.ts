@@ -27,7 +27,7 @@ export function scoreMatch(comprador: Comprador, asset: Asset): number {
   }
 
   if (intereses.includes("inversi") || intereses.includes("cartera") || intereses.includes("npl")) {
-    if (asset.cat === "NPL") score += 15;
+    if (asset.propiedades.some((p) => p.categoria === "NPL")) score += 15;
   }
 
   if (asset.precio != null && asset.precio <= presupuesto) {

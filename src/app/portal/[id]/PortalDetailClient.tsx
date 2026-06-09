@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { fmt, fmtM, shortAddr, formatFullAddress, getDescriptionText } from "@/lib/utils";
+import { fmt, fmtM, shortAddr, formatFullAddress, getDescriptionText, getCategoria } from "@/lib/utils";
 import type { Asset } from "@/lib/types";
 import Link from "next/link";
 import {
@@ -124,10 +124,10 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
             </button>
           ))}
           <div className="ml-auto flex items-center gap-2 py-2">
-            {asset.cat && (
+            {getCategoria(asset) !== "—" && (
               <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase ${
-                asset.cat === "NPL" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
-              }`}>{asset.cat}</span>
+                getCategoria(asset) === "NPL" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
+              }`}>{getCategoria(asset)}</span>
             )}
             <span className="text-sm font-bold text-navy">{asset.precio ? fmt(asset.precio) : "Haz tu Oferta"}</span>
           </div>
@@ -151,8 +151,8 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
             <span className="flex items-center gap-1"><MapPin size={12} /> {asset.pob}, {asset.prov}</span>
             {asset.tip && <span className="flex items-center gap-1"><Building size={12} /> {asset.tip}</span>}
             {asset.sqm && <span className="flex items-center gap-1"><Ruler size={12} /> {fmtM(asset.sqm)}</span>}
-            {sensitiveVisible && asset.catRef && (
-              <span className="flex items-center gap-1 font-mono"><Tag size={11} /> {asset.catRef}</span>
+            {sensitiveVisible && asset.id && (
+              <span className="flex items-center gap-1 font-mono"><Tag size={11} /> {asset.id}</span>
             )}
           </div>
         </div>
@@ -215,13 +215,13 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   <InfoPill icon={<Home size={13} />} label="Tipo inmueble" value={asset.bien} />
                   <InfoPill icon={<Building size={13} />} label="Tipología" value={asset.tip} />
-                  <InfoPill icon={<Tag size={13} />} label="Categoría" value={asset.cat} />
+                  <InfoPill icon={<Tag size={13} />} label="Categoría" value={getCategoria(asset)} />
                   <InfoPill icon={<Ruler size={13} />} label="Sup. Construida" value={asset.supC || fmtM(asset.sqm)} />
                   {asset.supG && <InfoPill icon={<Ruler size={13} />} label="Sup. Gráfica" value={asset.supG} />}
                   {asset.clase && <InfoPill icon={<Layers size={13} />} label="Clase" value={asset.clase} />}
                   {asset.uso && <InfoPill icon={<Building size={13} />} label="Uso" value={asset.uso} />}
-                  {sensitiveVisible && asset.catRef && (
-                    <InfoPill icon={<Tag size={13} />} label="Ref. Catastral" value={asset.catRef} mono />
+                  {sensitiveVisible && asset.id && (
+                    <InfoPill icon={<Tag size={13} />} label="Ref. Catastral" value={asset.id} mono />
                   )}
                   {asset.coef && <InfoPill icon={<Hash size={13} />} label="Coef. Participación" value={asset.coef} />}
                   {asset.age && <InfoPill icon={<CalendarDays size={13} />} label="Antigüedad" value={asset.age} />}
@@ -285,9 +285,9 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
                               </span>
                             )}
                           </div>
-                          {sensitiveVisible && s.catRef && (
+                          {sensitiveVisible && s.id && (
                             <div className="mt-1.5 inline-flex w-fit items-center gap-1 rounded border border-border px-2 py-0.5 font-mono text-[10px] text-muted">
-                              Ref: {s.catRef}
+                              Ref: {s.id}
                             </div>
                           )}
                         </div>
@@ -297,10 +297,10 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
                           ) : (
                             <span className="text-xs text-muted">Consultar</span>
                           )}
-                          {s.cat && (
+                          {getCategoria(s) !== "—" && (
                             <span className={`mt-1 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${
-                              s.cat === "NPL" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
-                            }`}>{s.cat}</span>
+                              getCategoria(s) === "NPL" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
+                            }`}>{getCategoria(s)}</span>
                           )}
                         </div>
                       </Link>
@@ -332,7 +332,7 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
                     ["Tipo", asset.tip],
                     ["Ubicación", `${asset.pob}, ${asset.prov}`],
                     ["Superficie", asset.supC || fmtM(asset.sqm)],
-                    ["Categoría", asset.cat],
+                    ["Categoría", getCategoria(asset)],
                   ].map(([l, v]) => (
                     <div key={l} className="flex items-center justify-between text-xs">
                       <span className="text-muted">{l}</span>
@@ -341,10 +341,10 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
                   ))}
                 </div>
 
-                {sensitiveVisible && asset.catRef && (
+                {sensitiveVisible && asset.id && (
                   <div className="mb-4 rounded-md bg-cream2 px-3 py-2">
                     <div className="text-[9px] font-semibold uppercase tracking-wider text-muted">Ref. Catastral</div>
-                    <div className="font-mono text-xs text-navy">{asset.catRef}</div>
+                    <div className="font-mono text-xs text-navy">{asset.id}</div>
                   </div>
                 )}
 

@@ -1,4 +1,4 @@
-import type { Asset, AssetAdmin, Comprador, Vendedor, Tarea } from "../types";
+import type { Asset, Propiedad, Comprador, Vendedor, Tarea } from "../types";
 
 /** Une mapas excel_raw al reimportar: por hoja, preferir celda no vacía del incoming. */
 export function mergeExcelRawMaps(
@@ -39,102 +39,168 @@ function finiteOrNull(v: unknown): number | null {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function rowToAsset(r: any): Asset {
-  const adm: AssetAdmin = {
-    pip: r.adm_pip ?? "—", lin: r.adm_lin ?? "—", cat: r.adm_cat ?? "—",
-    car: r.adm_car ?? "—", cli: r.adm_cli ?? "—", id1: r.adm_id1 ?? "—",
-    con: r.adm_con ?? "—", aid: r.adm_aid ?? "—", loans: r.adm_loans ?? "—",
-    tcol: r.adm_tcol ?? "—", scol: r.adm_scol ?? "—", ccaa: r.adm_ccaa ?? "—",
-    prov: r.adm_prov ?? "—", city: r.adm_city ?? "—", zip: r.adm_zip ?? "—",
-    addr: r.adm_addr ?? "—", finca: r.adm_finca ?? "—", reg: r.adm_reg ?? "—",
-    cref: r.adm_cref ?? "—", ejud: r.adm_ejud ?? "—", ejmap: r.adm_ejmap ?? "—",
-    eneg: r.adm_eneg ?? "—", ob: r.adm_ob ?? "—", sub: r.adm_sub ?? "—",
-    deu: r.adm_deu ?? "—", cprev: r.adm_cprev ?? "—", cpost: r.adm_cpost ?? "—",
-    dtot: r.adm_dtot ?? "—", pest: r.adm_pest ?? "—", str: r.adm_str ?? "—",
-    liq: r.adm_liq ?? "—", avj: r.adm_avj ?? "—", mmap: r.adm_mmap ?? "—",
-    buck: r.adm_buck ?? "—", lbuck: r.adm_lbuck ?? "—", smf: r.adm_smf ?? "—",
-    rsub: r.adm_rsub ?? "—", conn: r.adm_conn ?? "—", conn2: r.adm_conn2 ?? "—",
-  };
-
   return {
-    id: r.id, cat: r.cat ?? "—", prov: r.prov ?? "—", pob: r.pob ?? "—",
-    cp: r.cp ?? "—", addr: r.addr ?? "—", tip: r.tip ?? "Vivienda",
-    tipC: r.tip_c ?? "tp-viv", fase: r.fase ?? "Suspendido", faseC: r.fase_c ?? "fp-sus",
+    id: r.id, prov: r.prov ?? "—", pob: r.pob ?? "—", cp: r.cp ?? "—",
+    addr: r.addr ?? "—", tip: r.tip ?? "Vivienda", tipC: r.tip_c ?? "tp-viv",
     precio: r.precio != null ? Number(r.precio) : null,
     fav: r.fav ?? false, chk: false, sqm: r.sqm != null ? Number(r.sqm) : null,
     tvia: r.tvia ?? "—", nvia: r.nvia ?? "—", num: r.num ?? "—",
     esc: r.esc ?? "—", pla: r.pla ?? "—", pta: r.pta ?? "—",
-    map: r.map ?? "", catRef: r.cat_ref ?? "—",
+    map: r.map ?? "",
     clase: r.clase ?? "—", uso: r.uso ?? "—", bien: r.bien ?? "—",
     supC: r.sup_c ?? "—", supG: r.sup_g ?? "—", coef: r.coef ?? "—",
     ccaa: r.ccaa ?? "—", fullAddr: r.full_addr ?? "—", desc: r.descr ?? "—",
-    ownerName: r.owner_name ?? "—", ownerTel: r.owner_tel ?? "—",
-    ownerMail: r.owner_mail ?? "—", adm, pub: r.pub ?? false, age: r.age,
+    pub: r.pub ?? false, age: r.age,
     lat: finiteOrNull(r.lat),
     lng: finiteOrNull(r.lng),
+    propiedades: [],
+  };
+}
+
+/**
+ * Mapper para llamadas desde el portal público / cliente. Aquí el inmueble
+ * NO tiene PII propia — toda la PII vive en las propiedades. La sanitización
+ * de propiedades para público se hace en `rowToPropiedadPublic`.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToAssetPublic(r: any): Asset {
+  return rowToAsset(r);
+}
+
+export function assetToRow(a: Asset) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const row: Record<string, any> = {
+    id: a.id, prov: a.prov, pob: a.pob, cp: a.cp, addr: a.addr,
+    tip: a.tip, tip_c: a.tipC, precio: a.precio,
+    fav: a.fav, sqm: a.sqm, tvia: a.tvia, nvia: a.nvia, num: a.num,
+    esc: a.esc, pla: a.pla, pta: a.pta, map: a.map,
+    clase: a.clase, uso: a.uso, bien: a.bien, sup_c: a.supC, sup_g: a.supG,
+    coef: a.coef, ccaa: a.ccaa, full_addr: a.fullAddr, descr: a.desc,
+    pub: a.pub, age: a.age,
+  };
+  if (a.lat != null) row.lat = a.lat;
+  if (a.lng != null) row.lng = a.lng;
+  return row;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Propiedad (carga / lien / colateral)                              */
+/* ------------------------------------------------------------------ */
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function rowToPropiedad(r: any): Propiedad {
+  return {
+    id: r.id,
+    inmuebleId: r.inmueble_id,
+    activoId: r.activo_id,
+    categoria: (r.categoria === "NPL" ? "NPL" : "CDR") as "CDR" | "NPL",
+    propietario: r.propietario ?? "—",
+    contacto: r.contacto ?? "—",
+    telefono: r.telefono ?? "—",
+    mail: r.mail ?? "—",
+    faseInterna: r.fase_interna ?? "—",
+    faseC: r.fase_c ?? "fp-nd",
+    proceso: r.proceso ?? "—",
+    deuda: r.deuda != null ? Number(r.deuda) : null,
+    precioPublicacion: r.precio_publicacion != null ? Number(r.precio_publicacion) : null,
+    lien: r.lien ?? "—",
+    collateralId: r.collateral_id ?? "",
+    idPrinex: r.id_prinex ?? "",
+    idPrinexCorto: r.id_prinex_corto ?? "",
+    idProperty: r.id_property ?? "",
+    dataRef: r.data_ref ?? "",
+    portfolio: r.portfolio ?? "—",
+    folder: r.folder ?? "—",
+    mainLocalCcc14: r.main_local_ccc14 ?? "—",
+    stageStatus: r.stage_status ?? "—",
+    stageSubstatus: r.stage_substatus ?? "—",
+    tipologia: r.tipologia ?? "—",
+    juzgadoLarga: r.juzgado_larga ?? "—",
+    codigoProcedimiento: r.codigo_procedimiento ?? "—",
+    ultimaFaseCalculada: r.ultima_fase_calculada ?? "—",
+    hitoJudicial: r.hito_judicial ?? "—",
+    fechaLanzamiento: r.fecha_lanzamiento ?? "—",
+    lanzamiento: r.lanzamiento ?? "—",
+    infoOcupantes: r.info_ocupantes ?? "—",
+    inscrito: r.inscrito ?? "—",
+    cargas: r.cargas ?? "—",
+    registralmenteOk: r.registralmente_ok ?? "—",
     ...(r.excel_raw && typeof r.excel_raw === "object" && !Array.isArray(r.excel_raw)
       ? { excelRaw: r.excel_raw as Record<string, Record<string, string>> }
       : {}),
   };
 }
 
-/**
- * Mapper para chamadas vindas do portal público / cliente. Remove PII do
- * proprietário, dados administrativos internos (debtor/cartera/contrato) y el
- * payload bruto de Excel. `adm.con` se conserva porque el portal lo usa para
- * agrupar activos colaterales del mismo contrato.
- */
+/** Versión pública sin PII del propietario del préstamo. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function rowToAssetPublic(r: any): Asset {
-  const full = rowToAsset(r);
-  const sanitizedAdm: AssetAdmin = {
-    pip: "—", lin: "—", cat: "—", car: "—", cli: "—", id1: "—",
-    con: full.adm.con,
-    aid: "—", loans: "—", tcol: "—", scol: "—", ccaa: "—",
-    prov: "—", city: "—", zip: "—", addr: "—", finca: "—", reg: "—",
-    cref: "—", ejud: "—", ejmap: "—", eneg: "—", ob: "—", sub: "—",
-    deu: "—", cprev: "—", cpost: "—", dtot: "—", pest: "—", str: "—",
-    liq: "—", avj: "—", mmap: "—", buck: "—", lbuck: "—", smf: "—",
-    rsub: "—", conn: "—", conn2: "—",
-  };
+export function rowToPropiedadPublic(r: any): Propiedad {
+  const full = rowToPropiedad(r);
   const { excelRaw: _excelRaw, ...rest } = full;
   return {
     ...rest,
-    ownerName: "—",
-    ownerTel: "—",
-    ownerMail: "—",
-    adm: sanitizedAdm,
+    propietario: "—",
+    contacto: "—",
+    telefono: "—",
+    mail: "—",
   };
 }
 
-export function assetToRow(a: Asset) {
+export function propiedadToRow(p: Propiedad) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const row: Record<string, any> = {
-    id: a.id, cat: a.cat, prov: a.prov, pob: a.pob, cp: a.cp, addr: a.addr,
-    tip: a.tip, tip_c: a.tipC, fase: a.fase, fase_c: a.faseC, precio: a.precio,
-    fav: a.fav, sqm: a.sqm, tvia: a.tvia, nvia: a.nvia, num: a.num,
-    esc: a.esc, pla: a.pla, pta: a.pta, map: a.map, cat_ref: a.catRef,
-    clase: a.clase, uso: a.uso, bien: a.bien, sup_c: a.supC, sup_g: a.supG,
-    coef: a.coef, ccaa: a.ccaa, full_addr: a.fullAddr, descr: a.desc,
-    owner_name: a.ownerName, owner_tel: a.ownerTel, owner_mail: a.ownerMail,
-    pub: a.pub, age: a.age,
-    adm_pip: a.adm.pip, adm_lin: a.adm.lin, adm_cat: a.adm.cat,
-    adm_car: a.adm.car, adm_cli: a.adm.cli, adm_id1: a.adm.id1,
-    adm_con: a.adm.con, adm_aid: a.adm.aid, adm_loans: a.adm.loans,
-    adm_tcol: a.adm.tcol, adm_scol: a.adm.scol, adm_ccaa: a.adm.ccaa,
-    adm_prov: a.adm.prov, adm_city: a.adm.city, adm_zip: a.adm.zip,
-    adm_addr: a.adm.addr, adm_finca: a.adm.finca, adm_reg: a.adm.reg,
-    adm_cref: a.adm.cref, adm_ejud: a.adm.ejud, adm_ejmap: a.adm.ejmap,
-    adm_eneg: a.adm.eneg, adm_ob: a.adm.ob, adm_sub: a.adm.sub,
-    adm_deu: a.adm.deu, adm_cprev: a.adm.cprev, adm_cpost: a.adm.cpost,
-    adm_dtot: a.adm.dtot, adm_pest: a.adm.pest, adm_str: a.adm.str,
-    adm_liq: a.adm.liq, adm_avj: a.adm.avj, adm_mmap: a.adm.mmap,
-    adm_buck: a.adm.buck, adm_lbuck: a.adm.lbuck, adm_smf: a.adm.smf,
-    adm_rsub: a.adm.rsub, adm_conn: a.adm.conn, adm_conn2: a.adm.conn2,
+    id: p.id,
+    inmueble_id: p.inmuebleId,
+    activo_id: p.activoId,
+    categoria: p.categoria,
+    propietario: p.propietario,
+    contacto: p.contacto,
+    telefono: p.telefono,
+    mail: p.mail,
+    fase_interna: p.faseInterna,
+    fase_c: p.faseC,
+    proceso: p.proceso,
+    deuda: p.deuda,
+    precio_publicacion: p.precioPublicacion,
+    lien: p.lien,
+    collateral_id: p.collateralId || null,
+    id_prinex: p.idPrinex || null,
+    id_prinex_corto: p.idPrinexCorto || null,
+    id_property: p.idProperty || null,
+    data_ref: p.dataRef || null,
+    portfolio: p.portfolio,
+    folder: p.folder,
+    main_local_ccc14: p.mainLocalCcc14,
+    stage_status: p.stageStatus,
+    stage_substatus: p.stageSubstatus,
+    tipologia: p.tipologia,
+    juzgado_larga: p.juzgadoLarga,
+    codigo_procedimiento: p.codigoProcedimiento,
+    ultima_fase_calculada: p.ultimaFaseCalculada,
+    hito_judicial: p.hitoJudicial,
+    fecha_lanzamiento: p.fechaLanzamiento,
+    lanzamiento: p.lanzamiento,
+    info_ocupantes: p.infoOcupantes,
+    inscrito: p.inscrito,
+    cargas: p.cargas,
+    registralmente_ok: p.registralmenteOk,
   };
-  if (a.lat != null) row.lat = a.lat;
-  if (a.lng != null) row.lng = a.lng;
-  if (a.excelRaw && Object.keys(a.excelRaw).length > 0) row.excel_raw = a.excelRaw;
+  if (p.excelRaw && Object.keys(p.excelRaw).length > 0) row.excel_raw = p.excelRaw;
   return row;
+}
+
+/**
+ * Adjunta las propiedades a sus inmuebles. Útil después de fetchear
+ * `assets` y `propiedades` por separado: `attachPropiedades(assets, props)`
+ * llena `asset.propiedades[]` con las que tengan `inmueble_id = asset.id`.
+ */
+export function attachPropiedades(assets: Asset[], propiedades: Propiedad[]): Asset[] {
+  const byInmueble = new Map<string, Propiedad[]>();
+  for (const p of propiedades) {
+    const list = byInmueble.get(p.inmuebleId);
+    if (list) list.push(p);
+    else byInmueble.set(p.inmuebleId, [p]);
+  }
+  return assets.map((a) => ({ ...a, propiedades: byInmueble.get(a.id) ?? [] }));
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

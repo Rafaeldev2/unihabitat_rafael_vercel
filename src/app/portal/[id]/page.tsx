@@ -22,13 +22,14 @@ export default async function PortalDetailPage({ params }: { params: Promise<{ i
   }
 
   let siblings: Awaited<ReturnType<typeof fetchPublicAssets>> = [];
-  const con = asset.adm.con;
-  if (con && con !== "—" && con.trim()) {
+  const activoId = asset.propiedades[0]?.activoId ?? "";
+  if (activoId && activoId !== "—" && activoId.trim()) {
     try {
       const all = await fetchPublicAssets();
-      siblings = all.filter(a => a.id !== asset.id && a.adm.con === con);
+      siblings = all.filter(
+        (a) => a.id !== asset.id && a.propiedades.some((p) => p.activoId === activoId),
+      );
     } catch {
-      // El listado de colaterales es secundario: si falla, seguimos sin él.
       siblings = [];
     }
   }

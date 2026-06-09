@@ -19,7 +19,10 @@ import { InteractiveMap } from "@/components/InteractiveMap";
 import { EditableSection, type FieldDef } from "@/components/EditableSection";
 import { EditableExcelRawSection } from "@/components/EditableExcelRawSection";
 import { listEmptyExcelFields } from "@/lib/excel-raw-utils";
-import { getDescriptionText } from "@/lib/utils";
+import {
+  getDescriptionText, getCategoria, getFaseInterna, getPropietario, getOwnerTel,
+  getOwnerMail, getDeudaTotal,
+} from "@/lib/utils";
 import { toast } from "@/lib/toast";
 
 const tabs = [
@@ -131,7 +134,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
 
       {/* Sub-bar */}
       <div className="flex h-11 items-center gap-3 border-b border-border bg-white px-5">
-        {asset.cat !== "—" && <span className="rounded-md bg-gold/10 px-2 py-0.5 text-[10px] font-semibold text-gold">{asset.cat}</span>}
+        {getCategoria(asset) !== "—" && <span className="rounded-md bg-gold/10 px-2 py-0.5 text-[10px] font-semibold text-gold">{getCategoria(asset)}</span>}
         <span className="flex-1 truncate text-sm text-navy">{asset.addr}</span>
         <div className="flex items-center gap-2">
           <button
@@ -319,7 +322,8 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
   const [catastroRefreshing, setCatastroRefreshing] = useState(false);
   const [catastroMsg, setCatastroMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const hasCatRef = asset.catRef && asset.catRef !== "—";
+  // El id del inmueble ES la Referencia catastral en el nuevo modelo.
+  const hasCatRef = !!asset.id && asset.id !== "—";
 
   const precioFields: FieldDef[] = useMemo(
     () => [
@@ -352,7 +356,7 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
   };
 
   const catastroFields: FieldDef[] = [
-    { label: "Referencia", dbCol: "cat_ref", value: asset.catRef, mono: true },
+    { label: "Referencia", dbCol: "id", value: asset.id, mono: true },
     { label: "Clase", dbCol: "clase", value: asset.clase },
     { label: "Uso", dbCol: "uso", value: asset.uso },
     { label: "Bien", dbCol: "bien", value: asset.bien },
@@ -761,7 +765,11 @@ function TabAgentes({ asset, assetId, currentUser }: { asset: Asset; assetId: st
       <div className="mb-4 rounded-lg bg-gradient-to-br from-navy to-navy3 p-4">
         <div className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-white/30">Resumen del Activo</div>
         <div className="grid grid-cols-3 gap-3">
-          {[["Categoría", asset.cat], ["Fase Judicial", asset.adm.ejmap || "—"], ["Deuda / Precio", asset.adm.deu || "—"]].map(([l, v]) => (
+          {[
+            ["Categoría", getCategoria(asset)],
+            ["Fase Judicial", asset.propiedades[0]?.hitoJudicial || asset.propiedades[0]?.ultimaFaseCalculada || "—"],
+            ["Deuda total", (() => { const d = getDeudaTotal(asset); return d != null ? d.toLocaleString("es-ES") + " €" : "—"; })()],
+          ].map(([l, v]) => (
             <div key={l}><div className="text-[10px] font-medium uppercase tracking-wider text-muted">{l}</div><div className="text-sm text-white/80">{v}</div></div>
           ))}
         </div>
@@ -983,41 +991,12 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset }: { ass
   const [notes, setNotes] = useState<NotaRow[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(true);
 
-  const [ownerName, setOwnerName] = useState(asset.ownerName === "—" ? "" : asset.ownerName);
-  const [ownerTel, setOwnerTel] = useState(asset.ownerTel === "—" ? "" : asset.ownerTel);
-  const [ownerMail, setOwnerMail] = useState(asset.ownerMail === "—" ? "" : asset.ownerMail);
-  const [ownerSaving, setOwnerSaving] = useState(false);
-  const [ownerSaved, setOwnerSaved] = useState(false);
-
-  useEffect(() => {
-    setOwnerName(asset.ownerName === "—" ? "" : asset.ownerName);
-    setOwnerTel(asset.ownerTel === "—" ? "" : asset.ownerTel);
-    setOwnerMail(asset.ownerMail === "—" ? "" : asset.ownerMail);
-  }, [asset.ownerName, asset.ownerTel, asset.ownerMail]);
-
-  const ownerDirty =
-    (ownerName || "—") !== asset.ownerName ||
-    (ownerTel || "—") !== asset.ownerTel ||
-    (ownerMail || "—") !== asset.ownerMail;
-
-  const handleSaveOwner = async () => {
-    setOwnerSaving(true);
-    try {
-      await updateAssetFields(assetId, {
-        owner_name: ownerName.trim() || "—",
-        owner_tel: ownerTel.trim() || "—",
-        owner_mail: ownerMail.trim() || "—",
-      });
-      setOwnerSaved(true);
-      setTimeout(() => setOwnerSaved(false), 2000);
-      reloadAsset();
-      toast.success("Propietario guardado");
-    } catch (err) {
-      toast.error("Error al guardar el propietario", { description: err instanceof Error ? err.message : String(err) });
-    } finally {
-      setOwnerSaving(false);
-    }
-  };
+  // El propietario vive en la PROPIEDAD (lien) — no en el inmueble. Mostramos
+  // los datos de la primera propiedad asociada como referencia. La edición
+  // por propiedad se hará desde su panel propio en una iteración futura.
+  const ownerName = getPropietario(asset);
+  const ownerTel = getOwnerTel(asset);
+  const ownerMail = getOwnerMail(asset);
 
   useEffect(() => {
     loadAdminNotes();
@@ -1053,50 +1032,35 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset }: { ass
       setSaving(false);
     }
   };
-  const d = asset.adm;
-  const provFields: FieldDef[] = [
-    { label: "ID Pipedrive", dbCol: "adm_pip", value: d.pip },
-    { label: "ID LinkedIn", dbCol: "adm_lin", value: d.lin },
-    { label: "Categoría", dbCol: "adm_cat", value: d.cat },
-    { label: "Cartera", dbCol: "adm_car", value: d.car },
-    { label: "Cliente", dbCol: "adm_cli", value: d.cli },
-    { label: "ID1", dbCol: "adm_id1", value: d.id1, mono: true },
-    { label: "Contract ID", dbCol: "adm_con", value: d.con, mono: true },
-    { label: "Asset ID", dbCol: "adm_aid", value: d.aid },
-    { label: "Nº Loans", dbCol: "adm_loans", value: d.loans },
-    { label: "Type of Collateral", dbCol: "adm_tcol", value: d.tcol },
-    { label: "Subtype Collateral", dbCol: "adm_scol", value: d.scol },
-    { label: "CCAA", dbCol: "adm_ccaa", value: d.ccaa },
-    { label: "Provincia", dbCol: "adm_prov", value: d.prov },
-    { label: "Municipio", dbCol: "adm_city", value: d.city },
-    { label: "ZIP Code", dbCol: "adm_zip", value: d.zip, mono: true },
-    { label: "Nº Finca", dbCol: "adm_finca", value: d.finca },
-    { label: "Nº Registro", dbCol: "adm_reg", value: d.reg },
-    { label: "Ref. Catastral", dbCol: "adm_cref", value: d.cref, mono: true },
-    { label: "Estado Judicial", dbCol: "adm_ejud", value: d.ejud },
-    { label: "Estado Jud. Mapeo", dbCol: "adm_ejmap", value: d.ejmap },
-    { label: "Estado Negociación", dbCol: "adm_eneg", value: d.eneg },
-    { label: "OB", dbCol: "adm_ob", value: d.ob },
-    { label: "Tipo Subasta", dbCol: "adm_sub", value: d.sub },
-    { label: "DEU_TOT", dbCol: "adm_deu", value: d.deu },
-    { label: "Cargas Previas", dbCol: "adm_cprev", value: d.cprev },
-    { label: "Cargas Post.", dbCol: "adm_cpost", value: d.cpost },
-    { label: "Deuda Total", dbCol: "adm_dtot", value: d.dtot },
-    { label: "Precio Estimado", dbCol: "adm_pest", value: d.pest },
-    { label: "Main Strategy", dbCol: "adm_str", value: d.str },
-    { label: "Liquidez", dbCol: "adm_liq", value: d.liq },
-    { label: "Avance Judicial", dbCol: "adm_avj", value: d.avj },
-    { label: "Mapeo Municipios", dbCol: "adm_mmap", value: d.mmap },
-    { label: "Bucket Liquidez", dbCol: "adm_buck", value: d.buck },
-    { label: "Localiz. Buckets", dbCol: "adm_lbuck", value: d.lbuck },
-    { label: "Status MF", dbCol: "adm_smf", value: d.smf },
-    { label: "Resultado Subasta", dbCol: "adm_rsub", value: d.rsub },
-  ];
+  // En el modelo nuevo, los datos administrativos viven en la primera propiedad.
+  // Aquí solo los listamos como referencia (no editable desde el inmueble).
+  const p = asset.propiedades[0];
+  const provFields: FieldDef[] = p ? [
+    { label: "Categoría", dbCol: "categoria", value: p.categoria },
+    { label: "ID Activo (préstamo)", dbCol: "activo_id", value: p.activoId, mono: true },
+    { label: "Collateral ID", dbCol: "collateral_id", value: p.collateralId || "—", mono: true },
+    { label: "ID Prinex", dbCol: "id_prinex", value: p.idPrinex || "—", mono: true },
+    { label: "ID Property (CDR)", dbCol: "id_property", value: p.idProperty || "—" },
+    { label: "Portfolio", dbCol: "portfolio", value: p.portfolio },
+    { label: "Folder", dbCol: "folder", value: p.folder },
+    { label: "Stage Status", dbCol: "stage_status", value: p.stageStatus },
+    { label: "Stage SubStatus", dbCol: "stage_substatus", value: p.stageSubstatus },
+    { label: "Lien", dbCol: "lien", value: p.lien },
+    { label: "Deuda", dbCol: "deuda", value: p.deuda != null ? p.deuda.toLocaleString("es-ES") + " €" : "—" },
+    { label: "Precio Publicación", dbCol: "precio_publicacion", value: p.precioPublicacion != null ? p.precioPublicacion.toLocaleString("es-ES") + " €" : "—" },
+    { label: "Fase Interna", dbCol: "fase_interna", value: p.faseInterna },
+    { label: "Proceso", dbCol: "proceso", value: p.proceso, colSpan: 2 },
+    { label: "Juzgado Larga", dbCol: "juzgado_larga", value: p.juzgadoLarga, colSpan: 2 },
+    { label: "Hito Judicial (CDR)", dbCol: "hito_judicial", value: p.hitoJudicial },
+    { label: "Fecha Lanzamiento", dbCol: "fecha_lanzamiento", value: p.fechaLanzamiento },
+    { label: "Info Ocupantes", dbCol: "info_ocupantes", value: p.infoOcupantes, colSpan: 2 },
+  ] : [];
 
+  const propExcelRaw = p?.excelRaw;
   const hasDynamicExcel =
-    !!asset.excelRaw &&
-    Object.keys(asset.excelRaw).length > 0 &&
-    Object.values(asset.excelRaw).some((cols) => cols && Object.keys(cols).length > 0);
+    !!propExcelRaw &&
+    Object.keys(propExcelRaw).length > 0 &&
+    Object.values(propExcelRaw).some((cols) => cols && Object.keys(cols).length > 0);
 
   return (
     <>
@@ -1120,66 +1084,43 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset }: { ass
             <option>Seguimiento</option><option>Info. Solicitada</option><option>Reservado</option><option>No Disponible</option>
           </select>
         </SectionCard>
-        <SectionCard title="Propietario / Vendedor">
+        <SectionCard title="Propietario / Vendedor (primera propiedad)">
+          <p className="mb-2 text-[10px] text-muted">
+            Datos derivados de la primera carga/propiedad asociada al inmueble.
+            La edición por propiedad se hará desde su propio panel.
+          </p>
           <div className="mb-3 grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-0.5">
               <label className="text-[9px] font-semibold uppercase tracking-wider text-muted">Nombre</label>
-              <input
-                value={ownerName}
-                onChange={e => setOwnerName(e.target.value)}
-                placeholder="Nombre del propietario"
-                className="rounded-md border border-border bg-cream2 px-2.5 py-[7px] text-xs text-text outline-none transition-all placeholder:text-muted/50 focus:border-navy focus:bg-white"
-              />
+              <div className="rounded-md border border-border bg-cream2 px-2.5 py-[7px] text-xs text-text">{ownerName}</div>
             </div>
             <div className="flex flex-col gap-0.5">
               <label className="text-[9px] font-semibold uppercase tracking-wider text-muted">Teléfono</label>
-              <input
-                value={ownerTel}
-                onChange={e => setOwnerTel(e.target.value)}
-                placeholder="+34 600 000 000"
-                className="rounded-md border border-border bg-cream2 px-2.5 py-[7px] text-xs text-text outline-none transition-all placeholder:text-muted/50 focus:border-navy focus:bg-white"
-              />
+              <div className="rounded-md border border-border bg-cream2 px-2.5 py-[7px] text-xs text-text">{ownerTel}</div>
             </div>
             <div className="col-span-2 flex flex-col gap-0.5">
               <label className="text-[9px] font-semibold uppercase tracking-wider text-muted">Email</label>
-              <input
-                value={ownerMail}
-                onChange={e => setOwnerMail(e.target.value)}
-                placeholder="propietario@email.com"
-                type="email"
-                className="rounded-md border border-border bg-cream2 px-2.5 py-[7px] text-xs text-text outline-none transition-all placeholder:text-muted/50 focus:border-navy focus:bg-white"
-              />
+              <div className="rounded-md border border-border bg-cream2 px-2.5 py-[7px] text-xs text-text">{ownerMail}</div>
             </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              disabled={!ownerDirty || ownerSaving}
-              onClick={handleSaveOwner}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-navy py-2 text-xs font-medium text-white transition-colors hover:bg-navy3 disabled:opacity-40"
+          {ownerMail && ownerMail !== "—" && (
+            <a
+              href={`mailto:${ownerMail}`}
+              className="flex w-full items-center justify-center gap-1.5 rounded-md bg-gold px-4 py-2 text-xs font-medium text-white hover:bg-gold2"
             >
-              {ownerSaving ? <Loader2 size={13} className="animate-spin" /> : ownerSaved ? <CheckCircle2 size={13} /> : <Save size={13} />}
-              {ownerSaving ? "Guardando..." : ownerSaved ? "Guardado" : "Guardar"}
-            </button>
-            {ownerMail && ownerMail !== "—" && (
-              <a
-                href={`mailto:${ownerMail}`}
-                className="flex items-center justify-center gap-1.5 rounded-md bg-gold px-4 py-2 text-xs font-medium text-white hover:bg-gold2"
-              >
-                <Mail size={13} /> Enviar correo
-              </a>
-            )}
-          </div>
+              <Mail size={13} /> Enviar correo
+            </a>
+          )}
         </SectionCard>
       </div>
 
       <div className="mb-4">
-        {hasDynamicExcel && asset.excelRaw ? (
+        {hasDynamicExcel && propExcelRaw ? (
           <>
-            <ExcelEmptyFieldsBanner excelRaw={asset.excelRaw} />
+            <ExcelEmptyFieldsBanner excelRaw={propExcelRaw} />
             <EditableExcelRawSection
-              assetId={assetId}
-              excelRaw={asset.excelRaw}
+              assetId={p?.id ?? ""}
+              excelRaw={propExcelRaw}
               cols={4}
               onSaved={reloadAsset}
             />
@@ -1192,15 +1133,11 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset }: { ass
               <span className="font-mono text-[11px]">supabase-migration-excel-raw.sql</span> del repositorio.
             </p>
             <EditableSection
-              title="Datos Completos del Proveedor (campos fijos)"
+              title="Datos administrativos (primera propiedad)"
               assetId={assetId}
               cols={4}
               onSaved={reloadAsset}
-              fields={[
-                ...provFields,
-                { label: "Asset Address", dbCol: "adm_addr", value: d.addr || "—", mono: true, colSpan: 2 },
-                { label: "Conn — Contract — Asset", dbCol: "adm_conn2", value: d.conn2 || "—", mono: true, colSpan: 2 },
-              ]}
+              fields={provFields}
             />
           </>
         )}

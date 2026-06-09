@@ -9,11 +9,10 @@ import { defaultVendorPermissions } from "./permissions";
 // los datos llegan de Supabase. Vendedores y tareas conservan su semilla
 // mientras no estén dentro del alcance de esta corrección.
 import { tareasData } from "./mock-data";
-import { fetchAssets } from "@/app/actions/assets";
+import { fetchAssets, fetchPropiedades } from "@/app/actions/assets";
 import { fetchCompradores } from "@/app/actions/compradores";
 import { fetchVendedores } from "@/app/actions/vendedores";
-import { backfillMissingMaps } from "@/app/actions/maps";
-import { shouldBackfillMapFromAddress } from "@/lib/map-default";
+import { attachPropiedades } from "@/lib/supabase/db";
 import { getDevAuthFromDocument } from "@/lib/auth-helpers";
 import { fetchCurrentSession } from "@/app/actions/session";
 import { fetchVendorPermissions, fetchVendorAssignedAssetIds, fetchVendorAssignedCompradorIds } from "@/app/actions/permissions";
@@ -89,55 +88,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const assetsLoadTokenRef = useRef(0);
   const compradoresLoadTokenRef = useRef(0);
   const vendedoresLoadTokenRef = useRef(0);
-  const BACKFILL_CHUNK = 100;
 
   const loadAssetsFromServer = useCallback(async () => {
     const token = ++assetsLoadTokenRef.current;
     setState((prev) => ({ ...prev, assetsLoading: true, assetsError: null }));
     try {
-      let rows = await fetchAssets();
+      const [inmuebles, propiedades] = await Promise.all([
+        fetchAssets(),
+        fetchPropiedades(),
+      ]);
       if (token !== assetsLoadTokenRef.current) return;
 
-      // Antes existía un early-return cuando rows.length === 0 que dejaba los
-      // mocks visibles. Eso enmascaraba fallos reales del fetch (BD vacía vs
-      // BD inalcanzable se veían igual). Ahora siempre escribimos el resultado.
-      // Backfill defensivo: solo para filas SIN coordenadas y con dirección
-      // utilizable. La importación inicial ya geocodifica server-side, así
-      // que aquí solo recuperamos casos antiguos o errores transitorios.
-      const GEOAPIFY_KEY = process.env.NEXT_PUBLIC_GEOAPIFY_KEY;
-      if (GEOAPIFY_KEY && rows.length > 0) {
-        const needMap = rows.filter(
-          (a) => a.lat == null && a.lng == null && shouldBackfillMapFromAddress(a),
-        );
-        for (let i = 0; i < needMap.length; i += BACKFILL_CHUNK) {
-          if (token !== assetsLoadTokenRef.current) return;
-          const chunk = needMap.slice(i, i + BACKFILL_CHUNK);
-          const stubs = chunk.map((a) => ({
-            id: a.id,
-            addr: a.addr,
-            pob: a.pob,
-            prov: a.prov,
-            cp: a.cp,
-          }));
-          try {
-            const { hits } = await backfillMissingMaps(stubs);
-            rows = rows.map((a) => {
-              const h = hits[a.id];
-              if (!h) return a;
-              return { ...a, map: h.map, lat: h.lat, lng: h.lng };
-            });
-          } catch {
-            /* chunk sin backfill */
-          }
-        }
-      }
-
-      if (token !== assetsLoadTokenRef.current) return;
+      const rows = attachPropiedades(inmuebles, propiedades);
       setState((prev) => ({ ...prev, assets: rows, assetsLoading: false, assetsError: null }));
     } catch (err) {
-      // Si la BD falla, NO mantenemos los mocks: es engañoso. Vaciamos la
-      // lista, registramos el error y lo exponemos al UI vía `assetsError`.
-      console.error("[loadAssetsFromServer] fetchAssets falló:", err);
+      console.error("[loadAssetsFromServer] falló:", err);
       if (token === assetsLoadTokenRef.current) {
         const msg = err instanceof Error ? err.message : "No se pudieron cargar los activos";
         setState((prev) => ({ ...prev, assets: [], assetsLoading: false, assetsError: msg }));
@@ -315,7 +280,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const togglePub = useCallback((id: string) => {
     setState(prev => ({
       ...prev,
-      assets: prev.assets.map(a => a.id === id ? { ...a, pub: !a.pub, fase: !a.pub ? "Publicado" : "Suspendido", faseC: !a.pub ? "fp-pub" : "fp-sus" } : a),
+      assets: prev.assets.map(a => a.id === id ? { ...a, pub: !a.pub } : a),
     }));
   }, []);
 

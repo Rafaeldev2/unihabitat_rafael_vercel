@@ -1,58 +1,88 @@
-export interface AssetAdmin {
-  pip: string;
-  lin: string;
-  cat: string;
-  car: string;
-  cli: string;
-  id1: string;
-  con: string;
-  aid: string;
-  loans: string;
-  tcol: string;
-  scol: string;
-  ccaa: string;
-  prov: string;
-  city: string;
-  zip: string;
-  addr: string;
-  finca: string;
-  reg: string;
-  cref: string;
-  ejud: string;
-  ejmap: string;
-  eneg: string;
-  ob: string;
-  sub: string;
-  deu: string;
-  cprev: string;
-  cpost: string;
-  dtot: string;
-  pest: string;
-  str: string;
-  liq: string;
-  avj: string;
-  mmap: string;
-  buck: string;
-  lbuck: string;
-  smf: string;
-  rsub: string;
-  conn: string;
-  conn2: string;
+/* ============================================================
+ * PropCRM — Modelo de dominio
+ * ============================================================
+ *
+ * Tras la migración inmuebles ↔ propiedades:
+ *   - `Asset`     representa el INMUEBLE FÍSICO (1 por Referencia catastral).
+ *                 Es lo que se vende, lista en el portal, oferta y favoritea.
+ *   - `Propiedad` representa una CARGA / lien / colateral. N por inmueble.
+ *                 Contiene propietario del préstamo, deuda, fase judicial,
+ *                 identificadores del sistema origen y datos contables.
+ *
+ * Cada Asset trae embebido su array `propiedades`. Para campos que antes
+ * vivían en `asset.adm.*` / `asset.fase` / `asset.ownerName`, leer desde
+ * `asset.propiedades[0]?.<campo>` o iterar todas las cargas.
+ */
+
+export interface Propiedad {
+  /** PK — Collateral ID (NPL) / ID Property (CDR) / hash determinístico. */
+  id: string;
+  /** FK al inmueble físico (= Asset.id = Referencia catastral). */
+  inmuebleId: string;
+  /** Agrupador de propiedades del mismo activo/préstamo (col "ID1" del Excel). */
+  activoId: string;
+  /** Categoría del producto (col "Categoria"). */
+  categoria: "CDR" | "NPL";
+
+  // Comerciales — propietario del préstamo (col 0-3 del Excel).
+  propietario: string;
+  contacto: string;
+  telefono: string;
+  mail: string;
+
+  // Contables / judicial básico (col 6-7, 30 del Excel).
+  faseInterna: string;
+  faseC: string;
+  proceso: string;
+  deuda: number | null;
+  precioPublicacion: number | null;
+  lien: string;
+
+  // Identificadores del sistema origen.
+  collateralId: string;
+  idPrinex: string;
+  idPrinexCorto: string;
+  idProperty: string;
+  dataRef: string;
+
+  // Portafolio / clasificación.
+  portfolio: string;
+  folder: string;
+  mainLocalCcc14: string;
+  stageStatus: string;
+  stageSubstatus: string;
+  tipologia: string;
+
+  // Judicial extendido.
+  juzgadoLarga: string;
+  codigoProcedimiento: string;
+  ultimaFaseCalculada: string;
+  hitoJudicial: string;
+  fechaLanzamiento: string;
+  lanzamiento: string;
+  infoOcupantes: string;
+
+  // Estado registral (CDR).
+  inscrito: string;
+  cargas: string;
+  registralmenteOk: string;
+
+  /** Fila Excel en bruto: { "Hoja2": { "Header": "Value", ... } }. */
+  excelRaw?: Record<string, Record<string, string>>;
 }
 
 export interface Asset {
+  /** PK = Referencia catastral (string como "6516208CF2461N0003WZ"). */
   id: string;
-  cat: string;
   prov: string;
   pob: string;
   cp: string;
   addr: string;
   tip: string;
   tipC: string;
-  fase: string;
-  faseC: string;
   precio: number | null;
   fav: boolean;
+  /** Flag local de UI para checks (no persiste). */
   chk: boolean;
   sqm: number | null;
   tvia: string;
@@ -62,7 +92,6 @@ export interface Asset {
   pla: string;
   pta: string;
   map: string;
-  catRef: string;
   clase: string;
   uso: string;
   bien: string;
@@ -72,16 +101,13 @@ export interface Asset {
   ccaa: string;
   fullAddr: string;
   desc: string;
-  ownerName: string;
-  ownerTel: string;
-  ownerMail: string;
-  adm: AssetAdmin;
-  /** Por hoja de Excel: cabeceras → valores en bruto (tras importar). */
-  excelRaw?: Record<string, Record<string, string>>;
   pub: boolean;
   age?: string;
   lat?: number | null;
   lng?: number | null;
+  /** Cargas / liens / colaterales asociados al inmueble. Puede venir vacío
+   *  si el inmueble no tiene propiedades cargadas (ej.: registro huérfano). */
+  propiedades: Propiedad[];
 }
 
 export interface Comprador {

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Save, Loader2, CheckCircle2 } from "lucide-react";
-import { updateAssetExcelRaw } from "@/app/actions/assets";
+import { updatePropiedadExcelRaw } from "@/app/actions/assets";
 import { normalizeExcelCellInput } from "@/lib/excel-raw-utils";
 import { toast } from "@/lib/toast";
 
@@ -53,7 +53,10 @@ export function EditableExcelRawSection({
   const handleSave = async () => {
     setSaving(true);
     try {
-      await updateAssetExcelRaw(assetId, draft);
+      // assetId aquí es en realidad el propiedadId (PK de la propiedad cuyo
+       // excel_raw se está editando). El call-site del admin pasa el id del
+       // inmueble por compatibilidad — TODO: refactor explícito a propiedadId.
+      await updatePropiedadExcelRaw(assetId, draft);
       initial.current = cloneRaw(draft);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);

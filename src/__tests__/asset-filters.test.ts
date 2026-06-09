@@ -23,18 +23,21 @@ const SHARED_FILTER_SYMBOLS = [
   "assetMatchesListFilters",
 ] as const;
 
-function makeAsset(overrides: Partial<Asset> = {}): Asset {
-  return {
+interface FixtureOverrides extends Partial<Asset> {
+  cat?: "CDR" | "NPL" | "—";
+  fase?: string;
+}
+
+function makeAsset(overrides: FixtureOverrides = {}): Asset {
+  const { cat, fase, ...rest } = overrides;
+  const base: Asset = {
     id: "ASSET-1",
-    cat: "NPL",
     prov: "Alicante",
     pob: "Alicante",
     cp: "03001",
     addr: "C/ Test",
     tip: "PISO",
     tipC: "tp-piso",
-    fase: "Publicado",
-    faseC: "fp-pub",
     precio: 100000,
     fav: false,
     chk: false,
@@ -45,10 +48,9 @@ function makeAsset(overrides: Partial<Asset> = {}): Asset {
     esc: "—",
     pla: "—",
     pta: "—",
-    map: null,
+    map: "",
     lat: null,
     lng: null,
-    catRef: "—",
     clase: "URBANO",
     uso: "Residencial",
     bien: "VIVIENDA",
@@ -58,53 +60,51 @@ function makeAsset(overrides: Partial<Asset> = {}): Asset {
     ccaa: "Comunidad Valenciana",
     fullAddr: "C/ Test, Alicante",
     desc: "—",
-    ownerName: "—",
-    ownerTel: "—",
-    ownerMail: "—",
-    adm: {
-      pip: "—",
-      lin: "—",
-      cat: "NPL",
-      car: "—",
-      cli: "—",
-      id1: "—",
-      con: "—",
-      aid: "ASSET-1",
-      loans: "—",
-      tcol: "—",
-      scol: "—",
-      ccaa: "—",
-      prov: "—",
-      city: "—",
-      zip: "—",
-      addr: "—",
-      finca: "—",
-      reg: "—",
-      cref: "—",
-      ejud: "—",
-      ejmap: "—",
-      eneg: "—",
-      ob: "—",
-      sub: "—",
-      deu: "—",
-      cprev: "—",
-      cpost: "—",
-      dtot: "—",
-      pest: "—",
-      str: "—",
-      liq: "—",
-      avj: "—",
-      mmap: "—",
-      buck: "—",
-      lbuck: "—",
-      smf: "—",
-      rsub: "—",
-      conn: "—",
-      conn2: "—",
-    },
     pub: true,
-    ...overrides,
-  } as Asset;
+    propiedades: [],
+    ...rest,
+  };
+  // El test usa `cat` y `fase` como atajos para inyectar una propiedad.
+  if (cat !== undefined || fase !== undefined) {
+    base.propiedades = [{
+      id: `${base.id}-P1`,
+      inmuebleId: base.id,
+      activoId: `ACT-${base.id}`,
+      categoria: cat === "NPL" ? "NPL" : "CDR",
+      propietario: "—",
+      contacto: "—",
+      telefono: "—",
+      mail: "—",
+      faseInterna: fase ?? "Publicado",
+      faseC: "fp-pub",
+      proceso: "—",
+      deuda: null,
+      precioPublicacion: null,
+      lien: "—",
+      collateralId: "",
+      idPrinex: "",
+      idPrinexCorto: "",
+      idProperty: "",
+      dataRef: "",
+      portfolio: "—",
+      folder: "—",
+      mainLocalCcc14: "—",
+      stageStatus: "—",
+      stageSubstatus: "—",
+      tipologia: "—",
+      juzgadoLarga: "—",
+      codigoProcedimiento: "—",
+      ultimaFaseCalculada: "—",
+      hitoJudicial: "—",
+      fechaLanzamiento: "—",
+      lanzamiento: "—",
+      infoOcupantes: "—",
+      inscrito: "—",
+      cargas: "—",
+      registralmenteOk: "—",
+    }];
+  }
+  return base;
 }
 
 /** Réplica de cómo /admin y /portal construyen sus listas filtradas. */
@@ -140,7 +140,7 @@ function buildPortalFilterOptions(assets: Asset[], fProv = "") {
 
 const FIXTURE_ASSETS: Asset[] = [
   makeAsset({ id: "A1", cat: "NPL", prov: "Alicante", pob: "Alicante", tip: "piso", fase: "Publicado", pub: true }),
-  makeAsset({ id: "A2", cat: "REO", prov: "ALICANTE", pob: "ALICANTE/ALACANT", tip: "PISO", fase: "PUBLICADO", pub: true }),
+  makeAsset({ id: "A2", cat: "CDR", prov: "ALICANTE", pob: "ALICANTE/ALACANT", tip: "PISO", fase: "PUBLICADO", pub: true }),
   makeAsset({ id: "A3", cat: "CDR", prov: "A Coruña", pob: "Ferrol", tip: "LOCAL", fase: "En venta", pub: true }),
   makeAsset({ id: "A4", cat: "NPL", prov: "A CORUÑA", pob: "FERROL", tip: "local", fase: "En venta", pub: false }),
   makeAsset({ id: "A5", cat: "NPL", prov: "Albacete", pob: "Bonete", tip: "VIVIENDA", fase: "—", pub: true }),

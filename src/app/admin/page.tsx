@@ -13,12 +13,12 @@ import {
 } from "@/lib/asset-filters";
 import Link from "next/link";
 import type { Asset } from "@/lib/types";
-import { Search, Star, X, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Trash2, RefreshCw } from "lucide-react";
+import { Search, Star, X, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Trash2 } from "lucide-react";
 import { UploadActivosModal } from "./UploadActivosModal";
 import { FilterSelect } from "@/components/FilterSelect";
 import { deleteAllAssets, deleteAssetsByIds } from "@/app/actions/assets";
-import { forceRefreshAssetsCatastro, type ForceCatastroResult } from "@/app/actions/catastro";
 import { isAdmin } from "@/lib/auth-helpers";
+import { getCategoria, getFaseInterna, getFaseC, getPropietario, getActivoId } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 
 type SortCol = "prov" | "pob" | "sqm" | "precio" | "cat" | "addr" | "cp" | "tip" | "fase";
@@ -44,7 +44,6 @@ export default function ActivosPage() {
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [forcing, setForcing] = useState(false);
   const [q, setQ] = useState("");
   const [fCat, setFCat] = useState("");
   const [fProv, setFProv] = useState("");
@@ -69,14 +68,17 @@ export default function ActivosPage() {
       if (favOnly && !a.fav) return false;
       if (q) {
         const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+        const propBlob = a.propiedades.map((p) => [
+          p.id, p.activoId, p.categoria, p.propietario, p.contacto,
+          p.faseInterna, p.proceso, p.collateralId, p.idPrinex, p.idProperty,
+          p.mainLocalCcc14, p.portfolio, p.folder,
+        ].join(" ")).join(" ");
         const blob = [
-          a.id, a.cat, a.prov, a.pob, a.cp, a.ccaa,
+          a.id, a.prov, a.pob, a.cp, a.ccaa,
           a.addr, a.fullAddr, a.tvia, a.nvia, a.num,
           a.tip, a.bien, a.clase, a.uso,
-          a.catRef, a.ownerName,
-          a.fase, String(a.precio || ""), String(a.sqm || ""),
-          a.adm.aid, a.adm.id1, a.adm.con, a.adm.pip, a.adm.cref,
-          a.adm.car, a.adm.cli, a.adm.finca, a.adm.reg,
+          String(a.precio || ""), String(a.sqm || ""),
+          propBlob,
         ].filter(Boolean).join(" ").toLowerCase();
         if (!terms.every(t => blob.includes(t))) return false;
       }
@@ -167,60 +169,8 @@ export default function ActivosPage() {
     }
   };
 
-  const buildForceLogText = (result: ForceCatastroResult): string => {
-    const header = [
-      "PropCRM — Forzar Datos Catastrales (operación masiva)",
-      `Inicio:   ${result.startedAt}`,
-      `Fin:      ${result.finishedAt}`,
-      `Total:    ${result.total}`,
-      `Forzados: ${result.ok}`,
-      `Fallidos: ${result.failed}`,
-      "",
-      "--- DETALLE ---",
-    ];
-    const lines = result.results.map(r => {
-      const tag = r.success ? "[OK]  " : "[FAIL]";
-      const ref = r.ref ? ` ref=${r.ref}` : "";
-      const fields = r.success && r.updatedFields?.length ? ` fields=${r.updatedFields.join(",")}` : "";
-      const err = !r.success && r.error ? ` error=${JSON.stringify(r.error)}` : "";
-      return `${tag} ${r.id}${ref}${fields}${err} (${r.ms} ms)`;
-    });
-    return [...header, ...lines, ""].join("\n");
-  };
-
-  const downloadForceLog = (text: string) => {
-    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `propcrm-forzar-catastro-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleForceSelected = async () => {
-    if (selectedCount === 0) return;
-    if (!window.confirm(`¿Forzar la carga de Datos Catastrales para ${selectedCount} activo(s) seleccionado(s)?\n\nSe sobrescribirán los campos catastrales y de localización con datos frescos del Catastro. Esto puede tardar varios segundos.`)) return;
-    setForcing(true);
-    try {
-      const result = await forceRefreshAssetsCatastro(selectedInFiltered);
-      try { downloadForceLog(buildForceLogText(result)); } catch { /* descarga opcional */ }
-      try { window.dispatchEvent(new Event("propcrm-assets-updated")); } catch { /* ignore */ }
-      const desc = `${result.ok} de ${result.total} activo(s) actualizado(s)` +
-        (result.failed > 0 ? `. ${result.failed} con error — revisa el log.` : ".");
-      if (result.ok === 0 && result.failed > 0) {
-        toast.error("Forzado sin actualizaciones", { description: desc });
-      } else {
-        toast.success("Forzado completado", { description: desc });
-      }
-    } catch (err) {
-      toast.error("Error al forzar los activos seleccionados", { description: err instanceof Error ? err.message : String(err) });
-    } finally {
-      setForcing(false);
-    }
-  };
+  // (Bulk "Forzar Catastro" se eliminó del flujo de uploads. La acción manual
+  // sigue disponible por inmueble desde la ficha en /admin/assets/[id].)
 
   const allChk = filtered.length > 0 && filtered.every(a => a.chk);
 
@@ -314,17 +264,8 @@ export default function ActivosPage() {
                 <div className="mx-0.5 hidden h-4 w-px self-center bg-border2 sm:block" aria-hidden />
                 <button
                   type="button"
-                  onClick={handleForceSelected}
-                  disabled={forcing || deleting || selectedCount === 0}
-                  title="Sobrescribir Datos Catastrales y Localización con datos frescos del Catastro para los activos seleccionados"
-                  className="flex items-center gap-1.5 rounded-md border border-gold/30 bg-gold/5 px-2.5 py-1 text-[11px] font-medium text-gold transition-colors hover:bg-gold/10 disabled:opacity-40"
-                >
-                  <RefreshCw size={12} className={forcing ? "animate-spin" : ""} /> Forzar seleccionados{selectedCount > 0 ? ` (${selectedCount})` : ""}
-                </button>
-                <button
-                  type="button"
                   onClick={handleDeleteSelected}
-                  disabled={deleting || forcing || selectedCount === 0}
+                  disabled={deleting || selectedCount === 0}
                   className="flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-600 transition-colors hover:bg-red-100 disabled:opacity-40"
                 >
                   <Trash2 size={12} /> Borrar seleccionados{selectedCount > 0 ? ` (${selectedCount})` : ""}
@@ -332,7 +273,7 @@ export default function ActivosPage() {
                 <button
                   type="button"
                   onClick={handleDeleteAll}
-                  disabled={deleting || forcing || assets.length === 0}
+                  disabled={deleting || assets.length === 0}
                   className="flex items-center gap-1.5 rounded-md border border-red-300 bg-white px-2.5 py-1 text-[11px] font-medium text-red-700 transition-colors hover:bg-red-50 disabled:opacity-40"
                 >
                   <Trash2 size={12} /> Borrar todos
@@ -377,14 +318,14 @@ export default function ActivosPage() {
                 >
                   <Star size={14} className={`transition-all ${a.fav ? "fill-gold text-gold" : "text-border hover:text-gold/50"}`} />
                 </div>
-                <span className="truncate text-xs">{a.cat}</span>
+                <span className="truncate text-xs">{getCategoria(a)}</span>
                 <span className="truncate text-xs">{a.prov}</span>
                 <span className="truncate text-xs">{a.pob}</span>
                 <span className="truncate text-xs text-muted">{displayAssetAddress(a)}</span>
                 <span className="font-mono text-[11px] text-muted">{a.cp}</span>
                 <span className="text-xs text-muted">{fmtM(a.sqm)}</span>
                 <span className={`inline-flex w-fit rounded-md px-2 py-0.5 text-[10px] font-semibold ${pillClass[a.tipC] || ""}`}>{a.tip}</span>
-                <span className={`min-w-0 max-w-full rounded-md px-2 py-0.5 text-left text-[10px] font-semibold leading-snug whitespace-normal break-words ${pillClass[a.faseC] || ""}`}>{a.fase}</span>
+                <span className={`min-w-0 max-w-full rounded-md px-2 py-0.5 text-left text-[10px] font-semibold leading-snug whitespace-normal break-words ${pillClass[getFaseC(a)] || ""}`}>{getFaseInterna(a)}</span>
                 <span className="text-sm font-semibold text-navy">{fmt(a.precio)}</span>
                 <ChevronRight size={14} className="text-border" />
               </Link>

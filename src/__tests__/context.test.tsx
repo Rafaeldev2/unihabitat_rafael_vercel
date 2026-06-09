@@ -9,6 +9,7 @@ const backfillMissingMapsMock = vi.fn();
 
 vi.mock("@/app/actions/assets", () => ({
   fetchAssets: (...args: unknown[]) => fetchAssetsMock(...args),
+  fetchPropiedades: vi.fn(async () => []),
 }));
 vi.mock("@/app/actions/maps", () => ({
   backfillMissingMaps: (...args: unknown[]) => backfillMissingMapsMock(...args),

@@ -240,8 +240,9 @@ export async function backfillUploadedMaps(
     tvia: a.tvia ?? "",
     nvia: a.nvia ?? "",
     num: a.num ?? "",
-    catRef: a.catRef ?? "",
-    cref: a.adm?.cref ?? "",
+    // El id del inmueble ES la Referencia catastral en el nuevo modelo.
+    catRef: a.id,
+    cref: a.id,
     lat: a.lat ?? null,
     lng: a.lng ?? null,
   }));

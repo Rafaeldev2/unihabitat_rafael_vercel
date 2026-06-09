@@ -51,7 +51,7 @@ describe("toggleAssetPub", () => {
     const result = await toggleAssetPub("ASSET-1");
     expect(result).toBe(true);
     expect(sb.spies.update).toHaveBeenCalledWith(
-      expect.objectContaining({ pub: true, fase: "Publicado", fase_c: "fp-pub" }),
+      expect.objectContaining({ pub: true }),
     );
   });
 
@@ -68,11 +68,11 @@ describe("toggleAssetPub", () => {
     const result = await toggleAssetPub("ASSET-1");
     expect(result).toBe(false);
     expect(sb.spies.update).toHaveBeenCalledWith(
-      expect.objectContaining({ pub: false, fase: "Suspendido", fase_c: "fp-sus" }),
+      expect.objectContaining({ pub: false }),
     );
   });
 
-  it("lanza 'Activo no encontrado' cuando la fila no existe", async () => {
+  it("lanza 'Inmueble no encontrado' cuando la fila no existe", async () => {
     const sb = makeSupabaseMock({
       selectMaybeSingle: { data: null, error: null },
     });
@@ -82,7 +82,7 @@ describe("toggleAssetPub", () => {
     }));
     const { toggleAssetPub } = await import("@/app/actions/assets");
 
-    await expect(toggleAssetPub("MISSING")).rejects.toThrow(/Activo no encontrado/);
+    await expect(toggleAssetPub("MISSING")).rejects.toThrow(/Inmueble no encontrado/);
   });
 });
 
@@ -149,19 +149,14 @@ describe("upsertAssets — preserva pub/lat/lng existentes ante incoming vacío"
     const incoming = {
       id: "A1",
       pub: false, // mergeRowPreferNonEmpty solo override si incoming es `true`
-      cat: "—", prov: "—", pob: "—", cp: "—", addr: "—",
-      tip: "—", tipC: "—", fase: "—", faseC: "—", precio: null,
+      prov: "—", pob: "—", cp: "—", addr: "—",
+      tip: "—", tipC: "—", precio: null,
       fav: false, chk: false, sqm: null,
       tvia: "—", nvia: "—", num: "—", esc: "—", pla: "—", pta: "—",
       map: "",
-      catRef: "—", clase: "—", uso: "—", bien: "—", supC: "—", supG: "—", coef: "—", ccaa: "—",
+      clase: "—", uso: "—", bien: "—", supC: "—", supG: "—", coef: "—", ccaa: "—",
       fullAddr: "—", desc: "—",
-      ownerName: "—", ownerTel: "—", ownerMail: "—",
-      adm: { pip: "—", lin: "—", cat: "—", car: "—", cli: "—", id1: "—", con: "—", aid: "A1",
-        loans: "—", tcol: "—", scol: "—", ccaa: "—", prov: "—", city: "—", zip: "—", addr: "—",
-        finca: "—", reg: "—", cref: "—", ejud: "—", ejmap: "—", eneg: "—", ob: "—", sub: "—",
-        deu: "—", cprev: "—", cpost: "—", dtot: "—", pest: "—", str: "—", liq: "—", avj: "—",
-        mmap: "—", buck: "—", lbuck: "—", smf: "—", rsub: "—", conn: "—", conn2: "—" },
+      propiedades: [],
     };
 
     // El segundo argumento de upsertAssets es Asset[] — el cast ts-ignore es

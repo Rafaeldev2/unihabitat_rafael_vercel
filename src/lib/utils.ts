@@ -5,8 +5,53 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function fmt(n: number | null): string {
+export function fmt(n: number | null | undefined): string {
   return n ? n.toLocaleString("es-ES") + " €" : "—";
+}
+
+/* ------------------------------------------------------------------ */
+/*  Accessors al modelo Asset (inmueble) ↔ Propiedad                  */
+/* ------------------------------------------------------------------ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AssetLike = { propiedades?: any[] };
+
+/** Categoría representativa del inmueble (primera propiedad). */
+export function getCategoria(a: AssetLike): string {
+  return a.propiedades?.[0]?.categoria ?? "—";
+}
+/** Fase interna representativa (primera propiedad). */
+export function getFaseInterna(a: AssetLike): string {
+  return a.propiedades?.[0]?.faseInterna ?? "—";
+}
+/** Código de fase (para badges). */
+export function getFaseC(a: AssetLike): string {
+  return a.propiedades?.[0]?.faseC ?? "fp-nd";
+}
+/** Propietario del préstamo (primera propiedad). */
+export function getPropietario(a: AssetLike): string {
+  return a.propiedades?.[0]?.propietario ?? "—";
+}
+/** Teléfono del propietario. */
+export function getOwnerTel(a: AssetLike): string {
+  return a.propiedades?.[0]?.telefono ?? "—";
+}
+/** Email del propietario. */
+export function getOwnerMail(a: AssetLike): string {
+  return a.propiedades?.[0]?.mail ?? "—";
+}
+/** Deuda total (suma de todas las propiedades). */
+export function getDeudaTotal(a: AssetLike): number | null {
+  if (!a.propiedades || a.propiedades.length === 0) return null;
+  let total = 0;
+  let any = false;
+  for (const p of a.propiedades) {
+    if (p.deuda != null) { total += Number(p.deuda); any = true; }
+  }
+  return any ? total : null;
+}
+/** ID del activo (préstamo) — todas las propiedades comparten activoId. */
+export function getActivoId(a: AssetLike): string {
+  return a.propiedades?.[0]?.activoId ?? "";
 }
 
 /** Parsea texto de importe (es-ES: miles con punto, decimales con coma). */
@@ -95,7 +140,8 @@ export function getDescriptionText(a: {
   bien?: string; tip?: string;
   pob?: string; prov?: string;
   supC?: string; sqm?: number | null;
-  cat?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  propiedades?: any[];
 }): string {
   const desc = (a.desc || "").trim();
   const isEmpty = !desc || desc === "—";
@@ -107,7 +153,7 @@ export function getDescriptionText(a: {
     return [
       `${tipo}${lugar ? ` ubicado en ${lugar}` : ""}.`,
       sup ? `Superficie de ${sup}.` : "",
-      a.cat && a.cat !== "—" ? `Categoría ${a.cat}.` : "",
+      a.propiedades?.[0]?.categoria ? `Categoría ${a.propiedades[0].categoria}.` : "",
     ].filter(Boolean).join(" ");
   }
   return desc;

@@ -22,7 +22,6 @@ export function catastroParsedToPartialAsset(
   const supCNum = parseNumMaybe(row.superficieConstruida);
   const supGNum = parseNumMaybe(row.superficieGrafica);
   const partial: Partial<Asset> = {
-    catRef: row.referencia,
     clase: dash(row.clase),
     uso: dash(row.uso),
     bien: dash(row.bien),
