@@ -126,6 +126,7 @@ function buildPortalFilterOptions(assets: Asset[], active: AssetListFilters = {}
     pob: scoped.pob,
     tip: scoped.tip,
     estado: scoped.estado,
+    fase: scoped.fase,
   };
 }
 
@@ -172,6 +173,13 @@ describe("assetMatchesListFilters", () => {
     expect(assetMatchesListFilters(publicado, { estado: "Suspendido" })).toBe(false);
     expect(assetMatchesListFilters(suspendido, { estado: "Suspendido" })).toBe(true);
   });
+
+  it("filtra por situación (fase interna) independiente del estado de publicación", () => {
+    const asset = makeAsset({ id: "F1", fase: "Disponible", pub: false });
+    expect(assetMatchesListFilters(asset, { fase: "Disponible" })).toBe(true);
+    expect(assetMatchesListFilters(asset, { fase: "Seguimiento" })).toBe(false);
+    expect(assetMatchesListFilters(asset, { estado: "Suspendido", fase: "Disponible" })).toBe(true);
+  });
 });
 
 describe("paridad admin vs portal", () => {
@@ -182,6 +190,7 @@ describe("paridad admin vs portal", () => {
       pob: "Alicante",
       tipo: "PISO",
       estado: "Publicado",
+      fase: "Publicado",
     };
 
     const adminIds = filterAdminAssets(FIXTURE_ASSETS, filters).map((a) => a.id).sort();

@@ -79,12 +79,20 @@ export function buildEstadoFilterOptions(assets: Asset[]): string[] {
   return opts.sort((a, b) => a.localeCompare(b, "es"));
 }
 
+/** Fases internas derivadas de las propiedades asociadas (Disponible, Seguimiento, etc.). */
+export function buildFaseFilterOptions(assets: Asset[]): string[] {
+  const all: string[] = [];
+  for (const a of assets) for (const p of a.propiedades) all.push(p.faseInterna);
+  return uniqueFilterOptions(all);
+}
+
 export interface AssetListFilters {
   cat?: string;
   prov?: string;
   pob?: string;
   tipo?: string;
   estado?: string;
+  fase?: string;
 }
 
 export interface AssetFilterOptionSet {
@@ -93,6 +101,7 @@ export interface AssetFilterOptionSet {
   pob: string[];
   tip: string[];
   estado: string[];
+  fase: string[];
 }
 
 type FilterOptionField = keyof AssetListFilters;
@@ -120,6 +129,7 @@ export function buildAssetListFilterOptions(
     pob: buildPobFilterOptions(assetsForFilterOptions(assets, active, "pob"), fProv),
     tip: buildTipFilterOptions(assetsForFilterOptions(assets, active, "tipo")),
     estado: buildEstadoFilterOptions(assetsForFilterOptions(assets, active, "estado")),
+    fase: buildFaseFilterOptions(assetsForFilterOptions(assets, active, "fase")),
   };
 }
 
@@ -145,5 +155,9 @@ export function assetMatchesListFilters(a: Asset, f: AssetListFilters): boolean 
   if (f.pob && !matchesFilterValue(a.pob, f.pob)) return false;
   if (f.tipo && (a.tip ?? "").toUpperCase() !== f.tipo) return false;
   if (f.estado && !matchesFilterValue(assetEstadoLabel(a), f.estado)) return false;
+  if (f.fase) {
+    const matches = a.propiedades.some((p) => matchesFilterValue(p.faseInterna, f.fase!));
+    if (!matches) return false;
+  }
   return true;
 }

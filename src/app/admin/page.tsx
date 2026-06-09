@@ -46,6 +46,7 @@ export default function ActivosPage() {
   const [fPob, setFPob] = useState("");
   const [fTipo, setFTipo] = useState("");
   const [fEstado, setFEstado] = useState("");
+  const [fFase, setFFase] = useState("");
   const [favOnly, setFavOnly] = useState(false);
   const [sortCol, setSortCol] = useState<SortCol>("prov");
   const [sortDir, setSortDir] = useState<1 | -1>(1);
@@ -60,6 +61,7 @@ export default function ActivosPage() {
         pob: fPob,
         tipo: fTipo,
         estado: fEstado,
+        fase: fFase,
       })) return false;
       if (favOnly && !a.fav) return false;
       if (q) {
@@ -90,13 +92,13 @@ export default function ActivosPage() {
       return 0;
     });
     return res;
-  }, [assets, q, fCat, fProv, fPob, fTipo, fEstado, favOnly, sortCol, sortDir]);
+  }, [assets, q, fCat, fProv, fPob, fTipo, fEstado, fFase, favOnly, sortCol, sortDir]);
 
   // Reinicia a la página 1 cuando cambian filtros, búsqueda, orden o pageSize:
   // evita quedar "atrapado" en página 5 tras filtrar a 3 resultados.
   useEffect(() => {
     setCurrentPage(1);
-  }, [q, fCat, fProv, fPob, fTipo, fEstado, favOnly, sortCol, sortDir, pageSize]);
+  }, [q, fCat, fProv, fPob, fTipo, fEstado, fFase, favOnly, sortCol, sortDir, pageSize]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(Math.max(1, currentPage), totalPages);
@@ -106,11 +108,11 @@ export default function ActivosPage() {
   );
 
   const activeListFilters = useMemo(
-    () => ({ cat: fCat, prov: fProv, pob: fPob, tipo: fTipo, estado: fEstado }),
-    [fCat, fProv, fPob, fTipo, fEstado],
+    () => ({ cat: fCat, prov: fProv, pob: fPob, tipo: fTipo, estado: fEstado, fase: fFase }),
+    [fCat, fProv, fPob, fTipo, fEstado, fFase],
   );
 
-  const { cat: catOptions, prov: provOptions, pob: pobOptions, tip: tipOptions, estado: estadoOptions } =
+  const { cat: catOptions, prov: provOptions, pob: pobOptions, tip: tipOptions, estado: estadoOptions, fase: faseOptions } =
     useMemo(() => buildAssetListFilterOptions(assets, activeListFilters), [assets, activeListFilters]);
 
   const handleCatChange = (v: string) => {
@@ -130,7 +132,7 @@ export default function ActivosPage() {
   };
 
   const clearFilters = () => {
-    setQ(""); setFCat(""); setFProv(""); setFPob(""); setFTipo(""); setFEstado("");
+    setQ(""); setFCat(""); setFProv(""); setFPob(""); setFTipo(""); setFEstado(""); setFFase("");
     if (favOnly) setFavOnly(false);
   };
 
@@ -223,6 +225,7 @@ export default function ActivosPage() {
             <FilterSelect label="Población" value={fPob} onChange={setFPob} options={pobOptions} />
             <FilterSelect label="Tipología" value={fTipo} onChange={setFTipo} options={tipOptions} />
             <FilterSelect label="Estado" value={fEstado} onChange={setFEstado} options={estadoOptions} />
+            <FilterSelect label="Situación" value={fFase} onChange={setFFase} options={faseOptions} />
             <div className="flex min-w-[90px] flex-col gap-1">
               <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Favoritos</label>
               <button
