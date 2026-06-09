@@ -125,7 +125,7 @@ function buildPortalFilterOptions(assets: Asset[], active: AssetListFilters = {}
     prov: scoped.prov,
     pob: scoped.pob,
     tip: scoped.tip,
-    fase: scoped.fase,
+    estado: scoped.estado,
   };
 }
 
@@ -164,6 +164,14 @@ describe("assetMatchesListFilters", () => {
     expect(assetMatchesListFilters(asset, { tipo: "PISO" })).toBe(true);
     expect(assetMatchesListFilters(asset, { tipo: "LOCAL" })).toBe(false);
   });
+
+  it("filtra por estado de publicación (Publicado / Suspendido)", () => {
+    const publicado = makeAsset({ id: "PUB", pub: true });
+    const suspendido = makeAsset({ id: "SUS", pub: false });
+    expect(assetMatchesListFilters(publicado, { estado: "Publicado" })).toBe(true);
+    expect(assetMatchesListFilters(publicado, { estado: "Suspendido" })).toBe(false);
+    expect(assetMatchesListFilters(suspendido, { estado: "Suspendido" })).toBe(true);
+  });
 });
 
 describe("paridad admin vs portal", () => {
@@ -173,7 +181,7 @@ describe("paridad admin vs portal", () => {
       prov: "Alicante",
       pob: "Alicante",
       tipo: "PISO",
-      fase: "Publicado",
+      estado: "Publicado",
     };
 
     const adminIds = filterAdminAssets(FIXTURE_ASSETS, filters).map((a) => a.id).sort();

@@ -63,11 +63,20 @@ export function buildTipFilterOptions(assets: Asset[]): string[] {
   );
 }
 
-/** Fases derivadas de las propiedades asociadas. */
-export function buildFaseFilterOptions(assets: Asset[]): string[] {
-  const all: string[] = [];
-  for (const a of assets) for (const p of a.propiedades) all.push(p.faseInterna);
-  return uniqueFilterOptions(all);
+export const ESTADO_PUBLICADO = "Publicado";
+export const ESTADO_SUSPENDIDO = "Suspendido";
+
+/** Etiqueta de publicación del inmueble en el portal/admin. */
+export function assetEstadoLabel(a: Asset): string {
+  return a.pub ? ESTADO_PUBLICADO : ESTADO_SUSPENDIDO;
+}
+
+/** Estado de publicación: Publicado o Suspendido según `asset.pub`. */
+export function buildEstadoFilterOptions(assets: Asset[]): string[] {
+  const opts: string[] = [];
+  if (assets.some((a) => a.pub)) opts.push(ESTADO_PUBLICADO);
+  if (assets.some((a) => !a.pub)) opts.push(ESTADO_SUSPENDIDO);
+  return opts.sort((a, b) => a.localeCompare(b, "es"));
 }
 
 export interface AssetListFilters {
@@ -75,7 +84,7 @@ export interface AssetListFilters {
   prov?: string;
   pob?: string;
   tipo?: string;
-  fase?: string;
+  estado?: string;
 }
 
 export interface AssetFilterOptionSet {
@@ -83,7 +92,7 @@ export interface AssetFilterOptionSet {
   prov: string[];
   pob: string[];
   tip: string[];
-  fase: string[];
+  estado: string[];
 }
 
 type FilterOptionField = keyof AssetListFilters;
@@ -110,7 +119,7 @@ export function buildAssetListFilterOptions(
     prov: buildProvFilterOptions(assetsForFilterOptions(assets, active, "prov")),
     pob: buildPobFilterOptions(assetsForFilterOptions(assets, active, "pob"), fProv),
     tip: buildTipFilterOptions(assetsForFilterOptions(assets, active, "tipo")),
-    fase: buildFaseFilterOptions(assetsForFilterOptions(assets, active, "fase")),
+    estado: buildEstadoFilterOptions(assetsForFilterOptions(assets, active, "estado")),
   };
 }
 
@@ -135,9 +144,6 @@ export function assetMatchesListFilters(a: Asset, f: AssetListFilters): boolean 
   if (f.prov && !matchesFilterValue(a.prov, f.prov)) return false;
   if (f.pob && !matchesFilterValue(a.pob, f.pob)) return false;
   if (f.tipo && (a.tip ?? "").toUpperCase() !== f.tipo) return false;
-  if (f.fase) {
-    const matches = a.propiedades.some((p) => matchesFilterValue(p.faseInterna, f.fase!));
-    if (!matches) return false;
-  }
+  if (f.estado && !matchesFilterValue(assetEstadoLabel(a), f.estado)) return false;
   return true;
 }

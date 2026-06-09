@@ -85,7 +85,7 @@ function PortalContent() {
   const [fProv, setFProv] = useState(searchParams.get("prov") ?? "");
   const [fPob, setFPob] = useState("");
   const [fTipo, setFTipo] = useState(searchParams.get("tipo") ?? "");
-  const [fFase, setFFase] = useState("");
+  const [fEstado, setFEstado] = useState("");
   const [sortBy, setSortBy] = useState<SortKey>("none");
   const [pageSize, setPageSize] = useState<PageSize>(50);
   const [page, setPage] = useState(1);
@@ -126,8 +126,8 @@ function PortalContent() {
   }, []);
 
   const activeListFilters = useMemo(
-    () => ({ cat: fCat, prov: fProv, pob: fPob, tipo: fTipo, fase: fFase }),
-    [fCat, fProv, fPob, fTipo, fFase],
+    () => ({ cat: fCat, prov: fProv, pob: fPob, tipo: fTipo, estado: fEstado }),
+    [fCat, fProv, fPob, fTipo, fEstado],
   );
 
   // Categorías: mismo listado que /admin. Resto de filtros en cascada según catálogo visible.
@@ -136,7 +136,7 @@ function PortalContent() {
     [catalogAssets, activeListFilters],
   );
   const catOptions = useMemo(() => buildCatFilterOptions(assets), [assets]);
-  const { prov: provOptions, pob: pobOptions, tip: tipOptions, fase: faseOptions } = listFilterOptions;
+  const { prov: provOptions, pob: pobOptions, tip: tipOptions, estado: estadoOptions } = listFilterOptions;
 
   const handleCatChange = (v: string) => {
     setFCat(v);
@@ -158,7 +158,7 @@ function PortalContent() {
         prov: fProv,
         pob: fPob,
         tipo: fTipo,
-        fase: fFase,
+        estado: fEstado,
       })) return false;
       if (terms.length === 0) return true;
 
@@ -185,7 +185,7 @@ function PortalContent() {
     else if (sortBy === "pob_az") result.sort((a, b) => (a.pob || "").localeCompare(b.pob || ""));
 
     return result;
-  }, [catalogAssets, q, fCat, fProv, fPob, fTipo, fFase, sortBy, sensitiveVisible]);
+  }, [catalogAssets, q, fCat, fProv, fPob, fTipo, fEstado, sortBy, sensitiveVisible]);
 
   const suspendedMatchCount = useMemo(() => {
     if (isStaff || filtered.length > 0) return 0;
@@ -208,16 +208,16 @@ function PortalContent() {
 
   useEffect(() => {
     setPage(1);
-  }, [q, fCat, fProv, fPob, fTipo, fFase, sortBy, pageSize]);
+  }, [q, fCat, fProv, fPob, fTipo, fEstado, sortBy, pageSize]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
-  const hasFilters = Boolean(q || fCat || fProv || fPob || fTipo || fFase);
+  const hasFilters = Boolean(q || fCat || fProv || fPob || fTipo || fEstado);
 
   const clearFilters = useCallback(() => {
-    setQ(""); setFCat(""); setFProv(""); setFPob(""); setFTipo(""); setFFase("");
+    setQ(""); setFCat(""); setFProv(""); setFPob(""); setFTipo(""); setFEstado("");
   }, []);
 
   // Group assets by activo (loan) ID for "X inmuebles asociados" badge.
@@ -262,7 +262,7 @@ function PortalContent() {
               fTipo ? { label: fTipo, clear: () => setFTipo("") } : null,
               fProv ? { label: fProv, clear: () => setFProv("") } : null,
               fPob ? { label: fPob, clear: () => setFPob("") } : null,
-              fFase ? { label: fFase, clear: () => setFFase("") } : null,
+              fEstado ? { label: fEstado, clear: () => setFEstado("") } : null,
             ] as const).filter((c): c is { label: string; clear: () => void } => c !== null)
               .map((chip) => (
                 <span key={chip.label} className="flex items-center gap-1 rounded-full bg-gold/20 px-3 py-1.5 text-xs font-medium text-gold">
@@ -280,7 +280,7 @@ function PortalContent() {
             <FilterSelect label="Provincia" value={fProv} onChange={handleProvChange} options={provOptions} />
             <FilterSelect label="Población" value={fPob} onChange={setFPob} options={pobOptions} />
             <FilterSelect label="Tipología" value={fTipo} onChange={setFTipo} options={tipOptions} />
-            <FilterSelect label="Situación" value={fFase} onChange={setFFase} options={faseOptions} />
+            <FilterSelect label="Estado" value={fEstado} onChange={setFEstado} options={estadoOptions} />
             <div className="h-8 w-px self-end bg-border2" />
             <div className="flex gap-1.5 self-end">
               <button
