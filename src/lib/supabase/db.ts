@@ -40,16 +40,18 @@ function finiteOrNull(v: unknown): number | null {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function rowToAsset(r: any): Asset {
   return {
-    id: r.id, prov: r.prov ?? "—", pob: r.pob ?? "—", cp: r.cp ?? "—",
-    addr: r.addr ?? "—", tip: r.tip ?? "Vivienda", tipC: r.tip_c ?? "tp-viv",
+    id: r.id,
+    referencia: r.referencia ?? "",
+    prov: r.prov ?? "", pob: r.pob ?? "", cp: r.cp ?? "",
+    addr: r.addr ?? "", tip: r.tip ?? "", tipC: r.tip_c ?? "",
     precio: r.precio != null ? Number(r.precio) : null,
     fav: r.fav ?? false, chk: false, sqm: r.sqm != null ? Number(r.sqm) : null,
-    tvia: r.tvia ?? "—", nvia: r.nvia ?? "—", num: r.num ?? "—",
-    esc: r.esc ?? "—", pla: r.pla ?? "—", pta: r.pta ?? "—",
+    tvia: r.tvia ?? "", nvia: r.nvia ?? "", num: r.num ?? "",
+    esc: r.esc ?? "", pla: r.pla ?? "", pta: r.pta ?? "",
     map: r.map ?? "",
-    clase: r.clase ?? "—", uso: r.uso ?? "—", bien: r.bien ?? "—",
-    supC: r.sup_c ?? "—", supG: r.sup_g ?? "—", coef: r.coef ?? "—",
-    ccaa: r.ccaa ?? "—", fullAddr: r.full_addr ?? "—", desc: r.descr ?? "—",
+    clase: r.clase ?? "", uso: r.uso ?? "", bien: r.bien ?? "",
+    supC: r.sup_c ?? "", supG: r.sup_g ?? "", coef: r.coef ?? "",
+    ccaa: r.ccaa ?? "", fullAddr: r.full_addr ?? "", desc: r.descr ?? "",
     pub: r.pub ?? false, age: r.age,
     lat: finiteOrNull(r.lat),
     lng: finiteOrNull(r.lng),
@@ -70,7 +72,8 @@ export function rowToAssetPublic(r: any): Asset {
 export function assetToRow(a: Asset) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const row: Record<string, any> = {
-    id: a.id, prov: a.prov, pob: a.pob, cp: a.cp, addr: a.addr,
+    id: a.id, referencia: a.referencia,
+    prov: a.prov, pob: a.pob, cp: a.cp, addr: a.addr,
     tip: a.tip, tip_c: a.tipC, precio: a.precio,
     fav: a.fav, sqm: a.sqm, tvia: a.tvia, nvia: a.nvia, num: a.num,
     esc: a.esc, pla: a.pla, pta: a.pta, map: a.map,

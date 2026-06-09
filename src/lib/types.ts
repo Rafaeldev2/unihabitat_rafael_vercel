@@ -72,8 +72,11 @@ export interface Propiedad {
 }
 
 export interface Asset {
-  /** PK = Referencia catastral (string como "6516208CF2461N0003WZ"). */
+  /** PK compuesta = `${activoId}__${referencia}` (cuando se carga desde Excel).
+   *  Permite que la misma Referencia catastral aparezca en varios activos. */
   id: string;
+  /** Referencia catastral limpia, para mostrar en UI. */
+  referencia: string;
   prov: string;
   pob: string;
   cp: string;

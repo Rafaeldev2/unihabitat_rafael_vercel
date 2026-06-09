@@ -48,10 +48,13 @@ describe("parseTemplateExcel — plantilla CDR", () => {
     expect(r.diag.categoryCounts.NPL).toBe(0);
   });
 
-  it("usa la Referencia catastral como id del inmueble", async () => {
+  it("usa PK compuesta ID1__Referencia y expone Referencia limpia", async () => {
     const r = await parseTemplateExcel(loadFixture("CDR.xlsx"));
     for (const inmueble of r.inmuebles) {
-      expect(inmueble.id).toMatch(/^[0-9A-Z]{14,}$/); // RC = 14+ chars alfanuméricos
+      // id = ID1 + "__" + RC; RC suelta es alfanumérica de 14+ chars.
+      expect(inmueble.id).toContain("__");
+      expect(inmueble.referencia).toMatch(/^[0-9A-Z]{14,}$/);
+      expect(inmueble.id.endsWith(`__${inmueble.referencia}`)).toBe(true);
     }
   });
 

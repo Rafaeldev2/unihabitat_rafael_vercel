@@ -28,6 +28,7 @@ function makeAsset(overrides: FixtureOverrides = {}): Asset {
   const { cat, fase, ...rest } = overrides;
   const base: Asset = {
     id: "ASSET-1",
+    referencia: "ASSET-1",
     prov: "Alicante",
     pob: "Alicante",
     cp: "03001",
