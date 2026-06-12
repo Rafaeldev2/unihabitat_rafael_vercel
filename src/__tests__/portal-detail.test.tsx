@@ -28,6 +28,7 @@ function makeAsset(overrides: Partial<Asset> & { activoId?: string } = {}): Asse
   const id = (rest.id as string | undefined) ?? "TEST-1";
   return {
     id,
+    referencia: id,
     prov: "Málaga",
     pob: "Arriate",
     cp: "29350",

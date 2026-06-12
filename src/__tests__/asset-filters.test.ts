@@ -28,6 +28,7 @@ function makeAsset(overrides: FixtureOverrides = {}): Asset {
   const { cat, fase, ...rest } = overrides;
   const base: Asset = {
     id: "ASSET-1",
+    referencia: "ASSET-1",
     prov: "Alicante",
     pob: "Alicante",
     cp: "03001",
@@ -125,6 +126,7 @@ function buildPortalFilterOptions(assets: Asset[], active: AssetListFilters = {}
     prov: scoped.prov,
     pob: scoped.pob,
     tip: scoped.tip,
+    estado: scoped.estado,
     fase: scoped.fase,
   };
 }
@@ -164,6 +166,21 @@ describe("assetMatchesListFilters", () => {
     expect(assetMatchesListFilters(asset, { tipo: "PISO" })).toBe(true);
     expect(assetMatchesListFilters(asset, { tipo: "LOCAL" })).toBe(false);
   });
+
+  it("filtra por estado de publicación (Publicado / Suspendido)", () => {
+    const publicado = makeAsset({ id: "PUB", pub: true });
+    const suspendido = makeAsset({ id: "SUS", pub: false });
+    expect(assetMatchesListFilters(publicado, { estado: "Publicado" })).toBe(true);
+    expect(assetMatchesListFilters(publicado, { estado: "Suspendido" })).toBe(false);
+    expect(assetMatchesListFilters(suspendido, { estado: "Suspendido" })).toBe(true);
+  });
+
+  it("filtra por situación (fase interna) independiente del estado de publicación", () => {
+    const asset = makeAsset({ id: "F1", fase: "Disponible", pub: false });
+    expect(assetMatchesListFilters(asset, { fase: "Disponible" })).toBe(true);
+    expect(assetMatchesListFilters(asset, { fase: "Seguimiento" })).toBe(false);
+    expect(assetMatchesListFilters(asset, { estado: "Suspendido", fase: "Disponible" })).toBe(true);
+  });
 });
 
 describe("paridad admin vs portal", () => {
@@ -173,6 +190,7 @@ describe("paridad admin vs portal", () => {
       prov: "Alicante",
       pob: "Alicante",
       tipo: "PISO",
+      estado: "Publicado",
       fase: "Publicado",
     };
 

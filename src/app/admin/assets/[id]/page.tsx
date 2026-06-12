@@ -322,8 +322,8 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
   const [catastroRefreshing, setCatastroRefreshing] = useState(false);
   const [catastroMsg, setCatastroMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  // El id del inmueble ES la Referencia catastral en el nuevo modelo.
-  const hasCatRef = !!asset.id && asset.id !== "—";
+  // La columna `referencia` guarda la RC limpia; el id es compuesto (id1__ref).
+  const hasCatRef = !!asset.referencia && asset.referencia !== "—";
 
   const precioFields: FieldDef[] = useMemo(
     () => [
@@ -356,7 +356,7 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
   };
 
   const catastroFields: FieldDef[] = [
-    { label: "Referencia", dbCol: "id", value: asset.id, mono: true },
+    { label: "Referencia", dbCol: "referencia", value: asset.referencia, mono: true },
     { label: "Clase", dbCol: "clase", value: asset.clase },
     { label: "Uso", dbCol: "uso", value: asset.uso },
     { label: "Bien", dbCol: "bien", value: asset.bien },

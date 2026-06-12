@@ -151,8 +151,8 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
             <span className="flex items-center gap-1"><MapPin size={12} /> {asset.pob}, {asset.prov}</span>
             {asset.tip && <span className="flex items-center gap-1"><Building size={12} /> {asset.tip}</span>}
             {asset.sqm && <span className="flex items-center gap-1"><Ruler size={12} /> {fmtM(asset.sqm)}</span>}
-            {sensitiveVisible && asset.id && (
-              <span className="flex items-center gap-1 font-mono"><Tag size={11} /> {asset.id}</span>
+            {sensitiveVisible && asset.referencia && (
+              <span className="flex items-center gap-1 font-mono"><Tag size={11} /> {asset.referencia}</span>
             )}
           </div>
         </div>
@@ -220,8 +220,8 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
                   {asset.supG && <InfoPill icon={<Ruler size={13} />} label="Sup. Gráfica" value={asset.supG} />}
                   {asset.clase && <InfoPill icon={<Layers size={13} />} label="Clase" value={asset.clase} />}
                   {asset.uso && <InfoPill icon={<Building size={13} />} label="Uso" value={asset.uso} />}
-                  {sensitiveVisible && asset.id && (
-                    <InfoPill icon={<Tag size={13} />} label="Ref. Catastral" value={asset.id} mono />
+                  {sensitiveVisible && asset.referencia && (
+                    <InfoPill icon={<Tag size={13} />} label="Ref. Catastral" value={asset.referencia} mono />
                   )}
                   {asset.coef && <InfoPill icon={<Hash size={13} />} label="Coef. Participación" value={asset.coef} />}
                   {asset.age && <InfoPill icon={<CalendarDays size={13} />} label="Antigüedad" value={asset.age} />}
@@ -285,9 +285,9 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
                               </span>
                             )}
                           </div>
-                          {sensitiveVisible && s.id && (
+                          {sensitiveVisible && s.referencia && (
                             <div className="mt-1.5 inline-flex w-fit items-center gap-1 rounded border border-border px-2 py-0.5 font-mono text-[10px] text-muted">
-                              Ref: {s.id}
+                              Ref: {s.referencia}
                             </div>
                           )}
                         </div>
@@ -341,10 +341,10 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
                   ))}
                 </div>
 
-                {sensitiveVisible && asset.id && (
+                {sensitiveVisible && asset.referencia && (
                   <div className="mb-4 rounded-md bg-cream2 px-3 py-2">
                     <div className="text-[9px] font-semibold uppercase tracking-wider text-muted">Ref. Catastral</div>
-                    <div className="font-mono text-xs text-navy">{asset.id}</div>
+                    <div className="font-mono text-xs text-navy">{asset.referencia}</div>
                   </div>
                 )}
 

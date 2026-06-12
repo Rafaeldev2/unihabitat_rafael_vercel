@@ -64,8 +64,10 @@ function s(v: unknown): string {
   return String(v).trim();
 }
 
-function nonEmpty(v: string, fallback = "—"): string {
-  return v === "" ? fallback : v;
+/** Preserva el valor tal cual; vacío queda vacío (el cliente prefiere ver
+ *  celdas en blanco a "—" cuando el Excel no aporta dato). */
+function preserveOrEmpty(v: string): string {
+  return v ?? "";
 }
 
 /** Parsea "10,500000" / "289600.88" / "10500" → number; vacío → null. */
@@ -99,12 +101,22 @@ function bool(v: unknown): boolean {
 /*  Categoría → tipC / faseC                                          */
 /* ------------------------------------------------------------------ */
 
-/** Normaliza el campo "Bien" o "Tipo Inmueble" a una tipología canónica. */
+/**
+ * Normaliza el campo "Bien" o "Tipo Inmueble" a una tipología canónica
+ * SOLO cuando el valor encaja con un patrón conocido. Para valores
+ * desconocidos (ej. "OTROS", "NAVE INDUSTRIAL CON OFICINA") preserva el
+ * texto original del Excel — no quiere imponer un default "Vivienda".
+ *
+ * Devuelve "" cuando la celda viene vacía.
+ */
 export function normalizeTipo(bien: string): string {
-  const f = fold(bien);
-  if (!f || f === "—") return "Vivienda";
-  if (/PISO|APARTAMENTO|VIVIENDA/.test(f)) return "Piso";
-  if (/CASA|CHALET|UNIFAMILIAR/.test(f)) return "Casa / Chalet";
+  const raw = (bien ?? "").trim();
+  if (!raw) return "";
+  const f = fold(raw);
+  if (f === "—") return "";
+  if (/PISO|APARTAMENTO/.test(f)) return "Piso";
+  if (/VIVIENDA UNIFAMILIAR|CASA|CHALET/.test(f)) return "Casa / Chalet";
+  if (/VIVIENDA/.test(f)) return "Vivienda";
   if (/GARAJE|APARCAMIENTO|PARKING/.test(f)) return "Garaje";
   if (/TRASTERO/.test(f)) return "Trastero";
   if (/LOCAL|COMERCIAL/.test(f)) return "Comercial";
@@ -113,12 +125,15 @@ export function normalizeTipo(bien: string): string {
   if (/SUELO|TERRENO|PARCELA/.test(f)) return "Suelo";
   if (/EDIFICIO/.test(f)) return "Edificio";
   if (/OBRA/.test(f)) return "Obra Sin Finalizar";
-  return "Vivienda";
+  // No mapea a ninguna tipología canónica: devolvemos el bien tal cual
+  // (capitalizado al estilo Excel: primera letra mayúscula, resto minúsculas).
+  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
 }
 
 function tipoToCode(tip: string): string {
   switch (tip) {
     case "Piso": return "tp-pis";
+    case "Vivienda": return "tp-viv";
     case "Casa / Chalet": return "tp-cha";
     case "Garaje": return "tp-gar";
     case "Trastero": return "tp-tra";
@@ -128,14 +143,15 @@ function tipoToCode(tip: string): string {
     case "Suelo": return "tp-sue";
     case "Edificio": return "tp-edi";
     case "Obra Sin Finalizar": return "tp-obr";
-    default: return "tp-viv";
+    case "": return "";
+    default: return "tp-otr";
   }
 }
 
 /** Mapea "Fase Interna" (texto libre) a un código de fase. */
 function faseToCode(fase: string): string {
   const f = fold(fase);
-  if (!f) return "fp-nd";
+  if (!f) return "";
   if (/DISPONIBLE|PUB/.test(f)) return "fp-pub";
   if (/SUSPEND|PAUS/.test(f)) return "fp-sus";
   if (/SEGUIMIENTO|EN PROCESO/.test(f)) return "fp-seg";
@@ -253,9 +269,15 @@ function parseRow(
 ): ParsedRow | { skip: string } {
   const cell = (idx: number): string => (idx >= 0 ? s(row[idx]) : "");
 
-  // 1. PK del inmueble = Referencia
+  // 1. PK compuesta del inmueble = ID1 + Referencia.
+  //    La misma Referencia catastral puede aparecer en varios ID1 (activos
+  //    distintos que tienen el mismo inmueble físico como colateral); en ese
+  //    caso queremos persistirlos por separado, no fusionarlos.
   const referencia = cell(core.referencia);
+  const id1 = cell(core.id1);
   if (!referencia) return { skip: "sin Referencia" };
+  if (!id1) return { skip: "sin ID1" };
+  const inmuebleId = `${id1}__${referencia}`;
 
   // 2. Categoría
   const catRaw = fold(cell(core.categoria));
@@ -272,46 +294,46 @@ function parseRow(
   const latitud = num(row[core.latitud]);
 
   const inmueble: Asset = {
-    id: referencia,
-    prov: nonEmpty(cell(core.provincia)),
-    pob: nonEmpty(cell(core.municipio)),
-    cp: nonEmpty(cell(core.cp)),
-    addr: nonEmpty(cell(core.direccion)),
+    id: inmuebleId,
+    referencia,
+    prov: preserveOrEmpty(cell(core.provincia)),
+    pob: preserveOrEmpty(cell(core.municipio)),
+    cp: preserveOrEmpty(cell(core.cp)),
+    addr: preserveOrEmpty(cell(core.direccion)),
     tip,
     tipC: tipoToCode(tip),
     precio: num(row[core.precio]),
     fav: false,
     chk: false,
     sqm: num(row[core.supConstruida]),
-    tvia: nonEmpty(cell(core.tvia)),
-    nvia: nonEmpty(cell(core.nvia)),
-    num: nonEmpty(cell(core.numero)),
-    esc: nonEmpty(cell(core.escalera)),
-    pla: nonEmpty(cell(core.planta)),
-    pta: nonEmpty(cell(core.puerta)),
+    tvia: preserveOrEmpty(cell(core.tvia)),
+    nvia: preserveOrEmpty(cell(core.nvia)),
+    num: preserveOrEmpty(cell(core.numero)),
+    esc: preserveOrEmpty(cell(core.escalera)),
+    pla: preserveOrEmpty(cell(core.planta)),
+    pta: preserveOrEmpty(cell(core.puerta)),
     map: "",
-    clase: nonEmpty(cell(core.clase)),
-    uso: nonEmpty(cell(core.uso)),
-    bien: nonEmpty(bien),
-    supC: nonEmpty(cell(core.supConstruida)),
-    supG: nonEmpty(cell(core.supGrafica)),
-    coef: nonEmpty(cell(core.coefPart)),
-    ccaa: nonEmpty(categoria === "NPL" ? cell(nplExt.ccaa) : ""),
-    fullAddr: nonEmpty(cell(core.direccion)),
-    desc: nonEmpty(cell(core.descripcion)),
+    clase: preserveOrEmpty(cell(core.clase)),
+    uso: preserveOrEmpty(cell(core.uso)),
+    bien: preserveOrEmpty(bien),
+    supC: preserveOrEmpty(cell(core.supConstruida)),
+    supG: preserveOrEmpty(cell(core.supGrafica)),
+    coef: preserveOrEmpty(cell(core.coefPart)),
+    ccaa: preserveOrEmpty(categoria === "NPL" ? cell(nplExt.ccaa) : ""),
+    fullAddr: preserveOrEmpty(cell(core.direccion)),
+    desc: preserveOrEmpty(cell(core.descripcion)),
     pub: bool(row[core.publicar]),
-    age: nonEmpty(cell(core.antiguedad)),
+    age: preserveOrEmpty(cell(core.antiguedad)),
     lat: latitud,
     lng: longitud,
     propiedades: [],
   };
 
   // 4. PK de la propiedad
-  const id1 = cell(core.id1);
   let propId = "";
   if (categoria === "NPL" && nplExt.collateralId >= 0) propId = cell(nplExt.collateralId);
   if (!propId && categoria === "CDR" && cdrExt.idProperty >= 0) propId = cell(cdrExt.idProperty);
-  if (!propId) propId = `${id1 || "act"}__${referencia}`;
+  if (!propId) propId = `${id1}__${referencia}`;
 
   // 5. Excel raw
   const excelRaw: Record<string, string> = {};
@@ -327,21 +349,21 @@ function parseRow(
 
   const propiedad: Propiedad = {
     id: propId,
-    inmuebleId: referencia,
-    activoId: id1 || referencia,
+    inmuebleId,
+    activoId: id1,
     categoria,
 
-    propietario: nonEmpty(cell(core.propietario)),
-    contacto: nonEmpty(cell(core.contacto)),
-    telefono: nonEmpty(cell(core.telefono)),
-    mail: nonEmpty(cell(core.mail)),
+    propietario: preserveOrEmpty(cell(core.propietario)),
+    contacto: preserveOrEmpty(cell(core.contacto)),
+    telefono: preserveOrEmpty(cell(core.telefono)),
+    mail: preserveOrEmpty(cell(core.mail)),
 
-    faseInterna: nonEmpty(faseInterna),
+    faseInterna: preserveOrEmpty(faseInterna),
     faseC: faseToCode(faseInterna),
-    proceso: nonEmpty(cell(core.proceso)),
+    proceso: preserveOrEmpty(cell(core.proceso)),
     deuda: num(row[core.deuda]),
     precioPublicacion: categoria === "CDR" ? num(row[cdrExt.precioPublicacion]) : null,
-    lien: nonEmpty(categoria === "NPL" ? cell(nplExt.lien) : ""),
+    lien: preserveOrEmpty(categoria === "NPL" ? cell(nplExt.lien) : ""),
 
     collateralId: categoria === "NPL" ? cell(nplExt.collateralId) : "",
     idPrinex: categoria === "NPL" ? cell(nplExt.idPrinex) : "",
@@ -349,26 +371,26 @@ function parseRow(
     idProperty: categoria === "CDR" ? cell(cdrExt.idProperty) : "",
     dataRef: categoria === "NPL" ? cell(nplExt.dataRef) : "",
 
-    portfolio: nonEmpty(
+    portfolio: preserveOrEmpty(
       categoria === "NPL" ? cell(nplExt.portfolio) : cell(cdrExt.portfolio),
     ),
-    folder: nonEmpty(categoria === "CDR" ? cell(cdrExt.folder) : ""),
-    mainLocalCcc14: nonEmpty(categoria === "NPL" ? cell(nplExt.mainLocalCcc14) : ""),
-    stageStatus: nonEmpty(categoria === "CDR" ? cell(cdrExt.stageStatus) : ""),
-    stageSubstatus: nonEmpty(categoria === "CDR" ? cell(cdrExt.stageSubstatus) : ""),
-    tipologia: nonEmpty(categoria === "CDR" ? cell(cdrExt.tipologia) : ""),
+    folder: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.folder) : ""),
+    mainLocalCcc14: preserveOrEmpty(categoria === "NPL" ? cell(nplExt.mainLocalCcc14) : ""),
+    stageStatus: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.stageStatus) : ""),
+    stageSubstatus: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.stageSubstatus) : ""),
+    tipologia: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.tipologia) : ""),
 
-    juzgadoLarga: nonEmpty(categoria === "NPL" ? cell(nplExt.juzgadoLarga) : ""),
-    codigoProcedimiento: nonEmpty(categoria === "NPL" ? cell(nplExt.codigoProcedimiento) : ""),
-    ultimaFaseCalculada: nonEmpty(ultimaFaseCalculada),
-    hitoJudicial: nonEmpty(categoria === "CDR" ? cell(cdrExt.hitoJudicial) : ""),
-    fechaLanzamiento: nonEmpty(categoria === "CDR" ? cell(cdrExt.fechaLanzamiento) : ""),
-    lanzamiento: nonEmpty(categoria === "CDR" ? cell(cdrExt.lanzamiento) : ""),
-    infoOcupantes: nonEmpty(categoria === "CDR" ? cell(cdrExt.infoOcupantes) : ""),
+    juzgadoLarga: preserveOrEmpty(categoria === "NPL" ? cell(nplExt.juzgadoLarga) : ""),
+    codigoProcedimiento: preserveOrEmpty(categoria === "NPL" ? cell(nplExt.codigoProcedimiento) : ""),
+    ultimaFaseCalculada: preserveOrEmpty(ultimaFaseCalculada),
+    hitoJudicial: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.hitoJudicial) : ""),
+    fechaLanzamiento: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.fechaLanzamiento) : ""),
+    lanzamiento: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.lanzamiento) : ""),
+    infoOcupantes: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.infoOcupantes) : ""),
 
-    inscrito: nonEmpty(categoria === "CDR" ? cell(cdrExt.inscrito) : ""),
-    cargas: nonEmpty(categoria === "CDR" ? cell(cdrExt.cargas) : ""),
-    registralmenteOk: nonEmpty(categoria === "CDR" ? cell(cdrExt.registralmenteOk) : ""),
+    inscrito: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.inscrito) : ""),
+    cargas: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.cargas) : ""),
+    registralmenteOk: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.registralmenteOk) : ""),
 
     excelRaw: Object.keys(excelRaw).length > 0 ? { [sheetName]: excelRaw } : undefined,
   };
@@ -383,20 +405,20 @@ function parseRow(
 function pickStr(curr: string, next: string): string {
   const c = curr?.trim();
   const n = next?.trim();
-  if (n && n !== "—") return n;
-  if (c && c !== "—") return c;
-  return n || c || "";
+  if (n) return n;
+  return c || "";
 }
 
 function mergeInmuebles(prev: Asset, next: Asset): Asset {
   return {
     ...prev,
+    referencia: next.referencia || prev.referencia,
     prov: pickStr(prev.prov, next.prov),
     pob: pickStr(prev.pob, next.pob),
     cp: pickStr(prev.cp, next.cp),
     addr: pickStr(prev.addr, next.addr),
-    tip: next.tip && next.tip !== "Vivienda" ? next.tip : prev.tip,
-    tipC: next.tipC && next.tipC !== "tp-viv" ? next.tipC : prev.tipC,
+    tip: next.tip || prev.tip,
+    tipC: next.tipC || prev.tipC,
     precio: next.precio ?? prev.precio,
     sqm: next.sqm ?? prev.sqm,
     tvia: pickStr(prev.tvia, next.tvia),

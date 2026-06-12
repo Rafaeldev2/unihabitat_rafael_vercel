@@ -12,12 +12,12 @@ import type { Asset } from "@/lib/types";
 import { Search, Star, X, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, Plus, Check, Trash2 } from "lucide-react";
 import { UploadActivosModal } from "./UploadActivosModal";
 import { FilterSelect } from "@/components/FilterSelect";
-import { deleteAllAssets, deleteAssetsByIds } from "@/app/actions/assets";
+import { deleteAllAssets, deleteAssetsByIds, toggleAssetPub } from "@/app/actions/assets";
 import { isAdmin } from "@/lib/auth-helpers";
 import { getCategoria, getFaseInterna, getFaseC, getPropietario, getActivoId } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 
-type SortCol = "prov" | "pob" | "sqm" | "precio" | "cat" | "addr" | "cp" | "tip" | "fase";
+type SortCol = "prov" | "pob" | "sqm" | "precio" | "cat" | "addr" | "cp" | "tip" | "fase" | "pub";
 
 const PAGE_SIZE_OPTIONS = [250, 500, 1000] as const;
 const DEFAULT_PAGE_SIZE = 500;
@@ -45,6 +45,7 @@ export default function ActivosPage() {
   const [fProv, setFProv] = useState("");
   const [fPob, setFPob] = useState("");
   const [fTipo, setFTipo] = useState("");
+  const [fEstado, setFEstado] = useState("");
   const [fFase, setFFase] = useState("");
   const [favOnly, setFavOnly] = useState(false);
   const [sortCol, setSortCol] = useState<SortCol>("prov");
@@ -59,6 +60,7 @@ export default function ActivosPage() {
         prov: fProv,
         pob: fPob,
         tipo: fTipo,
+        estado: fEstado,
         fase: fFase,
       })) return false;
       if (favOnly && !a.fav) return false;
@@ -81,8 +83,16 @@ export default function ActivosPage() {
       return true;
     });
     res.sort((a, b) => {
-      const va = sortCol === "addr" ? displayAssetAddress(a) : a[sortCol as keyof Asset];
-      const vb = sortCol === "addr" ? displayAssetAddress(b) : b[sortCol as keyof Asset];
+      const va = sortCol === "addr" ? displayAssetAddress(a)
+        : sortCol === "cat" ? getCategoria(a)
+        : sortCol === "fase" ? getFaseInterna(a)
+        : sortCol === "pub" ? (a.pub ? 1 : 0)
+        : a[sortCol as keyof Asset];
+      const vb = sortCol === "addr" ? displayAssetAddress(b)
+        : sortCol === "cat" ? getCategoria(b)
+        : sortCol === "fase" ? getFaseInterna(b)
+        : sortCol === "pub" ? (b.pub ? 1 : 0)
+        : b[sortCol as keyof Asset];
       if (va === null || va === undefined) return sortDir;
       if (vb === null || vb === undefined) return -sortDir;
       if (typeof va === "string" && typeof vb === "string") return va.localeCompare(vb) * sortDir;
@@ -90,13 +100,13 @@ export default function ActivosPage() {
       return 0;
     });
     return res;
-  }, [assets, q, fCat, fProv, fPob, fTipo, fFase, favOnly, sortCol, sortDir]);
+  }, [assets, q, fCat, fProv, fPob, fTipo, fEstado, fFase, favOnly, sortCol, sortDir]);
 
   // Reinicia a la página 1 cuando cambian filtros, búsqueda, orden o pageSize:
   // evita quedar "atrapado" en página 5 tras filtrar a 3 resultados.
   useEffect(() => {
     setCurrentPage(1);
-  }, [q, fCat, fProv, fPob, fTipo, fFase, favOnly, sortCol, sortDir, pageSize]);
+  }, [q, fCat, fProv, fPob, fTipo, fEstado, fFase, favOnly, sortCol, sortDir, pageSize]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(Math.max(1, currentPage), totalPages);
@@ -106,11 +116,11 @@ export default function ActivosPage() {
   );
 
   const activeListFilters = useMemo(
-    () => ({ cat: fCat, prov: fProv, pob: fPob, tipo: fTipo, fase: fFase }),
-    [fCat, fProv, fPob, fTipo, fFase],
+    () => ({ cat: fCat, prov: fProv, pob: fPob, tipo: fTipo, estado: fEstado, fase: fFase }),
+    [fCat, fProv, fPob, fTipo, fEstado, fFase],
   );
 
-  const { cat: catOptions, prov: provOptions, pob: pobOptions, tip: tipOptions, fase: faseOptions } =
+  const { cat: catOptions, prov: provOptions, pob: pobOptions, tip: tipOptions, estado: estadoOptions, fase: faseOptions } =
     useMemo(() => buildAssetListFilterOptions(assets, activeListFilters), [assets, activeListFilters]);
 
   const handleCatChange = (v: string) => {
@@ -130,7 +140,7 @@ export default function ActivosPage() {
   };
 
   const clearFilters = () => {
-    setQ(""); setFCat(""); setFProv(""); setFPob(""); setFTipo(""); setFFase("");
+    setQ(""); setFCat(""); setFProv(""); setFPob(""); setFTipo(""); setFEstado(""); setFFase("");
     if (favOnly) setFavOnly(false);
   };
 
@@ -172,6 +182,17 @@ export default function ActivosPage() {
 
   // (Bulk "Forzar Catastro" se eliminó del flujo de uploads. La acción manual
   // sigue disponible por inmueble desde la ficha en /admin/assets/[id].)
+
+  const handleTogglePub = async (id: string) => {
+    try {
+      await toggleAssetPub(id);
+      window.dispatchEvent(new Event("propcrm-assets-updated"));
+    } catch (err) {
+      toast.error("No se pudo cambiar el estado de publicación", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
 
   const allChk = filtered.length > 0 && filtered.every(a => a.chk);
 
@@ -222,6 +243,7 @@ export default function ActivosPage() {
             <FilterSelect label="Provincia" value={fProv} onChange={handleProvChange} options={provOptions} />
             <FilterSelect label="Población" value={fPob} onChange={setFPob} options={pobOptions} />
             <FilterSelect label="Tipología" value={fTipo} onChange={setFTipo} options={tipOptions} />
+            <FilterSelect label="Estado" value={fEstado} onChange={setFEstado} options={estadoOptions} />
             <FilterSelect label="Situación" value={fFase} onChange={setFFase} options={faseOptions} />
             <div className="flex min-w-[90px] flex-col gap-1">
               <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Favoritos</label>
@@ -286,15 +308,15 @@ export default function ActivosPage() {
 
         {/* Table */}
         <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
-          <div className="grid grid-cols-[32px_28px_72px_100px_100px_1fr_56px_56px_100px_minmax(7rem,1fr)_95px_28px] items-center gap-1.5 bg-navy px-3.5 py-2.5">
+          <div className="grid grid-cols-[32px_28px_72px_100px_100px_1fr_56px_56px_100px_minmax(7rem,1fr)_90px_95px_28px] items-center gap-1.5 bg-navy px-3.5 py-2.5">
             <div
               className={`flex h-4 w-4 cursor-pointer items-center justify-center rounded-[3px] border-[1.5px] transition-all ${allChk ? "border-gold bg-gold text-white" : "border-white/25 hover:border-white/50"}`}
               onClick={() => toggleChkAll(filtered.map(a => a.id))}
             >{allChk && <Check size={10} strokeWidth={3} />}</div>
             <div />
-            {(["cat","prov","pob","addr","cp","sqm","tip","fase","precio"] as SortCol[]).map(col => (
+            {(["cat","prov","pob","addr","cp","sqm","tip","fase","pub","precio"] as SortCol[]).map(col => (
               <div key={col} className={`flex cursor-pointer select-none items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors ${sortCol === col ? "text-gold" : "text-white/35 hover:text-white/60"}`} onClick={() => handleSort(col)}>
-                {{cat:"Cat.",prov:"Provincia",pob:"Población",addr:"Dirección",cp:"C.P.",sqm:"m²",tip:"Tipo",fase:"Situación",precio:"Precio"}[col]}
+                {{cat:"Cat.",prov:"Provincia",pob:"Población",addr:"Dirección",cp:"C.P.",sqm:"m²",tip:"Tipo",fase:"Situación",pub:"Estado",precio:"Precio"}[col]}
               </div>
             ))}
             <div />
@@ -307,7 +329,7 @@ export default function ActivosPage() {
               <Link
                 key={a.id}
                 href={`/admin/assets/${a.id}`}
-                className="grid grid-cols-[32px_28px_72px_100px_100px_1fr_56px_56px_100px_minmax(7rem,1fr)_95px_28px] items-start gap-1.5 border-b border-border2 px-3.5 py-1.5 transition-colors last:border-b-0 hover:bg-cream/50 min-h-[46px]"
+                className="grid grid-cols-[32px_28px_72px_100px_100px_1fr_56px_56px_100px_minmax(7rem,1fr)_90px_95px_28px] items-start gap-1.5 border-b border-border2 px-3.5 py-1.5 transition-colors last:border-b-0 hover:bg-cream/50 min-h-[46px]"
               >
                 <div
                   className={`flex h-4 w-4 cursor-pointer items-center justify-center rounded-[3px] border-[1.5px] transition-all ${a.chk ? "border-navy bg-navy text-white" : "border-border hover:border-navy/40"}`}
@@ -327,6 +349,19 @@ export default function ActivosPage() {
                 <span className="text-xs text-muted">{fmtM(a.sqm)}</span>
                 <span className={`inline-flex w-fit rounded-md px-2 py-0.5 text-[10px] font-semibold ${pillClass[a.tipC] || ""}`}>{a.tip}</span>
                 <span className={`min-w-0 max-w-full rounded-md px-2 py-0.5 text-left text-[10px] font-semibold leading-snug whitespace-normal break-words ${pillClass[getFaseC(a)] || ""}`}>{getFaseInterna(a)}</span>
+                <button
+                  type="button"
+                  onClick={e => { e.preventDefault(); e.stopPropagation(); void handleTogglePub(a.id); }}
+                  className={`flex w-fit items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                    a.pub
+                      ? "bg-green/10 text-green hover:bg-green/20"
+                      : "bg-muted/10 text-muted hover:bg-muted/20"
+                  }`}
+                  title={a.pub ? "Hacer no publicado" : "Hacer publicado"}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${a.pub ? "bg-green" : "bg-muted"}`} />
+                  {a.pub ? "Publicado" : "No publicado"}
+                </button>
                 <span className="text-sm font-semibold text-navy">{fmt(a.precio)}</span>
                 <ChevronRight size={14} className="text-border" />
               </Link>
