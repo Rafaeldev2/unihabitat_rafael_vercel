@@ -25,9 +25,10 @@ Guía paso a paso: [**operacoes/staging.md**](operacoes/staging.md).
 - [x] Proyecto Supabase staging (`rflzqlutlbwtvgfbswtn`) distinto de prod  
 - [x] Schema + migraciones + datos copiados desde prod (`scripts/copy-prod-to-staging.mjs`)  
 - [x] `.env.local` local con keys **staging** + `EMAIL_DRY_RUN=true`  
-- [ ] Vars **Preview** en Vercel apuntando a staging (Production sin tocar)  
-- [ ] Auth redirect URLs del proyecto staging incluyen Preview + localhost  
-- [ ] Rama Git `staging` desplegada; URL Preview compartida con el cliente  
+- [x] Deploy staging: https://unihabitat-staging.vercel.app (proyecto Vercel aparte; prod intacta)  
+- [x] Rama Git `staging` en GitHub (`origin/staging`)  
+- [ ] Auth redirect URLs del proyecto staging: Site URL + `https://unihabitat-staging.vercel.app/**` + localhost  
+- [ ] Smoke cliente en esa URL (checklist abajo)  
 
 Detalle: [staging.md](operacoes/staging.md).
 

@@ -21,8 +21,8 @@ Nunca pegues `supabase-migration-*.sql` en el SQL Editor de **producción** hast
 - [x] Proyecto Supabase staging creado
 - [x] Schema + migraciones históricas + `categoria-libre` + `comprador-acceso` (+ policies staging)
 - [x] Datos CRM copiados desde prod (assets, propiedades, compradores, …)
-- [ ] Auth redirect URLs con la URL real del Preview
-- [ ] Vars **Preview** en el proyecto Vercel de Unihabitat (o deploy `unihabitat-staging`)
+- [x] Deploy Vercel aislado: **https://unihabitat-staging.vercel.app** (proyecto `unihabitat-staging`, no toca `www.unihabitat.net`)
+- [ ] Auth redirect URLs staging → `https://unihabitat-staging.vercel.app/**` + localhost
 - [ ] Smoke cliente ([seguimiento](../seguimiento-tareas-cliente.md))
 
 ---
