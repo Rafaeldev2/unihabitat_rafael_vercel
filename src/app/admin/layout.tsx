@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import {
   Building2, ShoppingCart, Handshake, CheckSquare, BarChart3,
-  Settings, LogOut, FileText, type LucideIcon,
+  Settings, LogOut, FileText, BookOpen, type LucideIcon,
 } from "lucide-react";
 import { signOut } from "@/app/login/actions";
 import { canViewSection } from "@/lib/auth-helpers";
@@ -13,13 +13,15 @@ import { hrefToSection } from "@/lib/permissions";
 import type { SectionId } from "@/lib/permissions";
 import { useApp } from "@/lib/context";
 import { AssetsErrorBanner } from "@/components/AssetsErrorBanner";
+import { isStagingGuideEnabled } from "@/lib/staging-guide";
 
 interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  sectionId: SectionId | "config";
+  sectionId: SectionId | "config" | "guia-staging";
   sep?: boolean;
+  stagingOnly?: boolean;
 }
 
 const ALL_NAV_ITEMS: NavItem[] = [
@@ -30,12 +32,21 @@ const ALL_NAV_ITEMS: NavItem[] = [
   { href: "/admin/ofertas",      label: "Ofertas",     icon: FileText,     sectionId: "ofertas" },
   { href: "/admin/informes",     label: "Informes",    icon: BarChart3,    sectionId: "informes" },
   { href: "/admin/config",       label: "Config",      icon: Settings,     sectionId: "config", sep: true },
+  {
+    href: "/admin/guia-staging",
+    label: "Guía",
+    icon: BookOpen,
+    sectionId: "guia-staging",
+    stagingOnly: true,
+    sep: true,
+  },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { session, sessionResolved, permissions } = useApp();
+  const showStagingGuide = isStagingGuideEnabled();
 
   const isActive = (href: string) => {
     if (href === "/admin") return pathname === "/admin" || pathname.startsWith("/admin/assets");
@@ -44,17 +55,23 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const visibleNav = ALL_NAV_ITEMS.filter((item) => {
     if (!sessionResolved || !session) return false;
-    return canViewSection(session, item.sectionId, permissions);
+    if (item.stagingOnly) {
+      return showStagingGuide && session.role === "admin";
+    }
+    return canViewSection(session, item.sectionId as SectionId | "config", permissions);
   });
 
+  const isGuiaStaging = pathname.startsWith("/admin/guia-staging");
   const currentSection = hrefToSection(pathname);
   const sectionAllowed =
-    !sessionResolved ||
-    !session ||
-    session.role === "admin" ||
-    !currentSection ||
-    currentSection === "config" ||
-    canViewSection(session, currentSection, permissions);
+    isGuiaStaging
+      ? showStagingGuide && session?.role === "admin"
+      : !sessionResolved ||
+        !session ||
+        session.role === "admin" ||
+        !currentSection ||
+        currentSection === "config" ||
+        canViewSection(session, currentSection, permissions);
 
   useEffect(() => {
     if (!sessionResolved || !session || session.role === "admin") return;

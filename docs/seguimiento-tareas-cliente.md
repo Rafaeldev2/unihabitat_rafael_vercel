@@ -29,6 +29,7 @@ Guía paso a paso: [**operacoes/staging.md**](operacoes/staging.md).
 - [x] Rama Git `staging` en GitHub (`origin/staging`)  
 - [ ] Auth redirect URLs del proyecto staging: Site URL + `https://unihabitat-staging.vercel.app/**` + localhost  
 - [ ] Smoke cliente en esa URL (checklist abajo)  
+- [x] Tutorial admin **Guía** → https://unihabitat-staging.vercel.app/admin/guia-staging (solo staging)  
 
 Detalle: [staging.md](operacoes/staging.md).
 

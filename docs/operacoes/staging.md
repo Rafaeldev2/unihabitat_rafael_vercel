@@ -22,8 +22,9 @@ Nunca pegues `supabase-migration-*.sql` en el SQL Editor de **producción** hast
 - [x] Schema + migraciones históricas + `categoria-libre` + `comprador-acceso` (+ policies staging)
 - [x] Datos CRM copiados desde prod (assets, propiedades, compradores, …)
 - [x] Deploy Vercel aislado: **https://unihabitat-staging.vercel.app** (proyecto `unihabitat-staging`, no toca `www.unihabitat.net`)
+- [x] Tutorial in-app **Guía** (`/admin/guia-staging`) — flag `NEXT_PUBLIC_SHOW_STAGING_GUIDE=true` (nunca en prod)
 - [ ] Auth redirect URLs staging → `https://unihabitat-staging.vercel.app/**` + localhost
-- [ ] Smoke cliente ([seguimiento](../seguimiento-tareas-cliente.md))
+- [ ] Smoke cliente ([seguimiento](../seguimiento-tareas-cliente.md)) + recorrer Guía
 
 ---
 
