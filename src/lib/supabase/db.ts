@@ -96,7 +96,7 @@ export function rowToPropiedad(r: any): Propiedad {
     id: r.id,
     inmuebleId: r.inmueble_id,
     activoId: r.activo_id,
-    categoria: (r.categoria === "NPL" ? "NPL" : "CDR") as "CDR" | "NPL",
+    categoria: String(r.categoria ?? "").trim() || "CDR",
     propietario: r.propietario ?? "—",
     contacto: r.contacto ?? "—",
     telefono: r.telefono ?? "—",
@@ -208,6 +208,7 @@ export function attachPropiedades(assets: Asset[], propiedades: Propiedad[]): As
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function rowToComprador(r: any): Comprador {
+  const acceso = r.acceso === "sin_acceso" ? "sin_acceso" : "activo";
   return {
     id: r.id, nombre: r.nombre, ini: r.ini ?? "", col: r.col ?? "#2563a8,#0d2a4a",
     tipo: r.tipo ?? "Free", agente: r.agente ?? "Admin", email: r.email,
@@ -215,6 +216,7 @@ export function rowToComprador(r: any): Comprador {
     activos: r.activos ?? "0", actividad: r.actividad ?? "",
     estado: r.estado ?? "Nuevo", estadoC: r.estado_c ?? "fp-nd",
     nda: r.nda ?? "Pendiente",
+    acceso,
   };
 }
 
@@ -224,6 +226,7 @@ export function compradorToRow(c: Comprador) {
     agente: c.agente, email: c.email, tel: c.tel, intereses: c.intereses,
     presupuesto: c.presupuesto, activos: c.activos, actividad: c.actividad,
     estado: c.estado, estado_c: c.estadoC, nda: c.nda,
+    acceso: c.acceso === "sin_acceso" ? "sin_acceso" : "activo",
   };
 }
 

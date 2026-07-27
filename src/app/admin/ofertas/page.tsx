@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useApp } from "@/lib/context";
-import { fetchOfertasPendientes, updateOfertaEstado, type OfertaRow } from "@/app/actions/ofertas";
+import { fetchOfertas, updateOfertaEstado, type OfertaRow } from "@/app/actions/ofertas";
 import { fetchCompradores } from "@/app/actions/compradores";
 import { fetchAssetByIdForAdmin } from "@/app/actions/assets";
 import type { Asset, Comprador } from "@/lib/types";
@@ -11,22 +11,32 @@ import { FileText, CheckCircle2, XCircle, Send, Loader2, AlertCircle, Euro } fro
 import { fmt } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 
+const ESTADO_FILTRO: Array<OfertaRow["estado"] | ""> = [
+  "",
+  "pendiente",
+  "nda_enviado",
+  "nda_firmado",
+  "validada",
+  "rechazada",
+];
+
 export default function OfertasPage() {
   const { assets } = useApp();
   const [ofertas, setOfertas] = useState<OfertaRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fEstado, setFEstado] = useState<OfertaRow["estado"] | "">("");
   const [compradores, setCompradores] = useState<Map<string, Comprador>>(new Map());
   const [assetsMap, setAssetsMap] = useState<Map<string, Asset>>(new Map());
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [fEstado]);
 
   async function loadData() {
     setLoading(true);
     try {
       const [ofertasData, compradoresData] = await Promise.all([
-        fetchOfertasPendientes(),
+        fetchOfertas(fEstado),
         fetchCompradores(),
       ]);
       setOfertas(ofertasData);
@@ -75,6 +85,18 @@ export default function OfertasPage() {
           <span className="rounded-md bg-cream px-2.5 py-0.5 text-xs font-medium text-muted">
             {ofertas.length} {ofertas.length === 1 ? "oferta" : "ofertas"}
           </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Estado</label>
+          <select
+            value={fEstado}
+            onChange={(e) => setFEstado(e.target.value as OfertaRow["estado"] | "")}
+            className="rounded-md border border-border bg-cream2 px-2.5 py-1.5 text-xs text-text outline-none focus:border-navy"
+          >
+            {ESTADO_FILTRO.map((e) => (
+              <option key={e || "all"} value={e}>{e || "Todos"}</option>
+            ))}
+          </select>
         </div>
       </div>
 

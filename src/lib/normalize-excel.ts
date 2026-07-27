@@ -15,6 +15,7 @@
 
 import * as XLSX from "xlsx";
 import type { Asset, Propiedad } from "./types";
+import { faseToCode } from "./fase-interna";
 
 export interface ParseTemplateResult {
   inmuebles: Asset[];
@@ -25,7 +26,8 @@ export interface ParseTemplateResult {
     parsed: number;
     skipped: number;
     skippedReasons: Record<string, number>;
-    categoryCounts: { CDR: number; NPL: number };
+    /** Conteos por categoría tal cual en el Excel (dinámico). */
+    categoryCounts: Record<string, number>;
   };
 }
 
@@ -148,15 +150,9 @@ function tipoToCode(tip: string): string {
   }
 }
 
-/** Mapea "Fase Interna" (texto libre) a un código de fase. */
-function faseToCode(fase: string): string {
-  const f = fold(fase);
-  if (!f) return "";
-  if (/DISPONIBLE|PUB/.test(f)) return "fp-pub";
-  if (/SUSPEND|PAUS/.test(f)) return "fp-sus";
-  if (/SEGUIMIENTO|EN PROCESO/.test(f)) return "fp-seg";
-  if (/RESERVA/.test(f)) return "fp-res";
-  return "fp-nd";
+/** True si la categoría (fold) es NPL — decide qué extensión de columnas usar. */
+function isNplCategoria(categoria: string): boolean {
+  return fold(categoria) === "NPL";
 }
 
 /* ------------------------------------------------------------------ */
@@ -173,7 +169,7 @@ const CORE_HEADERS = {
   categoria: ["Categoria", "Categoría"],
   faseInterna: ["Fase Interna"],
   proceso: ["Proceso"],
-  referencia: ["Referencia"],
+  referencia: ["Referencia", "Referencia Catastral", "ReferenciaCatastral"],
   clase: ["Clase"],
   uso: ["Uso"],
   bien: ["Bien"],
@@ -279,13 +275,13 @@ function parseRow(
   if (!id1) return { skip: "sin ID1" };
   const inmuebleId = `${id1}__${referencia}`;
 
-  // 2. Categoría
-  const catRaw = fold(cell(core.categoria));
-  const categoria: "CDR" | "NPL" = catRaw === "NPL" ? "NPL" : "CDR";
+  // 2. Categoría — texto libre del Excel (CDR, NPL, OCUPADO, …)
+  const categoria = fold(cell(core.categoria)) || "CDR";
+  const npl = isNplCategoria(categoria);
 
   // 3. Inmueble (físico)
   const bien = cell(core.bien);
-  const tipoSource = categoria === "NPL" && nplExt.tipoInmueble >= 0
+  const tipoSource = npl && nplExt.tipoInmueble >= 0
     ? cell(nplExt.tipoInmueble)
     : bien;
   const tip = normalizeTipo(tipoSource);
@@ -319,7 +315,7 @@ function parseRow(
     supC: preserveOrEmpty(cell(core.supConstruida)),
     supG: preserveOrEmpty(cell(core.supGrafica)),
     coef: preserveOrEmpty(cell(core.coefPart)),
-    ccaa: preserveOrEmpty(categoria === "NPL" ? cell(nplExt.ccaa) : ""),
+    ccaa: preserveOrEmpty(npl ? cell(nplExt.ccaa) : ""),
     fullAddr: preserveOrEmpty(cell(core.direccion)),
     desc: preserveOrEmpty(cell(core.descripcion)),
     pub: bool(row[core.publicar]),
@@ -331,8 +327,8 @@ function parseRow(
 
   // 4. PK de la propiedad
   let propId = "";
-  if (categoria === "NPL" && nplExt.collateralId >= 0) propId = cell(nplExt.collateralId);
-  if (!propId && categoria === "CDR" && cdrExt.idProperty >= 0) propId = cell(cdrExt.idProperty);
+  if (npl && nplExt.collateralId >= 0) propId = cell(nplExt.collateralId);
+  if (!propId && cdrExt.idProperty >= 0) propId = cell(cdrExt.idProperty);
   if (!propId) propId = `${id1}__${referencia}`;
 
   // 5. Excel raw
@@ -345,7 +341,7 @@ function parseRow(
   }
 
   const faseInterna = cell(core.faseInterna);
-  const ultimaFaseCalculada = categoria === "NPL" ? cell(nplExt.ultimaFaseCalculada) : "";
+  const ultimaFaseCalculada = npl ? cell(nplExt.ultimaFaseCalculada) : "";
 
   const propiedad: Propiedad = {
     id: propId,
@@ -362,35 +358,35 @@ function parseRow(
     faseC: faseToCode(faseInterna),
     proceso: preserveOrEmpty(cell(core.proceso)),
     deuda: num(row[core.deuda]),
-    precioPublicacion: categoria === "CDR" ? num(row[cdrExt.precioPublicacion]) : null,
-    lien: preserveOrEmpty(categoria === "NPL" ? cell(nplExt.lien) : ""),
+    precioPublicacion: !npl ? num(row[cdrExt.precioPublicacion]) : null,
+    lien: preserveOrEmpty(npl ? cell(nplExt.lien) : ""),
 
-    collateralId: categoria === "NPL" ? cell(nplExt.collateralId) : "",
-    idPrinex: categoria === "NPL" ? cell(nplExt.idPrinex) : "",
-    idPrinexCorto: categoria === "NPL" ? cell(nplExt.idPrinexCorto) : "",
-    idProperty: categoria === "CDR" ? cell(cdrExt.idProperty) : "",
-    dataRef: categoria === "NPL" ? cell(nplExt.dataRef) : "",
+    collateralId: npl ? cell(nplExt.collateralId) : "",
+    idPrinex: npl ? cell(nplExt.idPrinex) : "",
+    idPrinexCorto: npl ? cell(nplExt.idPrinexCorto) : "",
+    idProperty: !npl ? cell(cdrExt.idProperty) : "",
+    dataRef: npl ? cell(nplExt.dataRef) : "",
 
     portfolio: preserveOrEmpty(
-      categoria === "NPL" ? cell(nplExt.portfolio) : cell(cdrExt.portfolio),
+      npl ? cell(nplExt.portfolio) : cell(cdrExt.portfolio),
     ),
-    folder: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.folder) : ""),
-    mainLocalCcc14: preserveOrEmpty(categoria === "NPL" ? cell(nplExt.mainLocalCcc14) : ""),
-    stageStatus: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.stageStatus) : ""),
-    stageSubstatus: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.stageSubstatus) : ""),
-    tipologia: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.tipologia) : ""),
+    folder: preserveOrEmpty(!npl ? cell(cdrExt.folder) : ""),
+    mainLocalCcc14: preserveOrEmpty(npl ? cell(nplExt.mainLocalCcc14) : ""),
+    stageStatus: preserveOrEmpty(!npl ? cell(cdrExt.stageStatus) : ""),
+    stageSubstatus: preserveOrEmpty(!npl ? cell(cdrExt.stageSubstatus) : ""),
+    tipologia: preserveOrEmpty(!npl ? cell(cdrExt.tipologia) : ""),
 
-    juzgadoLarga: preserveOrEmpty(categoria === "NPL" ? cell(nplExt.juzgadoLarga) : ""),
-    codigoProcedimiento: preserveOrEmpty(categoria === "NPL" ? cell(nplExt.codigoProcedimiento) : ""),
+    juzgadoLarga: preserveOrEmpty(npl ? cell(nplExt.juzgadoLarga) : ""),
+    codigoProcedimiento: preserveOrEmpty(npl ? cell(nplExt.codigoProcedimiento) : ""),
     ultimaFaseCalculada: preserveOrEmpty(ultimaFaseCalculada),
-    hitoJudicial: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.hitoJudicial) : ""),
-    fechaLanzamiento: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.fechaLanzamiento) : ""),
-    lanzamiento: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.lanzamiento) : ""),
-    infoOcupantes: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.infoOcupantes) : ""),
+    hitoJudicial: preserveOrEmpty(!npl ? cell(cdrExt.hitoJudicial) : ""),
+    fechaLanzamiento: preserveOrEmpty(!npl ? cell(cdrExt.fechaLanzamiento) : ""),
+    lanzamiento: preserveOrEmpty(!npl ? cell(cdrExt.lanzamiento) : ""),
+    infoOcupantes: preserveOrEmpty(!npl ? cell(cdrExt.infoOcupantes) : ""),
 
-    inscrito: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.inscrito) : ""),
-    cargas: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.cargas) : ""),
-    registralmenteOk: preserveOrEmpty(categoria === "CDR" ? cell(cdrExt.registralmenteOk) : ""),
+    inscrito: preserveOrEmpty(!npl ? cell(cdrExt.inscrito) : ""),
+    cargas: preserveOrEmpty(!npl ? cell(cdrExt.cargas) : ""),
+    registralmenteOk: preserveOrEmpty(!npl ? cell(cdrExt.registralmenteOk) : ""),
 
     excelRaw: Object.keys(excelRaw).length > 0 ? { [sheetName]: excelRaw } : undefined,
   };
@@ -459,7 +455,7 @@ export async function parseTemplateExcel(file: File): Promise<ParseTemplateResul
       inmuebles: [], propiedades: [],
       diag: {
         sheet: sheetName, rows: 0, parsed: 0, skipped: 0,
-        skippedReasons: {}, categoryCounts: { CDR: 0, NPL: 0 },
+        skippedReasons: {}, categoryCounts: {},
       },
     };
   }
@@ -472,7 +468,9 @@ export async function parseTemplateExcel(file: File): Promise<ParseTemplateResul
   const nplExt = resolveIndices(headers, NPL_EXT_HEADERS);
 
   if (core.referencia < 0) {
-    throw new Error('Cabecera "Referencia" no encontrada en la primera hoja del Excel.');
+    throw new Error(
+      'Cabecera "Referencia" / "Referencia Catastral" no encontrada en la primera hoja del Excel.',
+    );
   }
   if (core.id1 < 0) {
     throw new Error('Cabecera "ID1" no encontrada en la primera hoja del Excel.');
@@ -484,7 +482,7 @@ export async function parseTemplateExcel(file: File): Promise<ParseTemplateResul
   const inmueblesById = new Map<string, Asset>();
   const propiedades: Propiedad[] = [];
   const skippedReasons: Record<string, number> = {};
-  const categoryCounts = { CDR: 0, NPL: 0 };
+  const categoryCounts: Record<string, number> = {};
   let parsed = 0;
   let skipped = 0;
 
@@ -509,7 +507,8 @@ export async function parseTemplateExcel(file: File): Promise<ParseTemplateResul
       prev ? mergeInmuebles(prev, result.inmueble) : result.inmueble,
     );
     propiedades.push(result.propiedad);
-    categoryCounts[result.propiedad.categoria]++;
+    const cat = result.propiedad.categoria || "CDR";
+    categoryCounts[cat] = (categoryCounts[cat] ?? 0) + 1;
     parsed++;
   }
 

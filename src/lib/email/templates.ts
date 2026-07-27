@@ -343,13 +343,70 @@ export function agentInviteTemplate(input: AgentInviteInput): EmailTemplate {
   return { subject, html, text };
 }
 
-// ── 5. Notificación in-system (mirror) ────────────────────────────────────
+// ── 5. Activo compartido con comprador ────────────────────────────────────
+export interface AssetSharedInput {
+  recipientName: string;
+  assetId: string;
+  lugar?: string;
+  tipologia?: string;
+  precioLabel?: string;
+  deudaLabel?: string;
+  actionUrl: string;
+}
+
+export function assetSharedTemplate(input: AssetSharedInput): EmailTemplate {
+  const subject = `[Unihabitat] Te han compartido un activo${input.lugar ? ` en ${input.lugar}` : ""}`;
+  const tipLine = input.tipologia ? `<div style="margin:4px 0;"><strong>Tipo:</strong> ${escapeHtml(input.tipologia)}</div>` : "";
+  const precioLine = input.precioLabel ? `<div style="margin:4px 0;"><strong>Precio:</strong> ${escapeHtml(input.precioLabel)}</div>` : "";
+  const deudaLine = input.deudaLabel ? `<div style="margin:4px 0;"><strong>Deuda:</strong> ${escapeHtml(input.deudaLabel)}</div>` : "";
+  const bodyHtml = `
+    <p style="margin:0 0 14px 0;font-size:15px;">Hola ${escapeHtml(input.recipientName || "cliente")},</p>
+    <p style="margin:0 0 18px 0;">Unihabitat te ha compartido un activo para que lo revises en tu portal.</p>
+    <div style="padding:16px 18px;border-left:3px solid ${GOLD};background-color:${CREAM};border-radius:4px;color:${TEXT};font-size:14px;">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:${MUTED};margin-bottom:8px;">Activo compartido</div>
+      ${input.lugar ? `<div style="margin:4px 0;"><strong>Ubicación:</strong> ${escapeHtml(input.lugar)}</div>` : ""}
+      ${tipLine}
+      ${precioLine}
+      ${deudaLine}
+      <div style="margin:8px 0 0 0;color:${MUTED};font-size:12px;">Ref: ${escapeHtml(input.assetId)}</div>
+    </div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0;">
+      <tr>
+        <td align="center">
+          <a href="${escapeHtml(input.actionUrl)}" style="display:inline-block;background-color:${NAVY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:6px;font-size:14px;font-weight:bold;">Ver activo</a>
+        </td>
+      </tr>
+    </table>
+    <p style="margin:0;color:${MUTED};font-size:12px;">Si el botón no funciona, copia este enlace: ${escapeHtml(input.actionUrl)}</p>
+  `;
+  const html = baseLayout({
+    preheader: `Activo compartido${input.lugar ? ` en ${input.lugar}` : ""}`,
+    banner: "Activo compartido",
+    bodyHtml,
+  });
+  const text = [
+    `Hola ${input.recipientName || "cliente"},`,
+    "",
+    "Unihabitat te ha compartido un activo.",
+    input.lugar ? `Ubicación: ${input.lugar}` : null,
+    input.tipologia ? `Tipo: ${input.tipologia}` : null,
+    input.precioLabel ? `Precio: ${input.precioLabel}` : null,
+    input.deudaLabel ? `Deuda: ${input.deudaLabel}` : null,
+    `Ref: ${input.assetId}`,
+    "",
+    `Ver activo: ${input.actionUrl}`,
+  ].filter(Boolean).join("\n");
+  return { subject, html, text };
+}
+
+// ── 6. Notificación in-system (mirror) ────────────────────────────────────
 const TIPO_LABEL: Record<string, string> = {
   match: "Nuevo match con activo",
   invitacion: "Activo compartido contigo",
   asignacion_comprador: "Nuevo comprador asignado",
   asignacion_activo: "Nuevo activo asignado",
   desasignacion: "Asignación retirada",
+  favorito: "Nuevo favorito de comprador",
 };
 
 export interface NotificationMirrorInput {

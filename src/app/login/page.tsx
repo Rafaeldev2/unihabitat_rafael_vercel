@@ -155,10 +155,15 @@ function LoginForm() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-navy via-navy2 to-navy3 px-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center">
-          <img src="/LogoAzul.svg" alt="Unihabitat" className="h-12 w-auto"/>
+          <div className="mx-auto mb-4 flex justify-center">
+            {/* BrandMark: * negro sobre fondo oscuro */}
+            <span className="inline-flex items-center gap-2.5">
+              <img src="/LogoAzul.svg" alt="" className="h-12 w-auto" />
+              <h1 className="text-2xl font-bold text-white">
+                Unihabitat<span className="text-black">*</span>
+              </h1>
+            </span>
           </div>
-          <h1 className="text-2xl font-bold text-white">Unihabitat</h1>
           <p className="mt-1 text-sm text-white/50">Gestión de activos inmobiliarios</p>
         </div>
 

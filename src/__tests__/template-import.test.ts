@@ -44,8 +44,8 @@ describe("parseTemplateExcel — plantilla CDR", () => {
     expect(r.diag.rows).toBeGreaterThan(0);
     expect(r.inmuebles.length).toBeGreaterThan(0);
     expect(r.propiedades.length).toBe(r.inmuebles.length);
-    expect(r.diag.categoryCounts.CDR).toBe(r.propiedades.length);
-    expect(r.diag.categoryCounts.NPL).toBe(0);
+    expect(r.diag.categoryCounts.CDR ?? 0).toBe(r.propiedades.length);
+    expect(r.diag.categoryCounts.NPL ?? 0).toBe(0);
   });
 
   it("usa PK compuesta ID1__Referencia y expone Referencia limpia", async () => {
@@ -95,8 +95,8 @@ describe("parseTemplateExcel — plantilla NPL", () => {
     expect(r.inmuebles.length).toBeLessThanOrEqual(r.propiedades.length);
     // categoryCounts cuenta filas parseadas (pre-dedup), por eso puede ser
     // mayor que propiedades.length si Collateral ID se repitió.
-    expect(r.diag.categoryCounts.NPL).toBeGreaterThanOrEqual(r.propiedades.length);
-    expect(r.diag.categoryCounts.CDR).toBe(0);
+    expect(r.diag.categoryCounts.NPL ?? 0).toBeGreaterThanOrEqual(r.propiedades.length);
+    expect(r.diag.categoryCounts.CDR ?? 0).toBe(0);
   });
 
   it("agrupa propiedades del mismo activo por ID1", async () => {
@@ -142,5 +142,78 @@ describe("parseTemplateExcel — errores", () => {
     const buf = wb.write(workbook, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
     const file = fileFromArrayBuffer("sin-referencia.xlsx", buf);
     await expect(parseTemplateExcel(file)).rejects.toThrow(/Referencia/);
+  });
+});
+
+describe("parseTemplateExcel — contraejemplos plan (CE-1, CE-2, CE-3)", () => {
+  it("acepta cabecera Referencia Catastral (plantilla cliente)", async () => {
+    const wb = await import("xlsx");
+    const ws = wb.utils.aoa_to_sheet([
+      [
+        "Propietario", "Telefono", "mail", "Publicar", "Categoria", "Fase Interna",
+        "Proceso", "Referencia Catastral", "Deuda", "Precio", "ID1",
+      ],
+      [
+        "Sergio", "673006438", "a@b.com", "SI", "NPL", "Seguimiento",
+        "EJ-1", "1890034VK1419S0010DS", "118945.54", "0", "ESC-HO-01-1200",
+      ],
+    ]);
+    const workbook = wb.utils.book_new();
+    wb.utils.book_append_sheet(workbook, ws, "Hoja1");
+    const buf = wb.write(workbook, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+    const r = await parseTemplateExcel(fileFromArrayBuffer("cliente-rc.xlsx", buf));
+    expect(r.inmuebles).toHaveLength(1);
+    expect(r.inmuebles[0].referencia).toBe("1890034VK1419S0010DS");
+    expect(r.propiedades[0].activoId).toBe("ESC-HO-01-1200");
+  });
+
+  it("persiste categoría OCUPADO sin forzar a CDR", async () => {
+    const wb = await import("xlsx");
+    const ws = wb.utils.aoa_to_sheet([
+      ["Categoria", "Referencia", "ID1", "Publicar", "Precio"],
+      ["OCUPADO", "7106909UK5370N0001QF", "ESC-HO-01-1682", "SI", "72736.89"],
+    ]);
+    const workbook = wb.utils.book_new();
+    wb.utils.book_append_sheet(workbook, ws, "Hoja1");
+    const buf = wb.write(workbook, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+    const r = await parseTemplateExcel(fileFromArrayBuffer("ocupado.xlsx", buf));
+    expect(r.propiedades).toHaveLength(1);
+    expect(r.propiedades[0].categoria).toBe("OCUPADO");
+    expect(r.diag.categoryCounts.OCUPADO).toBe(1);
+    expect(r.diag.categoryCounts.CDR ?? 0).toBe(0);
+  });
+
+  it("mismo ID1 con RC distinta → 2 inmuebles y 1 grupo activoId", async () => {
+    const wb = await import("xlsx");
+    const ws = wb.utils.aoa_to_sheet([
+      ["Categoria", "Referencia", "ID1", "Publicar"],
+      ["NPL", "AAA1111VK1111A0001AA", "GROUP-01", "SI"],
+      ["NPL", "BBB2222VK2222B0002BB", "GROUP-01", "SI"],
+    ]);
+    const workbook = wb.utils.book_new();
+    wb.utils.book_append_sheet(workbook, ws, "Hoja1");
+    const buf = wb.write(workbook, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+    const r = await parseTemplateExcel(fileFromArrayBuffer("grupo-id1.xlsx", buf));
+    expect(r.inmuebles).toHaveLength(2);
+    expect(r.propiedades).toHaveLength(2);
+    expect(new Set(r.propiedades.map((p) => p.activoId))).toEqual(new Set(["GROUP-01"]));
+    expect(r.inmuebles.map((i) => i.id).sort()).toEqual([
+      "GROUP-01__AAA1111VK1111A0001AA",
+      "GROUP-01__BBB2222VK2222B0002BB",
+    ].sort());
+  });
+});
+
+describe("faseToCode — 8 fases internas", () => {
+  it("mapea cada valor de negocio a un código distinto donde aplica", async () => {
+    const { faseToCode } = await import("@/lib/fase-interna");
+    expect(faseToCode("Disponible")).toBe("fp-pub");
+    expect(faseToCode("Seguimiento")).toBe("fp-seg");
+    expect(faseToCode("Info. Solicitada")).toBe("fp-info");
+    expect(faseToCode("Ofertado")).toBe("fp-ofe");
+    expect(faseToCode("Negociación")).toBe("fp-neg");
+    expect(faseToCode("Reservado")).toBe("fp-res");
+    expect(faseToCode("Cerrado")).toBe("fp-cer");
+    expect(faseToCode("No Disponible")).toBe("fp-nd");
   });
 });

@@ -9,8 +9,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "PropCRM — Real Estate Asset Management",
-  description: "Hybrid Real Estate CRM + Public Portal",
+  title: "Unihabitat — Activos inmobiliarios NPL y CDR",
+  description: "Portal y CRM Unihabitat para carteras NPL y CDR/REO en España",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

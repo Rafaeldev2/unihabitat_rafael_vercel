@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Search, X, Building2, ChevronDown } from "lucide-react";
 import { SiteFooter } from "@/components/SiteFooter";
+import { BrandMark } from "@/components/BrandMark";
 import { useApp } from "@/lib/context";
 import { normalizeTipo } from "@/lib/normalize-excel";
 
@@ -78,11 +79,8 @@ export default function HomePage() {
       {/* ── NAV ── */}
       <header className="fixed inset-x-0 top-0 z-50 border-b border-black/5 bg-white/95 backdrop-blur-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center">
-            <img src="/LogoAzul.svg" alt="Unihabitat" width={28} height={28} className="h-7 w-auto" />
-            </div>
-            <span className="text-lg font-bold text-navy tracking-tight">Unihabitat<span className="text-gold">*</span></span>
+          <Link href="/" className="flex items-center">
+            <BrandMark size={28} textClassName="text-lg text-navy" />
           </Link>
           <nav className="hidden items-center gap-6 text-sm font-medium text-navy/70 md:flex">
             <Link href="/portal" className="transition-colors hover:text-navy">Propiedades</Link>
@@ -250,15 +248,16 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl px-6">
           <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
             {[
-              { title: "Cesión de Remate", desc: "Adquiere activos inmobiliarios con grandes descuentos sobre el valor de tasación.", cat: "CDR" },
-              { title: "Carteras NPL", desc: "Accede a carteras completas de préstamos hipotecarios con potencial de máxima rentabilidad.", cat: "NPL" },
-              { title: "REO Directo", desc: "Inmuebles adjudicados listos para comprar, sin cargas ocultas ni procesos judiciales.", cat: "REO" },
+              { title: "Cesión de Remate", desc: "Adquiere activos inmobiliarios con grandes descuentos sobre el valor de tasación.", href: "/portal?cat=CDR" },
+              { title: "Carteras NPL", desc: "Accede a carteras completas de préstamos hipotecarios con potencial de máxima rentabilidad.", href: "/portal?cat=NPL" },
+              { title: "Catálogo completo", desc: "Explora todos los activos publicados (CDR, NPL y resto de categorías).", href: "/portal" },
             ].map((f) => (
               <div key={f.title} className="rounded-xl border border-border bg-white p-6 shadow-sm">
                 <h3 className="text-base font-bold text-navy">{f.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-navy/50">{f.desc}</p>
                 <button
-                  onClick={() => router.push(`/portal?cat=${f.cat}`)}
+                  type="button"
+                  onClick={() => router.push(f.href)}
                   className="mt-4 text-xs font-semibold text-gold underline underline-offset-2 hover:text-gold2"
                 >
                   Ver propiedades →

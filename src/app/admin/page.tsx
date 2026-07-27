@@ -30,7 +30,11 @@ const pillClass: Record<string, string> = {
   "fp-pub": "bg-green/8 text-green",
   "fp-sus": "bg-red/8 text-red",
   "fp-seg": "bg-blue/8 text-blue",
+  "fp-info": "bg-blue/8 text-blue",
+  "fp-ofe": "bg-gold/15 text-gold3",
+  "fp-neg": "bg-orange/8 text-orange",
   "fp-res": "bg-orange/8 text-orange",
+  "fp-cer": "bg-muted/8 text-muted",
   "fp-nd": "bg-muted/8 text-muted",
 };
 
@@ -47,6 +51,8 @@ export default function ActivosPage() {
   const [fTipo, setFTipo] = useState("");
   const [fEstado, setFEstado] = useState("");
   const [fFase, setFFase] = useState("");
+  const [fProceso, setFProceso] = useState("");
+  const [fDeuda, setFDeuda] = useState("");
   const [favOnly, setFavOnly] = useState(false);
   const [sortCol, setSortCol] = useState<SortCol>("prov");
   const [sortDir, setSortDir] = useState<1 | -1>(1);
@@ -62,6 +68,8 @@ export default function ActivosPage() {
         tipo: fTipo,
         estado: fEstado,
         fase: fFase,
+        proceso: fProceso,
+        deuda: fDeuda,
       })) return false;
       if (favOnly && !a.fav) return false;
       if (q) {
@@ -100,13 +108,13 @@ export default function ActivosPage() {
       return 0;
     });
     return res;
-  }, [assets, q, fCat, fProv, fPob, fTipo, fEstado, fFase, favOnly, sortCol, sortDir]);
+  }, [assets, q, fCat, fProv, fPob, fTipo, fEstado, fFase, fProceso, fDeuda, favOnly, sortCol, sortDir]);
 
   // Reinicia a la página 1 cuando cambian filtros, búsqueda, orden o pageSize:
   // evita quedar "atrapado" en página 5 tras filtrar a 3 resultados.
   useEffect(() => {
     setCurrentPage(1);
-  }, [q, fCat, fProv, fPob, fTipo, fEstado, fFase, favOnly, sortCol, sortDir, pageSize]);
+  }, [q, fCat, fProv, fPob, fTipo, fEstado, fFase, fProceso, fDeuda, favOnly, sortCol, sortDir, pageSize]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(Math.max(1, currentPage), totalPages);
@@ -116,12 +124,17 @@ export default function ActivosPage() {
   );
 
   const activeListFilters = useMemo(
-    () => ({ cat: fCat, prov: fProv, pob: fPob, tipo: fTipo, estado: fEstado, fase: fFase }),
-    [fCat, fProv, fPob, fTipo, fEstado, fFase],
+    () => ({
+      cat: fCat, prov: fProv, pob: fPob, tipo: fTipo, estado: fEstado,
+      fase: fFase, proceso: fProceso, deuda: fDeuda,
+    }),
+    [fCat, fProv, fPob, fTipo, fEstado, fFase, fProceso, fDeuda],
   );
 
-  const { cat: catOptions, prov: provOptions, pob: pobOptions, tip: tipOptions, estado: estadoOptions, fase: faseOptions } =
-    useMemo(() => buildAssetListFilterOptions(assets, activeListFilters), [assets, activeListFilters]);
+  const {
+    cat: catOptions, prov: provOptions, pob: pobOptions, tip: tipOptions,
+    estado: estadoOptions, fase: faseOptions, proceso: procesoOptions, deuda: deudaOptions,
+  } = useMemo(() => buildAssetListFilterOptions(assets, activeListFilters), [assets, activeListFilters]);
 
   const handleCatChange = (v: string) => {
     setFCat(v);
@@ -140,7 +153,8 @@ export default function ActivosPage() {
   };
 
   const clearFilters = () => {
-    setQ(""); setFCat(""); setFProv(""); setFPob(""); setFTipo(""); setFEstado(""); setFFase("");
+    setQ(""); setFCat(""); setFProv(""); setFPob(""); setFTipo(""); setFEstado("");
+    setFFase(""); setFProceso(""); setFDeuda("");
     if (favOnly) setFavOnly(false);
   };
 
@@ -194,6 +208,16 @@ export default function ActivosPage() {
     }
   };
 
+  const groupCountByActivoId = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const a of assets) {
+      const id = getActivoId(a);
+      if (!id || id === "—") continue;
+      m.set(id, (m.get(id) ?? 0) + 1);
+    }
+    return m;
+  }, [assets]);
+
   const allChk = filtered.length > 0 && filtered.every(a => a.chk);
 
   const SortIcon = ({ col }: { col: SortCol }) => {
@@ -245,6 +269,8 @@ export default function ActivosPage() {
             <FilterSelect label="Tipología" value={fTipo} onChange={setFTipo} options={tipOptions} />
             <FilterSelect label="Estado" value={fEstado} onChange={setFEstado} options={estadoOptions} />
             <FilterSelect label="Situación" value={fFase} onChange={setFFase} options={faseOptions} />
+            <FilterSelect label="Proceso" value={fProceso} onChange={setFProceso} options={procesoOptions} />
+            <FilterSelect label="Deuda" value={fDeuda} onChange={setFDeuda} options={deudaOptions} />
             <div className="flex min-w-[90px] flex-col gap-1">
               <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Favoritos</label>
               <button
@@ -257,8 +283,7 @@ export default function ActivosPage() {
             </div>
             <div className="h-8 w-px self-end bg-border2" />
             <div className="flex gap-1.5 self-end">
-              <button className="rounded-md bg-navy px-4 py-[7px] text-xs font-medium text-white hover:bg-navy3">Buscar</button>
-              <button onClick={clearFilters} className="rounded-md border border-border px-2.5 py-[7px] text-muted transition-colors hover:border-red hover:text-red"><X size={14} /></button>
+              <button type="button" onClick={clearFilters} className="rounded-md border border-border px-2.5 py-[7px] text-muted transition-colors hover:border-red hover:text-red" title="Limpiar filtros"><X size={14} /></button>
             </div>
           </div>
         </div>
@@ -341,7 +366,14 @@ export default function ActivosPage() {
                 >
                   <Star size={14} className={`transition-all ${a.fav ? "fill-gold text-gold" : "text-border hover:text-gold/50"}`} />
                 </div>
-                <span className="truncate text-xs">{getCategoria(a)}</span>
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="truncate text-xs">{getCategoria(a)}</span>
+                  {(groupCountByActivoId.get(getActivoId(a)) ?? 0) > 1 && (
+                    <span className="w-fit rounded bg-navy/8 px-1 py-px text-[9px] font-semibold text-navy">
+                      {groupCountByActivoId.get(getActivoId(a))} inmuebles
+                    </span>
+                  )}
+                </span>
                 <span className="truncate text-xs">{a.prov}</span>
                 <span className="truncate text-xs">{a.pob}</span>
                 <span className="truncate text-xs text-muted">{displayAssetAddress(a)}</span>

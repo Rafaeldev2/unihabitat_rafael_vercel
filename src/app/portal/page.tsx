@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useApp } from "@/lib/context";
-import { fmt, fmtM, shortAddr } from "@/lib/utils";
+import { fmtM, getPortalPriceDisplay, shortAddr } from "@/lib/utils";
 import {
   buildAssetListFilterOptions,
   buildCatFilterOptions,
@@ -11,20 +11,28 @@ import {
   countAssetsMatchingListFilters,
 } from "@/lib/asset-filters";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Search, MapPin, Building, SlidersHorizontal, X,
-  ArrowUpDown,
+  ArrowUpDown, List, Map as MapIcon,
   Ruler, Tag, Layers, Star,
   ChevronLeft, ChevronRight, Loader2,
 } from "lucide-react";
 import { Suspense } from "react";
 import { FilterSelect } from "@/components/FilterSelect";
 import { InteractiveMap } from "@/components/InteractiveMap";
+import { PortalAssetsMap } from "@/components/PortalAssetsMap";
 import { usePortalAuth } from "@/hooks/usePortalAuth";
 import { useFavoritos } from "@/hooks/useFavoritos";
 import { createClient } from "@/lib/supabase/client";
 import { ensureCompradorForEmail } from "@/app/actions/compradores";
+
+function normalizePortalCat(raw: string | null): string {
+  if (!raw) return "";
+  // REO no es categoría de filtro: catálogo completo.
+  if (raw.toUpperCase() === "REO") return "";
+  return raw;
+}
 
 type SortKey = "none" | "price_asc" | "price_desc" | "sqm_asc" | "sqm_desc" | "pob_az";
 
@@ -74,31 +82,56 @@ function PortalPropertyCardSkeleton() {
 function PortalContent() {
   const { assets, assetsLoading, assetsError } = useApp();
   const { sensitiveVisible, isStaff, userResolved } = usePortalAuth();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const catalogAssets = useMemo(
     () => portalCatalogAssets(assets, userResolved && isStaff),
     [assets, isStaff, userResolved],
   );
 
-  const [q, setQ] = useState(searchParams.get("pob") ?? "");
-  const [fCat, setFCat] = useState(searchParams.get("cat") ?? "");
-  const [fProv, setFProv] = useState(searchParams.get("prov") ?? "");
-  const [fPob, setFPob] = useState("");
-  const [fTipo, setFTipo] = useState(searchParams.get("tipo") ?? "");
-  const [fEstado, setFEstado] = useState("");
-  const [fFase, setFFase] = useState("");
+  const [q, setQ] = useState("");
+  const [fCat, setFCat] = useState(() => normalizePortalCat(searchParams.get("cat")));
+  const [fProv, setFProv] = useState(() => searchParams.get("prov") ?? "");
+  const [fPob, setFPob] = useState(() => searchParams.get("pob") ?? "");
+  const [fTipo, setFTipo] = useState(() => searchParams.get("tipo") ?? "");
   const [sortBy, setSortBy] = useState<SortKey>("none");
   const [pageSize, setPageSize] = useState<PageSize>(50);
   const [page, setPage] = useState(1);
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const [compradorId, setCompradorId] = useState<string | null>(null);
   const { isFavorito, toggleFavorito } = useFavoritos(compradorId);
 
+  // Leer URL → estado (pob es filtro de población, no búsqueda libre).
   useEffect(() => {
-    setQ(searchParams.get("pob") ?? "");
+    const rawCat = searchParams.get("cat");
+    if (rawCat && rawCat.toUpperCase() === "REO") {
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete("cat");
+      router.replace(`/portal${next.toString() ? `?${next}` : ""}`, { scroll: false });
+      return;
+    }
+    setFCat(normalizePortalCat(rawCat));
     setFProv(searchParams.get("prov") ?? "");
+    setFPob(searchParams.get("pob") ?? "");
     setFTipo(searchParams.get("tipo") ?? "");
-    setFCat(searchParams.get("cat") ?? "");
-  }, [searchParams]);
+  }, [searchParams, router]);
+
+  // Escribir estado → URL (solo cat|prov|pob|tipo).
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (fCat) params.set("cat", fCat);
+    if (fProv) params.set("prov", fProv);
+    if (fPob) params.set("pob", fPob);
+    if (fTipo) params.set("tipo", fTipo);
+    const next = params.toString();
+    const cur = new URLSearchParams();
+    for (const k of ["cat", "prov", "pob", "tipo"] as const) {
+      const v = searchParams.get(k);
+      if (v) cur.set(k, v);
+    }
+    if (cur.toString() === next) return;
+    router.replace(`/portal${next ? `?${next}` : ""}`, { scroll: false });
+  }, [fCat, fProv, fPob, fTipo, router, searchParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -127,8 +160,8 @@ function PortalContent() {
   }, []);
 
   const activeListFilters = useMemo(
-    () => ({ cat: fCat, prov: fProv, pob: fPob, tipo: fTipo, estado: fEstado, fase: fFase }),
-    [fCat, fProv, fPob, fTipo, fEstado, fFase],
+    () => ({ cat: fCat, prov: fProv, pob: fPob, tipo: fTipo }),
+    [fCat, fProv, fPob, fTipo],
   );
 
   // Categorías: mismo listado que /admin. Resto de filtros en cascada según catálogo visible.
@@ -137,7 +170,7 @@ function PortalContent() {
     [catalogAssets, activeListFilters],
   );
   const catOptions = useMemo(() => buildCatFilterOptions(assets), [assets]);
-  const { prov: provOptions, pob: pobOptions, tip: tipOptions, estado: estadoOptions, fase: faseOptions } = listFilterOptions;
+  const { prov: provOptions, pob: pobOptions, tip: tipOptions } = listFilterOptions;
 
   const handleCatChange = (v: string) => {
     setFCat(v);
@@ -159,8 +192,6 @@ function PortalContent() {
         prov: fProv,
         pob: fPob,
         tipo: fTipo,
-        estado: fEstado,
-        fase: fFase,
       })) return false;
       if (terms.length === 0) return true;
 
@@ -187,7 +218,7 @@ function PortalContent() {
     else if (sortBy === "pob_az") result.sort((a, b) => (a.pob || "").localeCompare(b.pob || ""));
 
     return result;
-  }, [catalogAssets, q, fCat, fProv, fPob, fTipo, fEstado, fFase, sortBy, sensitiveVisible]);
+  }, [catalogAssets, q, fCat, fProv, fPob, fTipo, sortBy, sensitiveVisible]);
 
   const suspendedMatchCount = useMemo(() => {
     if (isStaff || filtered.length > 0) return 0;
@@ -210,16 +241,16 @@ function PortalContent() {
 
   useEffect(() => {
     setPage(1);
-  }, [q, fCat, fProv, fPob, fTipo, fEstado, fFase, sortBy, pageSize]);
+  }, [q, fCat, fProv, fPob, fTipo, sortBy, pageSize]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
-  const hasFilters = Boolean(q || fCat || fProv || fPob || fTipo || fEstado || fFase);
+  const hasFilters = Boolean(q || fCat || fProv || fPob || fTipo);
 
   const clearFilters = useCallback(() => {
-    setQ(""); setFCat(""); setFProv(""); setFPob(""); setFTipo(""); setFEstado(""); setFFase("");
+    setQ(""); setFCat(""); setFProv(""); setFPob(""); setFTipo("");
   }, []);
 
   // Group assets by activo (loan) ID for "X inmuebles asociados" badge.
@@ -264,8 +295,6 @@ function PortalContent() {
               fTipo ? { label: fTipo, clear: () => setFTipo("") } : null,
               fProv ? { label: fProv, clear: () => setFProv("") } : null,
               fPob ? { label: fPob, clear: () => setFPob("") } : null,
-              fEstado ? { label: fEstado, clear: () => setFEstado("") } : null,
-              fFase ? { label: fFase, clear: () => setFFase("") } : null,
             ] as const).filter((c): c is { label: string; clear: () => void } => c !== null)
               .map((chip) => (
                 <span key={chip.label} className="flex items-center gap-1 rounded-full bg-gold/20 px-3 py-1.5 text-xs font-medium text-gold">
@@ -283,8 +312,6 @@ function PortalContent() {
             <FilterSelect label="Provincia" value={fProv} onChange={handleProvChange} options={provOptions} />
             <FilterSelect label="Población" value={fPob} onChange={setFPob} options={pobOptions} />
             <FilterSelect label="Tipología" value={fTipo} onChange={setFTipo} options={tipOptions} />
-            <FilterSelect label="Estado" value={fEstado} onChange={setFEstado} options={estadoOptions} />
-            <FilterSelect label="Situación" value={fFase} onChange={setFFase} options={faseOptions} />
             <div className="h-8 w-px self-end bg-border2" />
             <div className="flex gap-1.5 self-end">
               <button
@@ -324,6 +351,24 @@ function PortalContent() {
           {hasFilters && <span> · filtros activos</span>}
         </p>
         <div className="flex flex-wrap items-center gap-3">
+          <div className="flex overflow-hidden rounded-md border border-border bg-white">
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium ${viewMode === "list" ? "bg-navy text-white" : "text-muted hover:text-navy"}`}
+              aria-pressed={viewMode === "list"}
+            >
+              <List size={13} /> Lista
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("map")}
+              className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium ${viewMode === "map" ? "bg-navy text-white" : "text-muted hover:text-navy"}`}
+              aria-pressed={viewMode === "map"}
+            >
+              <MapIcon size={13} /> Mapa
+            </button>
+          </div>
           {hasFilters && (
             <button type="button" onClick={clearFilters} className="flex items-center gap-1 text-xs font-medium text-muted hover:text-navy">
               <X size={12} /> Limpiar
@@ -377,8 +422,13 @@ function PortalContent() {
         </div>
       ) : filtered.length > 0 ? (
         <>
+        {viewMode === "map" ? (
+          <PortalAssetsMap assets={filtered} />
+        ) : (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {paginated.map(a => (
+          {paginated.map(a => {
+            const price = getPortalPriceDisplay(a);
+            return (
             <Link
               key={a.id}
               href={`/portal/${a.id}`}
@@ -461,10 +511,13 @@ function PortalContent() {
                   )}
                 </div>
 
-                {/* Price */}
+                {/* Precio (CDR) o Deuda (NPL) */}
                 <div className="mt-3 flex items-end justify-between border-t border-border/50 pt-3">
-                  <span className="text-lg font-bold text-navy">{a.precio ? fmt(a.precio) : "Haz tu Oferta"}</span>
-                  {a.sqm && a.precio ? (
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-muted">{price.label}</div>
+                    <span className="text-lg font-bold text-navy">{price.value}</span>
+                  </div>
+                  {price.kind === "precio" && a.sqm && a.precio ? (
                     <span className="text-[10px] text-muted">
                       {Math.round(a.precio / a.sqm).toLocaleString("es-ES")} €/m²
                     </span>
@@ -472,10 +525,12 @@ function PortalContent() {
                 </div>
               </div>
             </Link>
-          ))}
+          );
+          })}
         </div>
+        )}
 
-        {totalPages > 1 && (
+        {viewMode === "list" && totalPages > 1 && (
           <nav
             className="mt-8 flex flex-wrap items-center justify-center gap-2"
             aria-label="Paginación de propiedades"

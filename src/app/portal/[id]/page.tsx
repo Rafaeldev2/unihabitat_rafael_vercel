@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Lock } from "lucide-react";
-import { fetchAssetById, fetchPublicAssets } from "@/app/actions/assets";
+import { fetchAssetById, fetchPublicAssetsByActivoId } from "@/app/actions/assets";
 import PortalDetailClient from "./PortalDetailClient";
 
 export default async function PortalDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -21,14 +21,12 @@ export default async function PortalDetailPage({ params }: { params: Promise<{ i
     );
   }
 
-  let siblings: Awaited<ReturnType<typeof fetchPublicAssets>> = [];
+  let siblings: Awaited<ReturnType<typeof fetchPublicAssetsByActivoId>> = [];
   const activoId = asset.propiedades[0]?.activoId ?? "";
   if (activoId && activoId !== "—" && activoId.trim()) {
     try {
-      const all = await fetchPublicAssets();
-      siblings = all.filter(
-        (a) => a.id !== asset.id && a.propiedades.some((p) => p.activoId === activoId),
-      );
+      const group = await fetchPublicAssetsByActivoId(activoId);
+      siblings = group.filter((a) => a.id !== asset.id);
     } catch {
       siblings = [];
     }

@@ -93,7 +93,7 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
       setDiag(result.diag);
       pushLog(
         "info",
-        `Parser: ${result.inmuebles.length} inmueble(s) · ${result.propiedades.length} propiedad(es) — ${result.diag.parsed}/${result.diag.rows} filas (CDR: ${result.diag.categoryCounts.CDR}, NPL: ${result.diag.categoryCounts.NPL})`,
+        `Parser: ${result.inmuebles.length} inmueble(s) · ${result.propiedades.length} propiedad(es) — ${result.diag.parsed}/${result.diag.rows} filas (${Object.entries(result.diag.categoryCounts).map(([k, n]) => `${k}: ${n}`).join(", ") || "sin categoría"})`,
       );
       if (result.diag.skipped > 0) {
         const reasons = Object.entries(result.diag.skippedReasons)
@@ -274,7 +274,14 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
               <p>
                 Hoja: <strong>{diag.sheet}</strong> · Filas: {diag.rows} · Parseadas: {diag.parsed} · Descartadas: {diag.skipped}
               </p>
-              <p>Categorías: CDR={diag.categoryCounts.CDR}, NPL={diag.categoryCounts.NPL}</p>
+              <p>
+                Categorías:{" "}
+                {Object.entries(diag.categoryCounts).map(([k, n]) => `${k}=${n}`).join(", ") || "—"}
+              </p>
+              <p className="mt-1 text-gray-500">
+                Filas con el mismo ID compuesto (ID1 + Referencia) se fusionan; ID1 repetido con
+                Referencia distinta crea inmuebles distintos del mismo grupo.
+              </p>
             </div>
           )}
 

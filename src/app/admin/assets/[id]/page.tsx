@@ -3,15 +3,15 @@
 import { use, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useApp } from "@/lib/context";
 import { isAdmin } from "@/lib/auth-helpers";
-import { assetNotes, assetDocs, docNotes, adminNotes, chatMessages } from "@/lib/mock-data";
 import Link from "next/link";
-import type { Asset, NoteEntry, DocItem, ChatMessage } from "@/lib/types";
-import { Home, FolderOpen, Briefcase, Users, Lock, ArrowLeft, Upload, Download, FileText, FileSpreadsheet, Image, MessageSquare, Send, Save, Plus, Mail, X, Loader2, AlertCircle, CheckCircle2, CheckCircle, Building, ExternalLink, RefreshCw, UserCog } from "lucide-react";
+import type { Asset } from "@/lib/types";
+import { Home, FolderOpen, Briefcase, Users, Lock, ArrowLeft, Upload, Download, FileText, FileSpreadsheet, Image, MessageSquare, Save, Plus, Mail, X, Loader2, AlertCircle, CheckCircle2, CheckCircle, Building, ExternalLink, RefreshCw, UserCog } from "lucide-react";
 import { uploadDocumento, fetchDocumentos, deleteDocumento, getDocumentUrl, type DocRow } from "@/app/actions/documentos";
 import { createNota, fetchNotas, type NotaRow } from "@/app/actions/notas";
 import { fetchCompradores } from "@/app/actions/compradores";
-import { fetchAssetByIdForAdmin, toggleAssetPub, updateAssetFields } from "@/app/actions/assets";
+import { fetchAssetByIdForAdmin, toggleAssetPub, updateAssetFields, updatePropiedadFields } from "@/app/actions/assets";
 import { inviteCompradorToAsset, revokeCompradorFromAsset, fetchInvitedCompradores } from "@/app/actions/invitations";
+import { enviarSolicitudInformacion } from "@/app/actions/email-info-request";
 import { refreshAssetCatastro } from "@/app/actions/catastro";
 import { getAssetAgente, setAssetAgente } from "@/app/actions/vendedores";
 import type { Comprador } from "@/lib/types";
@@ -19,9 +19,10 @@ import { InteractiveMap } from "@/components/InteractiveMap";
 import { EditableSection, type FieldDef } from "@/components/EditableSection";
 import { EditableExcelRawSection } from "@/components/EditableExcelRawSection";
 import { listEmptyExcelFields } from "@/lib/excel-raw-utils";
+import { FASE_INTERNA_OPTIONS, faseToCode } from "@/lib/fase-interna";
 import {
   getDescriptionText, getCategoria, getFaseInterna, getPropietario, getOwnerTel,
-  getOwnerMail, getDeudaTotal,
+  getOwnerMail, getDeudaTotal, fmt,
 } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 
@@ -225,12 +226,12 @@ function DataPill({ label, value, mono }: { label: string; value: string; mono?:
   );
 }
 
-function NoteCard({ note }: { note: NoteEntry | NotaRow }) {
+function NoteCard({ note }: { note: NotaRow }) {
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
     return d.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
   };
-  const date = "date" in note ? note.date : formatDate(note.created_at);
+  const date = formatDate(note.created_at);
   return (
     <div className="rounded-lg border border-border bg-white p-3">
       <div className="mb-1 flex items-center justify-between">
@@ -305,22 +306,31 @@ function DocItemRow({ doc, onDelete }: { doc: DocRow; onDelete?: () => void }) {
   );
 }
 
-function ChatBubble({ msg }: { msg: ChatMessage }) {
-  return (
-    <div className={`max-w-[76%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
-      msg.from === "cli" ? "self-start bg-cream2 text-text" : "self-end bg-navy text-white"
-    }`}>
-      {msg.text}
-      <div className={`mt-0.5 text-[10px] ${msg.from === "cli" ? "text-muted" : "text-right text-white/40"}`}>{msg.time}</div>
-    </div>
-  );
-}
-
 function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asset: Asset; assetId: string; currentUser: { nombre: string; email: string } | null; reloadAsset: () => void }) {
   const [generalNote, setGeneralNote] = useState("");
+  const [assetNotesList, setAssetNotesList] = useState<NotaRow[]>([]);
   const [saving, setSaving] = useState(false);
+  const [descDraft, setDescDraft] = useState(asset.desc && asset.desc !== "—" ? asset.desc : "");
+  const [savingDesc, setSavingDesc] = useState(false);
   const [catastroRefreshing, setCatastroRefreshing] = useState(false);
   const [catastroMsg, setCatastroMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    setDescDraft(asset.desc && asset.desc !== "—" ? asset.desc : "");
+  }, [asset.desc, assetId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const notes = await fetchNotas({ assetId });
+        if (!cancelled) setAssetNotesList(notes);
+      } catch {
+        if (!cancelled) setAssetNotesList([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [assetId]);
 
   // La columna `referencia` guarda la RC limpia; el id es compuesto (id1__ref).
   const hasCatRef = !!asset.referencia && asset.referencia !== "—";
@@ -426,24 +436,101 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
           )}
           <div className="flex flex-col gap-2">
             <EditableSection title="Precio" assetId={assetId} fields={precioFields} cols={1} onSaved={reloadAsset} />
+            {(getDeudaTotal(asset) != null || asset.propiedades[0]?.proceso) && (
+              <div className="rounded-lg border border-border bg-cream2 px-3 py-2 text-xs text-text">
+                {getDeudaTotal(asset) != null && (
+                  <p><span className="font-semibold text-muted">Deuda: </span>{fmt(getDeudaTotal(asset)!)}</p>
+                )}
+                {asset.propiedades[0]?.proceso && (
+                  <p className="mt-0.5"><span className="font-semibold text-muted">Proceso: </span>{asset.propiedades[0].proceso}</p>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2">
-              <button type="button" className="flex items-center justify-center gap-1.5 rounded-lg border border-border py-2.5 text-xs font-medium text-navy hover:bg-cream"><MessageSquare size={13} /> Consultar</button>
-              <button type="button" className="flex items-center justify-center gap-1.5 rounded-lg bg-gold py-2.5 text-xs font-medium text-white hover:bg-gold2"><FileText size={13} /> Oferta</button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!currentUser?.email) {
+                    toast.error("Sesión no disponible");
+                    return;
+                  }
+                  try {
+                    const result = await enviarSolicitudInformacion({
+                      assetId,
+                      nombre: currentUser.nombre,
+                      email: currentUser.email,
+                      mensaje: `Consulta interna admin sobre el activo ${assetId}`,
+                    });
+                    if (result.error) toast.error(result.error);
+                    else toast.success("Consulta enviada");
+                  } catch (err) {
+                    toast.error("No se pudo enviar la consulta", {
+                      description: err instanceof Error ? err.message : String(err),
+                    });
+                  }
+                }}
+                className="flex items-center justify-center gap-1.5 rounded-lg border border-border py-2.5 text-xs font-medium text-navy hover:bg-cream"
+              >
+                <MessageSquare size={13} /> Consultar
+              </button>
+              <Link
+                href={`/admin/ofertas?asset=${encodeURIComponent(assetId)}`}
+                className="flex items-center justify-center gap-1.5 rounded-lg bg-gold py-2.5 text-xs font-medium text-white hover:bg-gold2"
+              >
+                <FileText size={13} /> Oferta
+              </Link>
             </div>
           </div>
         </div>
       </div>
       <SectionCard title="Descripción del Activo">
-        <p className="text-sm leading-[1.7] text-text">{getDescriptionText(asset)}</p>
+        <textarea
+          value={descDraft}
+          onChange={(e) => setDescDraft(e.target.value)}
+          rows={4}
+          className="w-full rounded-md border border-border bg-cream2 p-3 text-sm leading-[1.7] text-text outline-none focus:border-navy"
+          placeholder={getDescriptionText(asset)}
+        />
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            disabled={savingDesc}
+            onClick={async () => {
+              setSavingDesc(true);
+              try {
+                await updateAssetFields(assetId, { descr: descDraft.trim() || null });
+                reloadAsset();
+                toast.success("Descripción guardada");
+              } catch (err) {
+                toast.error("No se pudo guardar la descripción", {
+                  description: err instanceof Error ? err.message : String(err),
+                });
+              } finally {
+                setSavingDesc(false);
+              }
+            }}
+            className="flex items-center gap-1.5 rounded-md bg-gold px-3 py-1.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
+          >
+            {savingDesc ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Guardar descripción
+          </button>
+        </div>
       </SectionCard>
       <div className="mt-3">
         <SectionCard title="Notas del activo">
+          <p className="mb-2 text-[11px] text-muted">Notas visibles para agentes. Solo administración/agentes con permiso las añaden aquí.</p>
+          {assetNotesList.length > 0 && (
+            <div className="mb-3 flex flex-col gap-2">
+              {assetNotesList.map((n) => (
+                <NoteCard key={n.id} note={n} />
+              ))}
+            </div>
+          )}
           <textarea
             value={generalNote}
             onChange={(e) => setGeneralNote(e.target.value)}
             className="w-full rounded-md border border-border bg-cream2 p-3 text-sm text-text outline-none focus:border-navy"
             rows={3}
-            placeholder="Añade notas generales sobre el activo..."
+            placeholder="Añade notas adicionales sobre el activo..."
           />
           <div className="mt-2 flex justify-end">
             <button
@@ -457,6 +544,8 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
                     text: generalNote.trim(),
                   });
                   setGeneralNote("");
+                  const notes = await fetchNotas({ assetId });
+                  setAssetNotesList(notes);
                   toast.success("Nota guardada", { description: "La nota general fue añadida al activo." });
                 } catch (err) {
                   toast.error("Error al guardar la nota", { description: err instanceof Error ? err.message : String(err) });
@@ -986,10 +1075,16 @@ function TabClientes({ assetId }: { assetId: string }) {
 }
 
 function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset }: { asset: Asset; assetId: string; togglePub: () => void; currentUser: { nombre: string; email: string } | null; reloadAsset: () => void }) {
-  const [adminNote, setAdminNote] = useState("Revisar situación judicial el 15/03. Hablar con el banco sobre cargas previas.");
+  const [adminNote, setAdminNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [savingFase, setSavingFase] = useState(false);
   const [notes, setNotes] = useState<NotaRow[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(true);
+  const [faseInterna, setFaseInterna] = useState(getFaseInterna(asset));
+
+  useEffect(() => {
+    setFaseInterna(getFaseInterna(asset));
+  }, [asset]);
 
   // El propietario vive en la PROPIEDAD (lien) — no en el inmueble. Mostramos
   // los datos de la primera propiedad asociada como referencia. La edición
@@ -1080,8 +1175,40 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset }: { ass
             <span className={`text-xs font-semibold ${asset.pub ? "text-green" : "text-red"}`}>{asset.pub ? "Publicado" : "Suspendido"}</span>
           </div>
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted">Fase interna</p>
-          <select className="w-full cursor-pointer appearance-none rounded-md border border-border bg-cream2 px-3 py-2 text-xs text-text outline-none focus:border-navy">
-            <option>Seguimiento</option><option>Info. Solicitada</option><option>Reservado</option><option>No Disponible</option>
+          <select
+            value={faseInterna === "—" ? "" : faseInterna}
+            disabled={savingFase || !asset.propiedades[0]?.id}
+            onChange={async (e) => {
+              const next = e.target.value;
+              const propId = asset.propiedades[0]?.id;
+              if (!propId || !next) return;
+              setFaseInterna(next);
+              setSavingFase(true);
+              try {
+                await updatePropiedadFields(propId, {
+                  fase_interna: next,
+                  fase_c: faseToCode(next),
+                });
+                reloadAsset();
+                toast.success("Fase interna actualizada");
+              } catch (err) {
+                setFaseInterna(getFaseInterna(asset));
+                toast.error("No se pudo guardar la fase interna", {
+                  description: err instanceof Error ? err.message : String(err),
+                });
+              } finally {
+                setSavingFase(false);
+              }
+            }}
+            className="w-full cursor-pointer appearance-none rounded-md border border-border bg-cream2 px-3 py-2 text-xs text-text outline-none focus:border-navy disabled:opacity-50"
+          >
+            <option value="">—</option>
+            {FASE_INTERNA_OPTIONS.map((f) => (
+              <option key={f} value={f}>{f}</option>
+            ))}
+            {faseInterna && faseInterna !== "—" && !(FASE_INTERNA_OPTIONS as readonly string[]).includes(faseInterna) && (
+              <option value={faseInterna}>{faseInterna}</option>
+            )}
           </select>
         </SectionCard>
         <SectionCard title="Propietario / Vendedor (primera propiedad)">
@@ -1181,20 +1308,11 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset }: { ass
         </SectionCard>
       </div>
 
-      {/* Chat */}
-      <div className="overflow-hidden rounded-lg border border-border bg-white">
-        <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-navy"><MessageSquare size={13} /> Conversaciones</div>
-          <span className="text-[11px] text-muted">3 activas</span>
-        </div>
-        <div className="flex max-h-[220px] flex-col gap-2 overflow-y-auto p-3.5">
-          {chatMessages.map((m, i) => <ChatBubble key={i} msg={m} />)}
-        </div>
-        <div className="flex gap-2 border-t border-border p-3">
-          <textarea className="flex-1 rounded-md border border-border p-2 text-sm outline-none focus:border-navy" rows={1} placeholder="Escribe una respuesta..." />
-          <button className="flex items-center gap-1 rounded-md bg-gold px-3 py-2 text-xs font-medium text-white hover:bg-gold2"><Send size={12} /></button>
-        </div>
-      </div>
+      <SectionCard title="Conversaciones">
+        <p className="text-xs text-muted">
+          El chat interno aún no está disponible. Usa Consultar (pestaña Características) o el email del propietario.
+        </p>
+      </SectionCard>
     </>
   );
 }

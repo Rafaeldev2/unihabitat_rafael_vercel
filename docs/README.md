@@ -74,6 +74,8 @@ flowchart TB
 | [Migrations Supabase](operacoes/migrations-supabase.md) | Ficheiros SQL e ordem |
 | [Deploy Vercel](operacoes/deploy-vercel.md) | Build, env, domínio |
 | [Troubleshooting](operacoes/troubleshooting.md) | Problemas comuns |
+| [Seguimiento tareas cliente](seguimiento-tareas-cliente.md) | Checklist ops (solo staging; no prod) |
+| [Staging frontend + BD](operacoes/staging.md) | Supabase staging + Vercel Preview separados de prod |
 
 ## Contribuir
 

@@ -1,0 +1,70 @@
+﻿MEJORAS CRM UNIHABITAT 
+1.- ACTIVOS 
+IMPORTANTE.- Cada vez que subo un archivo en CATEGORIA solo me deja CDR y NPL y necesito más  categorías, que aparezcan en función de lo que complete en la plantilla de subida. 
+1.- En la barra de la cabecera vamos a meter 2 filtros más entre Situación y Precio y será… 
+• SITUACIÓN.- La SITUACIÓN son los siguientes que no llegamos a ponerlos completos porque parte de  ellos se fueron a los clientes, esto se cambia en la fase interna del Administrador (Activos > Pinchamos  en el Activo > Administrador (está abajo del todo, a veces hay que hacer scroll para verlo) > FASE INTERNA. o Disponible 
+o Seguimiento 
+o Info. Solicitada 
+o Ofertado 
+o Negociación 
+o Reservado 
+o Cerrado 
+o No Disponible 
+  
+
+• PROCESO.- Es la fase legal en la que se encuentra. 
+• DEUDA.- Es la deuda que se le reclama al cliente, en el CRM aparecerá la Deuda y el Proceso en las  Características del Activo. 
+Todos estos puntos están en la cabecera del Excel creando una plantilla para que pueda subir o actualizar el  estado de los activos. También decirte que por alguna razón cuando el ID1 se repite, en vez de crear un grupo lo  que hace es que “sube” solo uno y el resto los desecha como duplicados, aunque la ref. catastral sea diferente  y eso antes no lo hacía, lo que hacía era un grupo. 
+EJEMPLO: Aún así te paso la plantilla que utilizo en la que lo del catastro lo hago de forma manual.
+Propietario Telefono mail Publicar Categoria Fase Interna Proceso Referencia Catastral Deuda Precio ID1 Sergio  
+Dortuny 673006438 sergio.fortuny@finsolutia.com NO NPL Seguimiento 1890034VK1419S0010DS 118.945,54 € 0 ESC-HO-01-1200 Sergio  
+Dortuny 673006438 sergio.fortuny@finsolutia.com SI NPL Disponible 1890034VK1419S0009GF 121.243,24 € 0 ESC-HO-01-1197 Sergio  
+Dortuny 673006438 sergio.fortuny@finsolutia.com NO CDR Seguimiento 1890034VK1419S0013HG 0 163.867,26 € ESC-HO-01-1203 Sergio  
+Dortuny 673006438 sergio.fortuny@finsolutia.com SI CDR Info. Solicitada 1890014VK1419S0004XO 0 188.632,70 € ESC-HO-01-1616 Sergio  
+Dortuny 673006438 sergio.fortuny@finsolutia.com SI NPL Seguimiento 1887415VK1418N0001ZR 103.283,71 € ESC-HO-01-1105 Sergio  
+Dortuny 673006438 sergio.fortuny@finsolutia.com SI OCUPADO Disponible 7106909UK5370N0001QF 0 72.736,89 € ESC-HO-01-1682 
+2.- El filtro no funciona bien. 
+  
+
+3.- Estos botones no funcionan. Están en características del activo, deberían funcionar igual que en la web.   
+4.- No puedo modificar la descripción del activo y en NOTAS DEL ACTIVO necesito que se queden justamente  debajo de Descripción del Activo porque son notas adicionales que añadiré al activo para que lo puedan leer  los agentes y que solo yo puedo añadir. 
+5.-En la pestaña Administrador, en NOTAS PRIVADAS y CONVERSACIONES siempre me sale una por defecto.
+2.- COMPRADORES 
+1.- No puedo Modificar, Eliminar o Desactivar compradores. Es importante para yo poder activarlos  manualmente porque me tienen que firmar un NDA. 
+2.- Cuando comparto con un cliente no llega el mail del activo, llega uno de inicio de Unihabitat*. 3.- No hace cruce de demanda, ni alerta de los cambios de favoritos o nuevos activos publicados. 
+NOTA.- En realidad el comprador y el agente la única diferencia es que el agente puede acceder a la zona  privada profesional y el otro no, la funcionalidad de ofertas, solicitar información y cruzar demanda debería ser  igual. 
+3.- OFERTAS 
+1.- Se me borran las ofertas y necesito tenerlas disponibles en forma de Oportunidades para poder gestionar. 
+----------------------------------------------------------------------------------------------------------------------------------- MEJORAS WEB UNIHABITAT 
+IMPORTANTE.- El perfil de Cliente cuando se dé de alta lo valido yo manualmente, hasta entonces  aparecerá como sin acceso, más adelante meteremos una forma de automatizarlo con un NDA (entiendo que esto es de la parte de CRM administrador, pero para tenerlo por aquí. 
+Cuando hacemos un filtro y volvemos atrás, no guarda el filtro y tenemos que empezar de nuevo. El enlace de Activos REO lo linkamos a https://www.unihabitat.net/portal 
+Poner mapa para poder buscar por mapa o lista 
+1.- ¿Podemos cambiar eso por Unihabitat*? 
+  
+    Y ponme el asterisco (*)en negro por favor y que aparezca igual en todas las páginas de la web. 
+  
+    
+2.- Este botón no funciona, quizás debería linkar al formulario de abajo
+  
+
+3.- No están linkados aunque se que están hechos porque lo vi. 
+  
+
+4.- El perfil cliente no puede poner sus notas y cuando pincha en enviar mensaje pone que no está  disponible. Si quieres podemos sustituir el cuadro este de Información reservada o sustituirlo por “Mis  Notas”.
+  
+
+  
+  
+
+5.- En los que son NPL podemos poner algo así… quizás el “truco” sea diferenciar entre deuda y  precio y poner aquí precio 0 y Deuda lo que tiene.
+  
+
+Te meto estos 3 casos que entiendo que vienen por los datos del CRM, que cuando solucionemos eso  se solucionará esto, pero por tenerlo presente y lo puedas ver porque se supone que está todo  conectado. 
+1.- El perfil de Cliente cuando se dé de alta lo valido yo manualmente, hasta entonces aparecerá  como sin acceso, más adelante meteremos una forma de automatizarlo con un NDA (entiendo que  esto es de la parte de CRM administrador, pero para tenerlo por aquí. 
+2.- Los filtros no están alineados, en el principal salen unas cosas y en el secundario otras, entiendo  que es problema general del filtro. 
+  
+
+  
+¿Podemos ocultar el de situación?, es decir, dejar solo los 4 primeros 
+3.- Me salen varios inmuebles asociados, pero al entrar solo hay uno, no aparece el resto, es como si  se hubiese duplicado. 
+Ejem.- https://www.unihabitat.net/portal/BGAL0278

@@ -94,6 +94,57 @@ export async function fetchAssetsByIds(ids: string[]): Promise<Asset[]> {
   return collected.map(rowToAssetPublic);
 }
 
+/**
+ * Inmuebles públicos del mismo grupo (activoId / ID1), vía query a `propiedades`.
+ * Incluye el inmueble actual si está publicado.
+ */
+export async function fetchPublicAssetsByActivoId(activoId: string): Promise<Asset[]> {
+  const key = activoId?.trim();
+  if (!key || key === "—") return [];
+  const supabase = await createClient();
+  const { data: propRows, error: propErr } = await supabase
+    .from("propiedades")
+    .select("inmueble_id")
+    .eq("activo_id", key);
+  if (propErr) throw new Error(propErr.message);
+  const inmuebleIds = [...new Set((propRows ?? []).map((r) => r.inmueble_id as string).filter(Boolean))];
+  if (inmuebleIds.length === 0) return [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const assetRows: any[] = [];
+  for (let i = 0; i < inmuebleIds.length; i += POSTGREST_PAGE_SIZE) {
+    const slice = inmuebleIds.slice(i, i + POSTGREST_PAGE_SIZE);
+    const { data, error } = await supabase
+      .from("assets")
+      .select("*")
+      .in("id", slice)
+      .eq("pub", true);
+    if (error) throw new Error(error.message);
+    if (data) assetRows.push(...data);
+  }
+  const inmuebles = assetRows.map(rowToAssetPublic);
+  if (inmuebles.length === 0) return inmuebles;
+
+  const ids = inmuebles.map((a) => a.id);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const propsCollected: any[] = [];
+  for (let i = 0; i < ids.length; i += POSTGREST_PAGE_SIZE) {
+    const slice = ids.slice(i, i + POSTGREST_PAGE_SIZE);
+    const { data, error } = await supabase.from("propiedades").select("*").in("inmueble_id", slice);
+    if (error) throw new Error(error.message);
+    if (data) propsCollected.push(...data);
+  }
+  const byInmueble = new Map<string, ReturnType<typeof rowToPropiedadPublic>[]>();
+  for (const row of propsCollected) {
+    const p = rowToPropiedadPublic(row);
+    const list = byInmueble.get(p.inmuebleId);
+    if (list) list.push(p);
+    else byInmueble.set(p.inmuebleId, [p]);
+  }
+  for (const a of inmuebles) a.propiedades = byInmueble.get(a.id) ?? [];
+  return inmuebles;
+}
+
 export async function fetchAssetById(id: string): Promise<Asset | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -389,6 +440,17 @@ export async function toggleAssetPub(id: string): Promise<boolean> {
   const { error: updateErr } = await supabase
     .from("assets").update({ pub: newPub }).eq("id", id);
   if (updateErr) throw new Error(updateErr.message);
+
+  // Al publicar, recalcular matching y notificar compradores top.
+  if (newPub) {
+    try {
+      const { computeMatchesForAsset } = await import("@/app/actions/matching");
+      await computeMatchesForAsset(id);
+    } catch (err) {
+      console.warn("[toggleAssetPub] matching falló (best-effort):", err);
+    }
+  }
+
   return newPub;
 }
 
@@ -401,6 +463,18 @@ export async function updateAssetFields(
   await requireAssetAccess(session, id);
   const supabase = await createServiceClient();
   const { error } = await supabase.from("assets").update(fields).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+/** Actualiza campos de una fila en `propiedades` (fase_interna, proceso, etc.). */
+export async function updatePropiedadFields(
+  propiedadId: string,
+  fields: Record<string, string | number | null>,
+): Promise<void> {
+  if (!propiedadId || Object.keys(fields).length === 0) return;
+  await requireEditPermission("activos");
+  const supabase = await createServiceClient();
+  const { error } = await supabase.from("propiedades").update(fields).eq("id", propiedadId);
   if (error) throw new Error(error.message);
 }
 

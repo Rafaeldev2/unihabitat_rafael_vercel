@@ -49,6 +49,27 @@ export function getDeudaTotal(a: AssetLike): number | null {
   }
   return any ? total : null;
 }
+
+/** Precio/Deuda para portal: NPL → Deuda; CDR → Precio o “Haz tu Oferta”. */
+export function getPortalPriceDisplay(a: AssetLike & { precio?: number | null }): {
+  label: string;
+  value: string;
+  kind: "deuda" | "precio" | "oferta";
+} {
+  const cat = getCategoria(a).toUpperCase();
+  if (cat === "NPL") {
+    const deuda = getDeudaTotal(a);
+    return {
+      label: "Deuda",
+      value: deuda != null && deuda > 0 ? fmt(deuda) : "—",
+      kind: "deuda",
+    };
+  }
+  if (a.precio != null && a.precio > 0) {
+    return { label: "Precio", value: fmt(a.precio), kind: "precio" };
+  }
+  return { label: "Precio", value: "Haz tu Oferta", kind: "oferta" };
+}
 /** ID del activo (préstamo) — todas las propiedades comparten activoId. */
 export function getActivoId(a: AssetLike): string {
   return a.propiedades?.[0]?.activoId ?? "";

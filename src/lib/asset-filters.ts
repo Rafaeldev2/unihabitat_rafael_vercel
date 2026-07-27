@@ -1,4 +1,5 @@
 import type { Asset } from "./types";
+import { FASE_INTERNA_OPTIONS } from "./fase-interna";
 
 /** Clave de comparación insensible a mayúsculas y tildes (p. ej. Alicante = ALICANTE). */
 export function filterOptionKey(raw: string): string {
@@ -79,11 +80,40 @@ export function buildEstadoFilterOptions(assets: Asset[]): string[] {
   return opts.sort((a, b) => a.localeCompare(b, "es"));
 }
 
-/** Fases internas derivadas de las propiedades asociadas (Disponible, Seguimiento, etc.). */
+/** Fases para el filtro Situación: enum fijo + valores legacy presentes en datos. */
 export function buildFaseFilterOptions(assets: Asset[]): string[] {
+  const fromData: string[] = [];
+  for (const a of assets) for (const p of a.propiedades) fromData.push(p.faseInterna);
+  return uniqueFilterOptions([...FASE_INTERNA_OPTIONS, ...fromData]);
+}
+
+export function buildProcesoFilterOptions(assets: Asset[]): string[] {
   const all: string[] = [];
-  for (const a of assets) for (const p of a.propiedades) all.push(p.faseInterna);
+  for (const a of assets) for (const p of a.propiedades) all.push(p.proceso);
   return uniqueFilterOptions(all);
+}
+
+export const DEUDA_CON = "Con deuda";
+export const DEUDA_SIN = "Sin deuda";
+
+export function buildDeudaFilterOptions(assets: Asset[]): string[] {
+  let con = false;
+  let sin = false;
+  for (const a of assets) {
+    for (const p of a.propiedades) {
+      if (p.deuda != null && p.deuda > 0) con = true;
+      else sin = true;
+    }
+    if (a.propiedades.length === 0) sin = true;
+  }
+  const opts: string[] = [];
+  if (con) opts.push(DEUDA_CON);
+  if (sin) opts.push(DEUDA_SIN);
+  return opts;
+}
+
+function assetHasDeuda(a: Asset): boolean {
+  return a.propiedades.some((p) => p.deuda != null && p.deuda > 0);
 }
 
 export interface AssetListFilters {
@@ -93,6 +123,8 @@ export interface AssetListFilters {
   tipo?: string;
   estado?: string;
   fase?: string;
+  proceso?: string;
+  deuda?: string;
 }
 
 export interface AssetFilterOptionSet {
@@ -102,6 +134,8 @@ export interface AssetFilterOptionSet {
   tip: string[];
   estado: string[];
   fase: string[];
+  proceso: string[];
+  deuda: string[];
 }
 
 type FilterOptionField = keyof AssetListFilters;
@@ -130,6 +164,8 @@ export function buildAssetListFilterOptions(
     tip: buildTipFilterOptions(assetsForFilterOptions(assets, active, "tipo")),
     estado: buildEstadoFilterOptions(assetsForFilterOptions(assets, active, "estado")),
     fase: buildFaseFilterOptions(assetsForFilterOptions(assets, active, "fase")),
+    proceso: buildProcesoFilterOptions(assetsForFilterOptions(assets, active, "proceso")),
+    deuda: buildDeudaFilterOptions(assetsForFilterOptions(assets, active, "deuda")),
   };
 }
 
@@ -158,6 +194,15 @@ export function assetMatchesListFilters(a: Asset, f: AssetListFilters): boolean 
   if (f.fase) {
     const matches = a.propiedades.some((p) => matchesFilterValue(p.faseInterna, f.fase!));
     if (!matches) return false;
+  }
+  if (f.proceso) {
+    const matches = a.propiedades.some((p) => matchesFilterValue(p.proceso, f.proceso!));
+    if (!matches) return false;
+  }
+  if (f.deuda) {
+    const has = assetHasDeuda(a);
+    if (f.deuda === DEUDA_CON && !has) return false;
+    if (f.deuda === DEUDA_SIN && has) return false;
   }
   return true;
 }

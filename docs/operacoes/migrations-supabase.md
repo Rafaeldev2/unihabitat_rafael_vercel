@@ -15,11 +15,13 @@
 | `supabase-migration-inmuebles-propiedades.sql` | **Separação Asset/Propiedad** — refactor principal |
 | `supabase-migration-agentes.sql` | Permissões e atribuições vendedor |
 | `supabase-dev-policies.sql` | Políticas RLS permissivas para desenvolvimento |
+| `supabase-migration-categoria-libre.sql` | Remove CHECK de categoría; valores libres (Excel) |
+| `supabase-migration-comprador-acceso.sql` | Coluna `compradores.acceso` (`sin_acceso` \| `activo`) |
 
 ## Ordem sugerida (novo ambiente)
 
 1. `supabase-schema.sql`
-2. Migrações incrementais por data/necessidade (excel-raw, map-columns, comprador-assets, inmuebles-propiedades, agentes)
+2. Migrações incrementais por data/necessidade (excel-raw, map-columns, comprador-assets, inmuebles-propiedades, agentes, categoria-libre, comprador-acceso)
 3. `supabase-dev-policies.sql` — **apenas dev**
 
 **Atenção:** `supabase-migration-inmuebles-propiedades.sql` pode truncar dados legacy de assets — rever antes de aplicar em produção.

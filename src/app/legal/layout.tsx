@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { BrandMark } from "@/components/BrandMark";
 
 export default function LegalLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -14,7 +15,8 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
             Volver al inicio
           </Link>
           <span className="text-border">|</span>
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted">Unihabitat — Información legal</span>
+          <BrandMark size={22} textClassName="text-xs uppercase tracking-wider text-muted" />
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted">— Información legal</span>
         </div>
       </header>
       <main className="mx-auto max-w-4xl px-4 py-8 pb-28">{children}</main>

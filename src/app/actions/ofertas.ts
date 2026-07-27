@@ -161,6 +161,16 @@ export async function fetchOfertasPendientes(): Promise<OfertaRow[]> {
   return (data ?? []) as OfertaRow[];
 }
 
+/** Todas las ofertas (histórico admin). Filtro opcional por estado. */
+export async function fetchOfertas(estado?: OfertaRow["estado"] | ""): Promise<OfertaRow[]> {
+  const supabase = await createClient();
+  let q = supabase.from("ofertas").select("*").order("created_at", { ascending: false });
+  if (estado) q = q.eq("estado", estado);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return (data ?? []) as OfertaRow[];
+}
+
 export async function updateOfertaEstado(
   ofertaId: string,
   estado: OfertaRow["estado"]
@@ -181,6 +191,13 @@ export async function updateOfertaEstado(
 
 export async function firmarNDA(ofertaId: string): Promise<void> {
   const supabase = await createClient();
+  const { data: oferta, error: fetchErr } = await supabase
+    .from("ofertas")
+    .select("comprador_id, asset_id")
+    .eq("id", ofertaId)
+    .maybeSingle();
+  if (fetchErr) throw new Error(fetchErr.message);
+
   const { error } = await supabase
     .from("ofertas")
     .update({
@@ -190,4 +207,21 @@ export async function firmarNDA(ofertaId: string): Promise<void> {
     })
     .eq("id", ofertaId);
   if (error) throw new Error(error.message);
+
+  // Sincroniza flag NDA del comprador (no automatiza acceso al portal).
+  if (oferta?.comprador_id) {
+    const service = await createServiceClient();
+    await service
+      .from("compradores")
+      .update({ nda: "Firmada" })
+      .eq("id", oferta.comprador_id);
+
+    if (oferta.asset_id) {
+      await service
+        .from("oportunidades")
+        .update({ estado: "contactada", updated_at: new Date().toISOString() })
+        .eq("comprador_id", oferta.comprador_id)
+        .eq("asset_id", oferta.asset_id);
+    }
+  }
 }
