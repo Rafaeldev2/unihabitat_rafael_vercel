@@ -125,17 +125,29 @@ describe("upsertAssets — preserva pub/lat/lng existentes ante incoming vacío"
       id: "A1", pub: true, lat: 36.807, lng: -5.179,
       map: "https://maps.geoapify.com/v1/staticmap?center=lonlat:-5.179,36.807&zoom=15&apiKey=k",
       addr: "C/ Real 1", pob: "Granada", prov: "Granada", cp: "18001",
+      referencia: "REF1", public_slug: "piso-granada-abcdef",
     };
 
     const upsertSpy = vi.fn(async () => ({ error: null }));
 
+    const selectBuilder = () => {
+      const builder: Record<string, unknown> = {};
+      builder.limit = vi.fn(async () => ({ data: [existing], error: null }));
+      builder.in = vi.fn(async () => ({ data: [existing], error: null }));
+      builder.range = vi.fn(async () => ({
+        data: [{ public_slug: existing.public_slug }],
+        error: null,
+      }));
+      builder.order = vi.fn(async () => ({ data: [], error: null }));
+      return builder;
+    };
+
     const fakeClient = {
       from: vi.fn(() => ({
-        select: vi.fn(() => ({
-          in: vi.fn(async () => ({ data: [existing], error: null })),
-        })),
+        select: vi.fn(() => selectBuilder()),
         upsert: upsertSpy,
       })),
+      rpc: vi.fn(async () => ({ data: { ok: true, errors: [] }, error: null })),
     };
 
     vi.doMock("@/lib/supabase/server", () => ({
@@ -148,6 +160,7 @@ describe("upsertAssets — preserva pub/lat/lng existentes ante incoming vacío"
     // Incoming "vacío": campos a "—" / null. NO debería pisar pub/lat/lng/map.
     const incoming = {
       id: "A1",
+      referencia: "",
       pub: false, // mergeRowPreferNonEmpty solo override si incoming es `true`
       prov: "—", pob: "—", cp: "—", addr: "—",
       tip: "—", tipC: "—", precio: null,
@@ -173,6 +186,7 @@ describe("upsertAssets — preserva pub/lat/lng existentes ante incoming vacío"
     expect(merged.pub).toBe(true);
     expect(merged.lat).toBe(36.807);
     expect(merged.lng).toBe(-5.179);
+    expect(merged.public_slug).toBe("piso-granada-abcdef");
     expect(typeof merged.map).toBe("string");
     // El map se reconstruye desde lat/lng vía applyMapFromLatLng. La URL
     // resultante depende de si GEOAPIFY_KEY está disponible en el entorno

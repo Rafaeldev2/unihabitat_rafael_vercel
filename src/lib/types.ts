@@ -75,8 +75,10 @@ export interface Asset {
   /** PK compuesta = `${activoId}__${referencia}` (cuando se carga desde Excel).
    *  Permite que la misma Referencia catastral aparezca en varios activos. */
   id: string;
-  /** Referencia catastral limpia, para mostrar en UI. */
+  /** Referencia catastral limpia, para mostrar en UI admin (no en URL pública). */
   referencia: string;
+  /** Slug público opaco para /portal/inmueble/[slug]. */
+  publicSlug?: string;
   prov: string;
   pob: string;
   cp: string;

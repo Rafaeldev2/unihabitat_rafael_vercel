@@ -7,7 +7,7 @@ import { fetchCompradorByEmail } from "@/app/actions/compradores";
 
 /**
  * Bloquea /portal/privado si el comprador tiene acceso = sin_acceso.
- * Admin/vendedor pasan; clientes demo con acceso activo también.
+ * Admin/vendedor pasan; el resto (incl. cuentas demo) requiere acceso activo en BD.
  */
 export default async function PortalPrivadoLayout({
   children,
@@ -48,25 +48,18 @@ export default async function PortalPrivadoLayout({
     redirect("/login?redirect=/portal/privado");
   }
 
-  // Demo admin/cliente emails always allowed for local DEV_USERS.
-  const isDemoCliente = email === "cliente@propcrm.com";
-
-  let acceso = "activo";
+  let acceso = "sin_acceso";
   try {
     const comprador = await fetchCompradorByEmail(email);
     if (comprador) {
       acceso = comprador.acceso;
-    } else if (!isDemoCliente) {
-      // Alta reciente sin fila aún: tratar como pendiente.
-      acceso = "sin_acceso";
     }
   } catch (err) {
-    // Migración pendiente: no bloquear; log para ops.
-    console.warn("[portal/privado] acceso check failed (fail-open):", err);
-    acceso = "activo";
+    console.warn("[portal/privado] acceso check failed (fail-closed):", err);
+    acceso = "sin_acceso";
   }
 
-  if (acceso === "sin_acceso" && !isDemoCliente) {
+  if (acceso === "sin_acceso") {
     return (
       <div className="mx-auto flex min-h-[60vh] max-w-lg flex-col items-center justify-center px-6 py-16 text-center">
         <Lock size={40} strokeWidth={1} className="text-border" />

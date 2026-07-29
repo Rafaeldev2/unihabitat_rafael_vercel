@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useApp } from "@/lib/context";
 import { fmtM, getPortalPriceDisplay, shortAddr } from "@/lib/utils";
+import { assetPortalHref } from "@/lib/public-slug";
 import {
   buildAssetListFilterOptions,
   buildCatFilterOptions,
@@ -431,7 +432,7 @@ function PortalContent() {
             return (
             <Link
               key={a.id}
-              href={`/portal/${a.id}`}
+              href={assetPortalHref(a)}
               className="group overflow-hidden rounded-xl border border-border bg-white shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5"
             >
               {/* Image + badges */}

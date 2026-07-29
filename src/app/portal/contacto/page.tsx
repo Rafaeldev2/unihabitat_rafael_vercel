@@ -121,9 +121,9 @@ export default function ContactoPage() {
                   className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-navy" />
                 <span>
                   He leído y acepto el{" "}
-                  <a href="#" className="font-medium text-navy underline underline-offset-2">Aviso Legal</a>{" "}
+                  <a href="/legal/privacidad#aviso-legal" className="font-medium text-navy underline underline-offset-2">Aviso Legal</a>{" "}
                   y la{" "}
-                  <a href="#" className="font-medium text-navy underline underline-offset-2">Política de Privacidad</a>
+                  <a href="/legal/privacidad#privacidad" className="font-medium text-navy underline underline-offset-2">Política de Privacidad</a>
                 </span>
               </label>
 

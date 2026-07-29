@@ -24,7 +24,7 @@ export function PrivacyPolicyBody() {
         </p>
       </section>
 
-      <section>
+      <section id="privacidad">
         <h2>Política de protección de datos</h2>
         <p>
           El responsable aplica el principio de responsabilidad activa en el tratamiento de datos personales,
@@ -177,7 +177,7 @@ export function PrivacyPolicyBody() {
         </p>
       </section>
 
-      <section>
+      <section id="aviso-legal">
         <h2>Aviso legal</h2>
 
         <h3>Propiedad intelectual e industrial</h3>

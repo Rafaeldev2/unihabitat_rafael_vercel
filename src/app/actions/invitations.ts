@@ -7,6 +7,7 @@ import { sendEmail } from "@/lib/email/send";
 import { assetSharedTemplate } from "@/lib/email/templates";
 import { getPublicAppOrigin } from "@/lib/app-public-url";
 import { getDeudaTotal, fmt } from "@/lib/utils";
+import { assetPortalHref } from "@/lib/public-slug";
 import { rowToAsset } from "@/lib/supabase/db";
 
 export interface CompradorAssetRow {
@@ -71,7 +72,8 @@ export async function inviteCompradorToAsset(
     }
 
     const origin = getPublicAppOrigin();
-    const actionUrl = `${origin}/portal/${encodeURIComponent(assetId)}`;
+    const path = asset ? assetPortalHref(asset) : `/portal/${encodeURIComponent(assetId)}`;
+    const actionUrl = `${origin}${path}`;
 
     // Email dedicado con ficha del activo (no mirror genérico de bienvenida).
     if (compEmail) {

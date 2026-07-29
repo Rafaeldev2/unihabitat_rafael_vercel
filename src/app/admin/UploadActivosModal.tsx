@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useApp } from "@/lib/context";
 import { parseTemplateExcel, type ParseTemplateResult } from "@/lib/normalize-excel";
-import { upsertAssets, upsertPropiedades } from "@/app/actions/assets";
+import { assertImportSchemaReady, upsertAssets, upsertPropiedades } from "@/app/actions/assets";
 import {
   X, Upload, Loader2, CheckCircle, AlertCircle,
   ChevronDown, ChevronUp, Copy, Download, FileSpreadsheet, Database,
@@ -112,11 +112,28 @@ export function UploadActivosModal({ open, onClose }: UploadActivosModalProps) {
         return;
       }
 
-      // ── Step 2: guardar ─────────────────────────────────────────────────
+      // ── Step 2: preflight schema + guardar ───────────────────────────────
       const t1 = Date.now();
+      updateStep("save", { status: "active", detail: "Comprobando schema…" });
+      const schemaCheck = await assertImportSchemaReady();
+      if (!schemaCheck.ok) {
+        updateStep("save", { status: "error", detail: "Schema incompatible" });
+        setStatus("error");
+        setMessage("El schema de base de datos no está listo para importar. Aplica la migración de staging antes de continuar.");
+        for (const err of schemaCheck.errors) pushLog("error", `Preflight: ${err}`);
+        return;
+      }
+
       updateStep("save", { status: "active", detail: "Guardando inmuebles…" });
 
       const inmResult = await upsertAssets(result.inmuebles);
+      if (inmResult.errors.some((e) => e.startsWith("Preflight:"))) {
+        updateStep("save", { status: "error", detail: "Abortado por preflight" });
+        setStatus("error");
+        setMessage("Importación abortada: schema incompatible. No se escribieron datos.");
+        for (const err of inmResult.errors) pushLog("error", err);
+        return;
+      }
       pushLog(
         "info",
         `Inmuebles: ${inmResult.inserted} nuevo(s), ${inmResult.updated} actualizado(s)${inmResult.errors.length > 0 ? `, ${inmResult.errors.length} error(es)` : ""}`,

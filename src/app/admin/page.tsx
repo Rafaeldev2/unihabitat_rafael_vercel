@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useApp } from "@/lib/context";
-import { fmt, fmtM, displayAssetAddress } from "@/lib/utils";
+import { fmt, fmtM, displayAssetAddress, getProceso, getDeudaTotal } from "@/lib/utils";
 import {
   buildAssetListFilterOptions,
   assetMatchesListFilters,
@@ -14,10 +14,10 @@ import { UploadActivosModal } from "./UploadActivosModal";
 import { FilterSelect } from "@/components/FilterSelect";
 import { deleteAllAssets, deleteAssetsByIds, toggleAssetPub } from "@/app/actions/assets";
 import { isAdmin } from "@/lib/auth-helpers";
-import { getCategoria, getFaseInterna, getFaseC, getPropietario, getActivoId } from "@/lib/utils";
+import { getCategoria, getFaseInterna, getFaseC, getActivoId } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 
-type SortCol = "prov" | "pob" | "sqm" | "precio" | "cat" | "addr" | "cp" | "tip" | "fase" | "pub";
+type SortCol = "prov" | "pob" | "sqm" | "precio" | "cat" | "addr" | "cp" | "tip" | "fase" | "proceso" | "deuda" | "pub";
 
 const PAGE_SIZE_OPTIONS = [250, 500, 1000] as const;
 const DEFAULT_PAGE_SIZE = 500;
@@ -94,11 +94,15 @@ export default function ActivosPage() {
       const va = sortCol === "addr" ? displayAssetAddress(a)
         : sortCol === "cat" ? getCategoria(a)
         : sortCol === "fase" ? getFaseInterna(a)
+        : sortCol === "proceso" ? getProceso(a)
+        : sortCol === "deuda" ? getDeudaTotal(a)
         : sortCol === "pub" ? (a.pub ? 1 : 0)
         : a[sortCol as keyof Asset];
       const vb = sortCol === "addr" ? displayAssetAddress(b)
         : sortCol === "cat" ? getCategoria(b)
         : sortCol === "fase" ? getFaseInterna(b)
+        : sortCol === "proceso" ? getProceso(b)
+        : sortCol === "deuda" ? getDeudaTotal(b)
         : sortCol === "pub" ? (b.pub ? 1 : 0)
         : b[sortCol as keyof Asset];
       if (va === null || va === undefined) return sortDir;
@@ -333,15 +337,15 @@ export default function ActivosPage() {
 
         {/* Table */}
         <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
-          <div className="grid grid-cols-[32px_28px_72px_100px_100px_1fr_56px_56px_100px_minmax(7rem,1fr)_90px_95px_28px] items-center gap-1.5 bg-navy px-3.5 py-2.5">
+          <div className="grid grid-cols-[32px_28px_72px_100px_100px_1fr_56px_56px_100px_minmax(6rem,1fr)_minmax(4.5rem,88px)_72px_90px_95px_28px] items-center gap-1.5 bg-navy px-3.5 py-2.5">
             <div
               className={`flex h-4 w-4 cursor-pointer items-center justify-center rounded-[3px] border-[1.5px] transition-all ${allChk ? "border-gold bg-gold text-white" : "border-white/25 hover:border-white/50"}`}
               onClick={() => toggleChkAll(filtered.map(a => a.id))}
             >{allChk && <Check size={10} strokeWidth={3} />}</div>
             <div />
-            {(["cat","prov","pob","addr","cp","sqm","tip","fase","pub","precio"] as SortCol[]).map(col => (
+            {(["cat","prov","pob","addr","cp","sqm","tip","fase","proceso","deuda","pub","precio"] as SortCol[]).map(col => (
               <div key={col} className={`flex cursor-pointer select-none items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors ${sortCol === col ? "text-gold" : "text-white/35 hover:text-white/60"}`} onClick={() => handleSort(col)}>
-                {{cat:"Cat.",prov:"Provincia",pob:"Población",addr:"Dirección",cp:"C.P.",sqm:"m²",tip:"Tipo",fase:"Situación",pub:"Estado",precio:"Precio"}[col]}
+                {{cat:"Cat.",prov:"Provincia",pob:"Población",addr:"Dirección",cp:"C.P.",sqm:"m²",tip:"Tipo",fase:"Situación",proceso:"Proceso",deuda:"Deuda",pub:"Estado",precio:"Precio"}[col]}
               </div>
             ))}
             <div />
@@ -354,7 +358,7 @@ export default function ActivosPage() {
               <Link
                 key={a.id}
                 href={`/admin/assets/${a.id}`}
-                className="grid grid-cols-[32px_28px_72px_100px_100px_1fr_56px_56px_100px_minmax(7rem,1fr)_90px_95px_28px] items-start gap-1.5 border-b border-border2 px-3.5 py-1.5 transition-colors last:border-b-0 hover:bg-cream/50 min-h-[46px]"
+                className="grid grid-cols-[32px_28px_72px_100px_100px_1fr_56px_56px_100px_minmax(6rem,1fr)_minmax(4.5rem,88px)_72px_90px_95px_28px] items-start gap-1.5 border-b border-border2 px-3.5 py-1.5 transition-colors last:border-b-0 hover:bg-cream/50 min-h-[46px]"
               >
                 <div
                   className={`flex h-4 w-4 cursor-pointer items-center justify-center rounded-[3px] border-[1.5px] transition-all ${a.chk ? "border-navy bg-navy text-white" : "border-border hover:border-navy/40"}`}
@@ -381,6 +385,8 @@ export default function ActivosPage() {
                 <span className="text-xs text-muted">{fmtM(a.sqm)}</span>
                 <span className={`inline-flex w-fit rounded-md px-2 py-0.5 text-[10px] font-semibold ${pillClass[a.tipC] || ""}`}>{a.tip}</span>
                 <span className={`min-w-0 max-w-full rounded-md px-2 py-0.5 text-left text-[10px] font-semibold leading-snug whitespace-normal break-words ${pillClass[getFaseC(a)] || ""}`}>{getFaseInterna(a)}</span>
+                <span className="truncate text-[10px] text-muted" title={getProceso(a)}>{getProceso(a)}</span>
+                <span className="text-xs font-medium text-navy">{getDeudaTotal(a) != null ? fmt(getDeudaTotal(a)!) : "—"}</span>
                 <button
                   type="button"
                   onClick={e => { e.preventDefault(); e.stopPropagation(); void handleTogglePub(a.id); }}

@@ -1,23 +1,15 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Lock } from "lucide-react";
-import { fetchAssetById, fetchPublicAssetsByActivoId } from "@/app/actions/assets";
-import { publicAssetPath } from "@/lib/public-slug";
-import PortalDetailClient from "./PortalDetailClient";
+import { fetchAssetByPublicSlug, fetchPublicAssetsByActivoId } from "@/app/actions/assets";
+import PortalDetailClient from "../../[id]/PortalDetailClient";
 
-/**
- * Ruta legacy `/portal/{id}` → redirige a `/portal/inmueble/{slug}` canónico.
- * Si aún no hay slug (migración pendiente), renderiza la ficha como fallback.
- */
-export default async function PortalDetailLegacyPage({
+export default async function PortalInmuebleSlugPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }) {
-  const { id: raw } = await params;
-  const id = decodeURIComponent(raw);
-
-  const asset = await fetchAssetById(id);
+  const { slug } = await params;
+  const asset = await fetchAssetByPublicSlug(decodeURIComponent(slug));
 
   if (!asset || !asset.pub) {
     return (
@@ -29,10 +21,6 @@ export default async function PortalDetailLegacyPage({
         </Link>
       </div>
     );
-  }
-
-  if (asset.publicSlug) {
-    redirect(publicAssetPath(asset.publicSlug));
   }
 
   let siblings: Awaited<ReturnType<typeof fetchPublicAssetsByActivoId>> = [];

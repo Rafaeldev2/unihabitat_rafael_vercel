@@ -2,7 +2,7 @@
 
 > **Propósito:** Checklist de acciones que debes hacer tú (Supabase, env, validación manual). No es trabajo de código.  
 > **Público:** Product owner / ops Unihabitat.  
-> **Actualizado:** 2026-07-23 (tras Fase 3 + guía staging)
+> **Actualizado:** 2026-07-29 (correcciones feedback cliente + slugs + import OCUPADO)
 
 Las Fases 1–3 ya están en código. Lo de abajo es lo que falta **por tu parte**.
 
@@ -41,12 +41,15 @@ Detalle: [staging.md](operacoes/staging.md).
 
 | # | Archivo | Qué hace |
 |---|---------|----------|
-| 1 | [`supabase-migration-categoria-libre.sql`](../supabase-migration-categoria-libre.sql) | Categoría libre en Excel (p. ej. OCUPADO) — Fase 1 |
-| 2 | [`supabase-migration-comprador-acceso.sql`](../supabase-migration-comprador-acceso.sql) | Columna `compradores.acceso` (`sin_acceso` \| `activo`) — Fase 2 |
+| 1 | [`supabase-migration-feedback-cliente-staging.sql`](../supabase-migration-feedback-cliente-staging.sql) | `assets.referencia` + `public_slug` + drop CHECK categoría + RPC preflight — **obligatorio para import OCUPADO y URLs slug** |
+| 2 | [`supabase-migration-categoria-libre.sql`](../supabase-migration-categoria-libre.sql) | Idempotente: categoría libre (si no usaste el #1 completo) |
+| 3 | [`supabase-migration-comprador-acceso.sql`](../supabase-migration-comprador-acceso.sql) | Columna `compradores.acceso` (`sin_acceso` \| `activo`) |
+
+Script auxiliar: `node scripts/run-migration-feedback-cliente.mjs` (intenta `exec_sql`; si falla, pegar SQL en el Editor).
 
 Si staging es un proyecto vacío, aplica antes el schema base + migraciones históricas ([migrations-supabase.md](operacoes/migrations-supabase.md)).
 
-Sin (2), el bloqueo de `/portal/privado` no será fiable (fail-open con warning).
+Sin (1), el import de OCUPADO falla y las URLs slug no existen. Sin (3), el bloqueo de `/portal/privado` no será fiable.
 
 ### 2. Variables de entorno (local / Vercel **Preview**)
 
@@ -68,7 +71,7 @@ Sin (2), el bloqueo de `/portal/privado` no será fiable (fail-open con warning)
 - [ ] Altas nuevas quedan en **Sin acceso**.
 - [ ] En `/admin/compradores` → **Activar acceso** cuando proceda.
 - [ ] NDA firmada **no** abre el portal sola; hace falta activar acceso a mano.
-- [ ] Demo `cliente@propcrm.com` puede entrar al privado en local (bypass dev).
+- [ ] Demo `cliente@propcrm.com` **también** respeta `sin_acceso` (ya no hay bypass).
 
 ### Email al compartir un activo
 

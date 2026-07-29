@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect, useMemo } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useApp } from "@/lib/context";
 import { fetchOfertas, updateOfertaEstado, type OfertaRow } from "@/app/actions/ofertas";
 import { fetchCompradores } from "@/app/actions/compradores";
 import { fetchAssetByIdForAdmin } from "@/app/actions/assets";
 import type { Asset, Comprador } from "@/lib/types";
 import Link from "next/link";
-import { FileText, CheckCircle2, XCircle, Send, Loader2, AlertCircle, Euro } from "lucide-react";
+import { FileText, CheckCircle2, XCircle, Send, Loader2, AlertCircle, Euro, X } from "lucide-react";
 import { fmt } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 
@@ -20,17 +21,43 @@ const ESTADO_FILTRO: Array<OfertaRow["estado"] | ""> = [
   "rechazada",
 ];
 
+const ESTADO_OPCIONES: OfertaRow["estado"][] = [
+  "pendiente",
+  "validada",
+  "rechazada",
+  "nda_enviado",
+  "nda_firmado",
+];
+
 export default function OfertasPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted">
+          Cargando ofertas…
+        </div>
+      }
+    >
+      <OfertasPageInner />
+    </Suspense>
+  );
+}
+
+function OfertasPageInner() {
   const { assets } = useApp();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const assetFilter = searchParams.get("asset") ?? "";
   const [ofertas, setOfertas] = useState<OfertaRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [fEstado, setFEstado] = useState<OfertaRow["estado"] | "">("");
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [compradores, setCompradores] = useState<Map<string, Comprador>>(new Map());
   const [assetsMap, setAssetsMap] = useState<Map<string, Asset>>(new Map());
 
   useEffect(() => {
     loadData();
-  }, [fEstado]);
+  }, [fEstado, assetFilter]);
 
   async function loadData() {
     setLoading(true);
@@ -44,8 +71,10 @@ export default function OfertasPage() {
       compradoresData.forEach(c => compMap.set(c.id, c));
       setCompradores(compMap);
 
-      // Cargar assets
-      const assetIds = [...new Set(ofertasData.map(o => o.asset_id))];
+      const assetIds = [...new Set([
+        ...ofertasData.map(o => o.asset_id),
+        ...(assetFilter ? [assetFilter] : []),
+      ])];
       const assetPromises = assetIds.map(id => fetchAssetByIdForAdmin(id));
       const assetResults = await Promise.all(assetPromises);
       const assetMap = new Map<string, Asset>();
@@ -58,14 +87,28 @@ export default function OfertasPage() {
     }
   }
 
+  const filteredOfertas = useMemo(
+    () => assetFilter ? ofertas.filter(o => o.asset_id === assetFilter) : ofertas,
+    [ofertas, assetFilter],
+  );
+
+  const filterAsset = assetFilter ? assetsMap.get(assetFilter) ?? assets.find(a => a.id === assetFilter) : undefined;
+
+  const clearAssetFilter = () => {
+    router.replace("/admin/ofertas");
+  };
+
   async function handleEstadoChange(ofertaId: string, nuevoEstado: OfertaRow["estado"]) {
+    setUpdatingId(ofertaId);
     try {
       await updateOfertaEstado(ofertaId, nuevoEstado);
       await loadData();
-      toast.success("Estado de oferta actualizado", { description: `Nuevo estado: ${nuevoEstado}` });
+      toast.success("Estado de oferta actualizado", { description: `Nuevo estado: ${nuevoEstado.replace(/_/g, " ")}` });
     } catch (err) {
       console.error("Error updating estado:", err);
       toast.error("Error al actualizar el estado de la oferta", { description: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setUpdatingId(null);
     }
   }
 
@@ -83,7 +126,7 @@ export default function OfertasPage() {
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold text-navy">Ofertas de Compradores</h1>
           <span className="rounded-md bg-cream px-2.5 py-0.5 text-xs font-medium text-muted">
-            {ofertas.length} {ofertas.length === 1 ? "oferta" : "ofertas"}
+            {filteredOfertas.length} {filteredOfertas.length === 1 ? "oferta" : "ofertas"}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -101,14 +144,32 @@ export default function OfertasPage() {
       </div>
 
       <div className="p-5">
-        {ofertas.length === 0 ? (
+        {assetFilter && (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted">Filtro activo:</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-navy/20 bg-navy/5 px-3 py-1 text-xs font-medium text-navy">
+              Activo: {filterAsset ? `${filterAsset.pob}, ${filterAsset.prov}` : assetFilter}
+              <button
+                type="button"
+                onClick={clearAssetFilter}
+                className="rounded-full p-0.5 text-muted transition-colors hover:bg-navy/10 hover:text-navy"
+                aria-label="Quitar filtro de activo"
+              >
+                <X size={12} />
+              </button>
+            </span>
+          </div>
+        )}
+        {filteredOfertas.length === 0 ? (
           <div className="py-16 text-center">
             <FileText size={40} className="mx-auto mb-3 text-border" />
-            <p className="text-sm text-muted">No hay ofertas pendientes</p>
+            <p className="text-sm text-muted">
+              {assetFilter ? "No hay ofertas para este activo" : "No hay ofertas pendientes"}
+            </p>
           </div>
         ) : (
           <div className="space-y-3">
-            {ofertas.map(oferta => {
+            {filteredOfertas.map(oferta => {
               const comprador = compradores.get(oferta.comprador_id);
               const asset = assetsMap.get(oferta.asset_id);
               if (!comprador || !asset) return null;
@@ -189,24 +250,46 @@ export default function OfertasPage() {
                     </div>
                   )}
 
-                  <div className="ml-12 flex flex-wrap gap-2">
+                  <div className="ml-12 flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <label htmlFor={`estado-${oferta.id}`} className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+                        Cambiar estado
+                      </label>
+                      <select
+                        id={`estado-${oferta.id}`}
+                        value={oferta.estado}
+                        disabled={updatingId === oferta.id}
+                        onChange={(e) => void handleEstadoChange(oferta.id, e.target.value as OfertaRow["estado"])}
+                        className="rounded-md border border-border bg-cream2 px-2.5 py-1.5 text-xs text-text outline-none focus:border-navy disabled:opacity-50"
+                      >
+                        {ESTADO_OPCIONES.map((e) => (
+                          <option key={e} value={e}>{e.replace(/_/g, " ")}</option>
+                        ))}
+                      </select>
+                    </div>
                     {oferta.estado === "pendiente" && (
                       <>
                         <button
-                          onClick={() => handleEstadoChange(oferta.id, "validada")}
-                          className="flex items-center gap-1.5 rounded-lg bg-green px-3 py-1.5 text-xs font-medium text-white hover:bg-green/90"
+                          type="button"
+                          disabled={updatingId === oferta.id}
+                          onClick={() => void handleEstadoChange(oferta.id, "validada")}
+                          className="flex items-center gap-1.5 rounded-lg bg-green px-3 py-1.5 text-xs font-medium text-white hover:bg-green/90 disabled:opacity-50"
                         >
                           <CheckCircle2 size={14} /> Validar
                         </button>
                         <button
-                          onClick={() => handleEstadoChange(oferta.id, "rechazada")}
-                          className="flex items-center gap-1.5 rounded-lg bg-red px-3 py-1.5 text-xs font-medium text-white hover:bg-red/90"
+                          type="button"
+                          disabled={updatingId === oferta.id}
+                          onClick={() => void handleEstadoChange(oferta.id, "rechazada")}
+                          className="flex items-center gap-1.5 rounded-lg bg-red px-3 py-1.5 text-xs font-medium text-white hover:bg-red/90 disabled:opacity-50"
                         >
                           <XCircle size={14} /> Rechazar
                         </button>
                         <button
-                          onClick={() => handleEstadoChange(oferta.id, "nda_enviado")}
-                          className="flex items-center gap-1.5 rounded-lg bg-gold px-3 py-1.5 text-xs font-medium text-white hover:bg-gold2"
+                          type="button"
+                          disabled={updatingId === oferta.id}
+                          onClick={() => void handleEstadoChange(oferta.id, "nda_enviado")}
+                          className="flex items-center gap-1.5 rounded-lg bg-gold px-3 py-1.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
                         >
                           <Send size={14} /> Enviar NDA
                         </button>
@@ -214,8 +297,10 @@ export default function OfertasPage() {
                     )}
                     {oferta.estado === "validada" && (
                       <button
-                        onClick={() => handleEstadoChange(oferta.id, "nda_enviado")}
-                        className="flex items-center gap-1.5 rounded-lg bg-gold px-3 py-1.5 text-xs font-medium text-white hover:bg-gold2"
+                        type="button"
+                        disabled={updatingId === oferta.id}
+                        onClick={() => void handleEstadoChange(oferta.id, "nda_enviado")}
+                        className="flex items-center gap-1.5 rounded-lg bg-gold px-3 py-1.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
                       >
                         <Send size={14} /> Enviar NDA
                       </button>

@@ -50,6 +50,12 @@ export function getDeudaTotal(a: AssetLike): number | null {
   return any ? total : null;
 }
 
+/** Proceso representativo del inmueble (primera propiedad con valor). */
+export function getProceso(a: AssetLike): string {
+  const p = a.propiedades?.find((x) => x.proceso && x.proceso !== "—");
+  return p?.proceso ?? a.propiedades?.[0]?.proceso ?? "—";
+}
+
 /** Precio/Deuda para portal: NPL → Deuda; CDR → Precio o “Haz tu Oferta”. */
 export function getPortalPriceDisplay(a: AssetLike & { precio?: number | null }): {
   label: string;

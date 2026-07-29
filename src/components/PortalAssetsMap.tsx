@@ -5,6 +5,7 @@ import Link from "next/link";
 import { MapPin } from "lucide-react";
 import type { Asset } from "@/lib/types";
 import { getPortalPriceDisplay, shortAddr } from "@/lib/utils";
+import { assetPortalHref } from "@/lib/public-slug";
 
 type PortalAssetsMapProps = {
   assets: Asset[];
@@ -72,7 +73,7 @@ export function PortalAssetsMap({ assets, className = "" }: PortalAssetsMapProps
             `<div style="font:12px/1.4 system-ui,sans-serif;min-width:140px">
               <strong>${escapeHtml(shortAddr(p.asset) || p.asset.pob || p.asset.id)}</strong><br/>
               <span style="color:#666">${escapeHtml(price.label)}: ${escapeHtml(price.value)}</span><br/>
-              <a href="/portal/${encodeURIComponent(p.asset.id)}" style="color:#0d2a4a;font-weight:600">Ver ficha →</a>
+              <a href="${assetPortalHref(p.asset)}" style="color:#0d2a4a;font-weight:600">Ver ficha →</a>
             </div>`,
           );
           bounds.extend([p.lat, p.lng]);

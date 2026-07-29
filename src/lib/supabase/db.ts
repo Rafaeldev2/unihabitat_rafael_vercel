@@ -42,6 +42,7 @@ export function rowToAsset(r: any): Asset {
   return {
     id: r.id,
     referencia: r.referencia ?? "",
+    publicSlug: r.public_slug ?? undefined,
     prov: r.prov ?? "", pob: r.pob ?? "", cp: r.cp ?? "",
     addr: r.addr ?? "", tip: r.tip ?? "", tipC: r.tip_c ?? "",
     precio: r.precio != null ? Number(r.precio) : null,
@@ -81,6 +82,7 @@ export function assetToRow(a: Asset) {
     coef: a.coef, ccaa: a.ccaa, full_addr: a.fullAddr, descr: a.desc,
     pub: a.pub, age: a.age,
   };
+  if (a.publicSlug) row.public_slug = a.publicSlug;
   if (a.lat != null) row.lat = a.lat;
   if (a.lng != null) row.lng = a.lng;
   return row;

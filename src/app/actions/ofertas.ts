@@ -4,6 +4,8 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email/send";
 import { EMAIL_SUPPORT } from "@/lib/email/resend";
 import { offerTemplate } from "@/lib/email/templates";
+import { getServerSession, requireAdminOrVendor } from "@/lib/auth-server";
+import { fetchCompradorByEmail } from "@/app/actions/compradores";
 
 export interface OfertaRow {
   id: string;
@@ -175,6 +177,7 @@ export async function updateOfertaEstado(
   ofertaId: string,
   estado: OfertaRow["estado"]
 ): Promise<void> {
+  await requireAdminOrVendor();
   const serviceClient = await createServiceClient();
   const updateData: Partial<OfertaRow> = { estado, updated_at: new Date().toISOString() };
   if (estado === "nda_enviado") {
@@ -190,13 +193,33 @@ export async function updateOfertaEstado(
 }
 
 export async function firmarNDA(ofertaId: string): Promise<void> {
+  const session = await getServerSession();
+  if (!session?.email) {
+    throw new Error("Acceso denegado: se requiere autenticación");
+  }
+  if (session.role === "admin" || session.role === "vendedor") {
+    throw new Error("Acceso denegado: acción reservada al comprador");
+  }
+
+  const comprador = await fetchCompradorByEmail(session.email);
+  if (!comprador) {
+    throw new Error("Comprador no encontrado");
+  }
+
   const supabase = await createClient();
   const { data: oferta, error: fetchErr } = await supabase
     .from("ofertas")
-    .select("comprador_id, asset_id")
+    .select("comprador_id, asset_id, estado")
     .eq("id", ofertaId)
     .maybeSingle();
   if (fetchErr) throw new Error(fetchErr.message);
+  if (!oferta) throw new Error("Oferta no encontrada");
+  if (oferta.comprador_id !== comprador.id) {
+    throw new Error("Acceso denegado: no puedes firmar esta oferta");
+  }
+  if (oferta.estado !== "nda_enviado") {
+    throw new Error("Esta oferta no está pendiente de firma de NDA");
+  }
 
   const { error } = await supabase
     .from("ofertas")

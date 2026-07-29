@@ -11,6 +11,7 @@ import { buildStaticMapUrl } from "@/lib/catastro/geoapify";
 import {
   requireAdmin, requireAdminOrVendor, requireEditPermission, requireAssetAccess,
 } from "@/lib/auth-server";
+import { buildPublicSlug } from "@/lib/public-slug";
 
 // PostgREST aplica `db-max-rows = 1000` por request; paginamos manualmente.
 const POSTGREST_PAGE_SIZE = 1000;
@@ -159,6 +160,60 @@ export async function fetchAssetById(id: string): Promise<Asset | null> {
   return asset;
 }
 
+/** Resuelve ficha pública/privada por slug opaco (sin catastral en URL). */
+export async function fetchAssetByPublicSlug(slug: string): Promise<Asset | null> {
+  const key = slug?.trim();
+  if (!key) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("assets").select("*").eq("public_slug", key).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  const asset = rowToAssetPublic(data);
+  const { data: props, error: pErr } = await supabase
+    .from("propiedades").select("*").eq("inmueble_id", asset.id);
+  if (pErr) throw new Error(pErr.message);
+  asset.propiedades = (props ?? []).map(rowToPropiedadPublic);
+  return asset;
+}
+
+export interface ImportSchemaPreflightResult {
+  ok: boolean;
+  errors: string[];
+}
+
+/**
+ * Fail-fast antes de escribir batches: columnas/constraints requeridos por el importador.
+ * Requiere RPC `import_schema_preflight` (migración feedback-cliente).
+ */
+export async function assertImportSchemaReady(): Promise<ImportSchemaPreflightResult> {
+  await requireAdmin();
+  const supabase = await createServiceClient();
+  const errors: string[] = [];
+
+  const { error: colErr } = await supabase
+    .from("assets")
+    .select("id, referencia, public_slug")
+    .limit(1);
+  if (colErr) {
+    errors.push(`Schema assets incompatible: ${colErr.message}`);
+  }
+
+  const { data: rpcData, error: rpcErr } = await supabase.rpc("import_schema_preflight");
+  if (rpcErr) {
+    errors.push(
+      `No se pudo validar schema (¿migración aplicada?): ${rpcErr.message}`,
+    );
+  } else if (rpcData && typeof rpcData === "object") {
+    const payload = rpcData as { ok?: boolean; errors?: string[] };
+    if (payload.ok === false && Array.isArray(payload.errors)) {
+      errors.push(...payload.errors);
+    }
+  }
+
+  return { ok: errors.length === 0, errors };
+}
+
 export async function fetchAssetByIdForAdmin(id: string): Promise<Asset | null> {
   const session = await requireAdminOrVendor();
   await requireAssetAccess(session, id);
@@ -298,9 +353,31 @@ export async function upsertAssets(assets: Asset[]): Promise<UpsertAssetsResult>
   let inserted = 0;
   let updated = 0;
 
+  const preflight = await assertImportSchemaReady();
+  if (!preflight.ok) {
+    return {
+      inserted: 0,
+      updated: 0,
+      errors: preflight.errors.map((e) => `Preflight: ${e}`),
+      duplicatesMerged: {},
+    };
+  }
+
   const { deduped, duplicates } = dedupAssetsById(assets);
   const duplicatesMerged: Record<string, number> = {};
   for (const [id, n] of duplicates) duplicatesMerged[id] = n;
+
+  // Prefetch slugs existentes (paginado) para evitar colisiones en el batch.
+  const takenSlugs = new Set<string>();
+  {
+    const slugRows = await fetchAllPaginated<{ public_slug: string | null }>(
+      "upsertAssets.slugs",
+      () => supabase.from("assets").select("public_slug"),
+    );
+    for (const r of slugRows) {
+      if (r.public_slug) takenSlugs.add(String(r.public_slug));
+    }
+  }
 
   const BATCH_SIZE = 50;
   for (let i = 0; i < deduped.length; i += BATCH_SIZE) {
@@ -316,9 +393,24 @@ export async function upsertAssets(assets: Asset[]): Promise<UpsertAssetsResult>
     for (const row of existingRows ?? []) existingMap.set(row.id, row);
 
     const rows = batch.map((a) => {
-      const incoming = assetToRow(a);
       const existing = existingMap.get(a.id);
+      const keepSlug = existing?.public_slug ? String(existing.public_slug) : a.publicSlug;
+      if (keepSlug) takenSlugs.delete(keepSlug);
+      const publicSlug = buildPublicSlug(
+        { id: a.id, tip: a.tip, pob: a.pob, publicSlug: keepSlug },
+        takenSlugs,
+      );
+      takenSlugs.add(publicSlug);
+      a.publicSlug = publicSlug;
+
+      const incoming = assetToRow(a);
+      incoming.public_slug = publicSlug;
+      if (!incoming.referencia) {
+        incoming.referencia = a.referencia || (existing?.referencia ?? "") || a.id.split("__")[1] || a.id;
+      }
       const merged = existing ? mergeRowPreferNonEmpty(existing, incoming) : incoming;
+      merged.public_slug = publicSlug;
+      if (!merged.referencia) merged.referencia = incoming.referencia;
       applyMapFromLatLng(merged);
       return merged;
     });
@@ -375,6 +467,16 @@ export async function upsertPropiedades(propiedades: Propiedad[]): Promise<Upser
   const errors: string[] = [];
   let inserted = 0;
   let updated = 0;
+
+  const preflight = await assertImportSchemaReady();
+  if (!preflight.ok) {
+    return {
+      inserted: 0,
+      updated: 0,
+      errors: preflight.errors.map((e) => `Preflight: ${e}`),
+      duplicatesMerged: {},
+    };
+  }
 
   const { deduped, duplicates } = dedupPropiedadesById(propiedades);
   const duplicatesMerged: Record<string, number> = {};

@@ -20,12 +20,14 @@ const SHARED_FILTER_SYMBOLS = [
 ] as const;
 
 interface FixtureOverrides extends Partial<Asset> {
-  cat?: "CDR" | "NPL" | "—";
+  cat?: string;
   fase?: string;
+  proceso?: string;
+  deuda?: number | null;
 }
 
 function makeAsset(overrides: FixtureOverrides = {}): Asset {
-  const { cat, fase, ...rest } = overrides;
+  const { cat, fase, proceso, deuda, ...rest } = overrides;
   const base: Asset = {
     id: "ASSET-1",
     referencia: "ASSET-1",
@@ -61,21 +63,23 @@ function makeAsset(overrides: FixtureOverrides = {}): Asset {
     propiedades: [],
     ...rest,
   };
-  // El test usa `cat` y `fase` como atajos para inyectar una propiedad.
-  if (cat !== undefined || fase !== undefined) {
+  // El test usa `cat`/`fase`/`proceso`/`deuda` como atajos para inyectar una propiedad.
+  if (cat !== undefined || fase !== undefined || proceso !== undefined || deuda !== undefined) {
+    const categoria =
+      cat === undefined || cat === "—" ? "CDR" : cat;
     base.propiedades = [{
       id: `${base.id}-P1`,
       inmuebleId: base.id,
       activoId: `ACT-${base.id}`,
-      categoria: cat === "NPL" ? "NPL" : "CDR",
+      categoria,
       propietario: "—",
       contacto: "—",
       telefono: "—",
       mail: "—",
       faseInterna: fase ?? "Publicado",
       faseC: "fp-pub",
-      proceso: "—",
-      deuda: null,
+      proceso: proceso ?? "—",
+      deuda: deuda ?? null,
       precioPublicacion: null,
       lien: "—",
       collateralId: "",
@@ -252,6 +256,29 @@ describe("paridad admin vs portal", () => {
   });
 });
 
+describe("categoría libre OCUPADO y columnas proceso/deuda", () => {
+  it("incluye OCUPADO en opciones de categoría y filtra por ella", () => {
+    const assets = [
+      ...FIXTURE_ASSETS,
+      makeAsset({ id: "OCC1", cat: "OCUPADO", prov: "Madrid", pob: "Valdemoro", tip: "PISO", pub: true }),
+    ];
+    const opts = buildCatFilterOptions(assets);
+    expect(opts).toContain("OCUPADO");
+    const filtered = filterAdminAssets(assets, { cat: "OCUPADO" });
+    expect(filtered.map((a) => a.id)).toEqual(["OCC1"]);
+  });
+
+  it("filtra por proceso y deuda con la misma API de list filters", () => {
+    const assets = [
+      makeAsset({ id: "P1", cat: "NPL", proceso: "EJ-1", deuda: 100000, pub: true }),
+      makeAsset({ id: "P2", cat: "NPL", proceso: "EJ-2", deuda: 50000, pub: true }),
+    ];
+    expect(filterAdminAssets(assets, { proceso: "EJ-1" }).map((a) => a.id)).toEqual(["P1"]);
+    const withDeuda = buildAssetListFilterOptions(assets);
+    expect(withDeuda.proceso).toEqual(expect.arrayContaining(["EJ-1", "EJ-2"]));
+  });
+});
+
 describe("páginas admin y portal", () => {
   it.each([
     ["admin", "admin/page.tsx"],
@@ -263,5 +290,11 @@ describe("páginas admin y portal", () => {
     for (const symbol of SHARED_FILTER_SYMBOLS) {
       expect(src, `${relPath} debe importar ${symbol}`).toContain(symbol);
     }
+  });
+
+  it("home usa asset-filters para handoff a /portal", () => {
+    const src = readFileSync(resolve(__dirname, "../app/page.tsx"), "utf8");
+    expect(src).toContain('@/lib/asset-filters');
+    expect(src).toContain("buildAssetListFilterOptions");
   });
 });

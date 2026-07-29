@@ -8,6 +8,10 @@
 
 create table if not exists public.assets (
   id text primary key,
+  -- Referencia catastral limpia (UI / import). El PK compuesto vive en id.
+  referencia text default '',
+  -- Slug público opaco para /portal/inmueble/[slug] (sin catastral en URL).
+  public_slug text,
   cat text default '—',
   prov text default '—',
   pob text default '—',

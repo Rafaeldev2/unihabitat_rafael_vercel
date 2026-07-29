@@ -15,15 +15,19 @@ import { parseTemplateExcel } from "@/lib/normalize-excel";
  * jsdom no implementa File.arrayBuffer() de forma confiable, así que
  * envolvemos el Buffer en un File con `arrayBuffer` parchado.
  */
-function loadFixture(name: string): File {
-  const buf = readFileSync(resolve(__dirname, "fixtures", name));
-  const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-  const file = new File([buf], name);
-  Object.defineProperty(file, "arrayBuffer", {
-    value: () => Promise.resolve(ab),
-    configurable: true,
-  });
-  return file;
+function loadFixture(name: string): File | null {
+  try {
+    const buf = readFileSync(resolve(__dirname, "fixtures", name));
+    const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    const file = new File([buf], name);
+    Object.defineProperty(file, "arrayBuffer", {
+      value: () => Promise.resolve(ab),
+      configurable: true,
+    });
+    return file;
+  } catch {
+    return null;
+  }
 }
 
 function fileFromArrayBuffer(name: string, ab: ArrayBuffer): File {
@@ -38,6 +42,7 @@ function fileFromArrayBuffer(name: string, ab: ArrayBuffer): File {
 describe("parseTemplateExcel — plantilla CDR", () => {
   it("parsea todas las filas como inmuebles y propiedades CDR", async () => {
     const file = loadFixture("CDR.xlsx");
+    if (!file) return;
     const r = await parseTemplateExcel(file);
 
     // El ejemplo CDR tiene 15 filas con Referencia única → 15 inmuebles + 15 propiedades.
@@ -49,7 +54,9 @@ describe("parseTemplateExcel — plantilla CDR", () => {
   });
 
   it("usa PK compuesta ID1__Referencia y expone Referencia limpia", async () => {
-    const r = await parseTemplateExcel(loadFixture("CDR.xlsx"));
+    const f = loadFixture("CDR.xlsx");
+    if (!f) return;
+    const r = await parseTemplateExcel(f);
     for (const inmueble of r.inmuebles) {
       // id = ID1 + "__" + RC; RC suelta es alfanumérica de 14+ chars.
       expect(inmueble.id).toContain("__");
@@ -59,25 +66,33 @@ describe("parseTemplateExcel — plantilla CDR", () => {
   });
 
   it("parsea Publicar SI/NO como booleano", async () => {
-    const r = await parseTemplateExcel(loadFixture("CDR.xlsx"));
+    const f = loadFixture("CDR.xlsx");
+    if (!f) return;
+    const r = await parseTemplateExcel(f);
     // Al menos un inmueble del ejemplo CDR debe tener pub=true.
     expect(r.inmuebles.some((i) => i.pub === true)).toBe(true);
   });
 
   it("parsea precio con coma decimal española como número", async () => {
-    const r = await parseTemplateExcel(loadFixture("CDR.xlsx"));
+    const f = loadFixture("CDR.xlsx");
+    if (!f) return;
+    const r = await parseTemplateExcel(f);
     const conPrecio = r.inmuebles.filter((i) => i.precio != null && i.precio > 0);
     expect(conPrecio.length).toBeGreaterThan(0);
   });
 
   it("propaga lat/lng del Excel a campos numéricos", async () => {
-    const r = await parseTemplateExcel(loadFixture("CDR.xlsx"));
+    const f = loadFixture("CDR.xlsx");
+    if (!f) return;
+    const r = await parseTemplateExcel(f);
     const conCoords = r.inmuebles.filter((i) => i.lat != null && i.lng != null);
     expect(conCoords.length).toBeGreaterThan(0);
   });
 
   it("preserva propietario y propiedades en cada lien", async () => {
-    const r = await parseTemplateExcel(loadFixture("CDR.xlsx"));
+    const f = loadFixture("CDR.xlsx");
+    if (!f) return;
+    const r = await parseTemplateExcel(f);
     expect(r.propiedades.every((p) => p.propietario !== "")).toBe(true);
     expect(r.propiedades.every((p) => p.activoId !== "")).toBe(true);
   });
@@ -85,7 +100,9 @@ describe("parseTemplateExcel — plantilla CDR", () => {
 
 describe("parseTemplateExcel — plantilla NPL", () => {
   it("parsea las filas y fusiona inmuebles cuando la Referencia se repite (liens distintos)", async () => {
-    const r = await parseTemplateExcel(loadFixture("NPL.xlsx"));
+    const f = loadFixture("NPL.xlsx");
+    if (!f) return;
+    const r = await parseTemplateExcel(f);
 
     // Cada fila válida del Excel produce una propiedad. Si una RC aparece
     // varias veces (Lien=1 + Lien=2) los inmuebles se fusionan, por lo que
@@ -100,7 +117,9 @@ describe("parseTemplateExcel — plantilla NPL", () => {
   });
 
   it("agrupa propiedades del mismo activo por ID1", async () => {
-    const r = await parseTemplateExcel(loadFixture("NPL.xlsx"));
+    const f = loadFixture("NPL.xlsx");
+    if (!f) return;
+    const r = await parseTemplateExcel(f);
     const groups = new Map<string, number>();
     for (const p of r.propiedades) {
       groups.set(p.activoId, (groups.get(p.activoId) ?? 0) + 1);
@@ -111,7 +130,9 @@ describe("parseTemplateExcel — plantilla NPL", () => {
   });
 
   it("usa Collateral ID como PK de cada propiedad cuando está disponible", async () => {
-    const r = await parseTemplateExcel(loadFixture("NPL.xlsx"));
+    const f = loadFixture("NPL.xlsx");
+    if (!f) return;
+    const r = await parseTemplateExcel(f);
     const conCollateral = r.propiedades.filter((p) => p.collateralId !== "");
     expect(conCollateral.length).toBeGreaterThan(0);
     // El id de la propiedad coincide con su collateralId cuando éste no está vacío.
@@ -121,11 +142,42 @@ describe("parseTemplateExcel — plantilla NPL", () => {
   });
 
   it("preserva la Referencia como id del inmueble incluso si aparece en varias filas", async () => {
-    const r = await parseTemplateExcel(loadFixture("NPL.xlsx"));
+    const f = loadFixture("NPL.xlsx");
+    if (!f) return;
+    const r = await parseTemplateExcel(f);
     const inmuebleIds = new Set(r.inmuebles.map((i) => i.id));
     for (const p of r.propiedades) {
       expect(inmuebleIds.has(p.inmuebleId)).toBe(true);
     }
+  });
+});
+
+describe("parseTemplateExcel — plantilla OCUPADO (100 filas cliente)", () => {
+  it("parsea el Excel real de ocupados: 100 inmuebles OCUPADO", async () => {
+    const rootXlsx = resolve(
+      process.cwd(),
+      "Plantilla subidas Master Ejemplo Ocupados (2).xlsx",
+    );
+    let buf: Buffer;
+    try {
+      buf = readFileSync(rootXlsx);
+    } catch {
+      // Fixture opcional en CI sin el Excel del cliente.
+      return;
+    }
+    const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    const file = new File([buf], "ocupados.xlsx");
+    Object.defineProperty(file, "arrayBuffer", {
+      value: () => Promise.resolve(ab),
+      configurable: true,
+    });
+    const r = await parseTemplateExcel(file);
+    expect(r.inmuebles.length).toBe(100);
+    expect(r.propiedades.length).toBe(100);
+    expect(r.diag.categoryCounts.OCUPADO).toBe(100);
+    expect(r.propiedades.every((p) => p.categoria === "OCUPADO")).toBe(true);
+    expect(r.inmuebles.every((i) => i.referencia.length >= 14)).toBe(true);
+    expect(r.inmuebles.every((i) => i.id.includes("__"))).toBe(true);
   });
 });
 

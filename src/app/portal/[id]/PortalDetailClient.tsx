@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { fmt, fmtM, shortAddr, formatFullAddress, getDescriptionText, getCategoria, getPortalPriceDisplay } from "@/lib/utils";
+import { assetPortalHref } from "@/lib/public-slug";
 import type { Asset } from "@/lib/types";
 import Link from "next/link";
 import {
@@ -309,7 +310,7 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
                       return (
                         <Link
                           key={s.id}
-                          href={`/portal/${s.id}`}
+                          href={assetPortalHref(s)}
                           className="group flex gap-4 rounded-lg border border-border p-3 transition-all hover:border-gold/40 hover:shadow-sm"
                         >
                           {body}
@@ -447,9 +448,9 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
                         className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-border accent-navy" />
                       <span>
                         He leído y acepto el{" "}
-                        <a href="#" className="font-medium text-navy underline underline-offset-2">Aviso Legal</a>{" "}
+                        <a href="/legal/privacidad#aviso-legal" className="font-medium text-navy underline underline-offset-2">Aviso Legal</a>{" "}
                         y la{" "}
-                        <a href="#" className="font-medium text-navy underline underline-offset-2">Política de Privacidad</a>
+                        <a href="/legal/privacidad#privacidad" className="font-medium text-navy underline underline-offset-2">Política de Privacidad</a>
                       </span>
                     </label>
                     {contactError && (
@@ -606,7 +607,7 @@ function OfertaModal({
           <div className="mb-4 rounded-lg border border-border bg-cream2 p-3">
             <div className="text-xs font-semibold text-muted">Activo</div>
             <div className="text-sm font-medium text-navy">{asset.pob}, {asset.prov}</div>
-            <div className="text-xs text-muted">{asset.id}</div>
+            <div className="text-xs text-muted">{asset.tip}</div>
           </div>
 
           <div className="mb-4">

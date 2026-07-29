@@ -5,7 +5,7 @@ import { useApp } from "@/lib/context";
 import { isAdmin } from "@/lib/auth-helpers";
 import Link from "next/link";
 import type { Asset } from "@/lib/types";
-import { Home, FolderOpen, Briefcase, Users, Lock, ArrowLeft, Upload, Download, FileText, FileSpreadsheet, Image, MessageSquare, Save, Plus, Mail, X, Loader2, AlertCircle, CheckCircle2, CheckCircle, Building, ExternalLink, RefreshCw, UserCog } from "lucide-react";
+import { Home, FolderOpen, Briefcase, Users, Lock, ArrowLeft, Upload, Download, FileText, FileSpreadsheet, Image, MessageSquare, Save, Plus, Mail, X, Loader2, AlertCircle, CheckCircle2, CheckCircle, Building, ExternalLink, RefreshCw, UserCog, Send } from "lucide-react";
 import { uploadDocumento, fetchDocumentos, deleteDocumento, getDocumentUrl, type DocRow } from "@/app/actions/documentos";
 import { createNota, fetchNotas, type NotaRow } from "@/app/actions/notas";
 import { fetchCompradores } from "@/app/actions/compradores";
@@ -120,7 +120,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href={`/portal/${id}`}
+            href={asset?.publicSlug ? `/portal/inmueble/${encodeURIComponent(asset.publicSlug)}` : `/portal/${encodeURIComponent(id)}`}
             target="_blank"
             className="flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/5 px-3.5 py-2 text-xs font-medium text-gold transition-colors hover:bg-gold/10"
           >
@@ -314,6 +314,10 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
   const [savingDesc, setSavingDesc] = useState(false);
   const [catastroRefreshing, setCatastroRefreshing] = useState(false);
   const [catastroMsg, setCatastroMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [showConsultarModal, setShowConsultarModal] = useState(false);
+  const [consultarMsg, setConsultarMsg] = useState("");
+  const [consultarStatus, setConsultarStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
+  const [consultarError, setConsultarError] = useState("");
 
   useEffect(() => {
     setDescDraft(asset.desc && asset.desc !== "—" ? asset.desc : "");
@@ -362,6 +366,46 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
       setCatastroMsg({ ok: false, text: err instanceof Error ? err.message : "Error de conexión" });
     } finally {
       setCatastroRefreshing(false);
+    }
+  };
+
+  const handleOpenConsultar = () => {
+    setConsultarMsg(`Consulta interna admin sobre el activo ${assetId}`);
+    setConsultarStatus("idle");
+    setConsultarError("");
+    setShowConsultarModal(true);
+  };
+
+  const handleSendConsultar = async () => {
+    if (!currentUser?.email) {
+      setConsultarStatus("error");
+      setConsultarError("Sesión no disponible");
+      return;
+    }
+    if (!consultarMsg.trim()) {
+      setConsultarStatus("error");
+      setConsultarError("Escribe un mensaje antes de enviar");
+      return;
+    }
+    setConsultarStatus("sending");
+    setConsultarError("");
+    try {
+      const result = await enviarSolicitudInformacion({
+        assetId,
+        nombre: currentUser.nombre,
+        email: currentUser.email,
+        mensaje: consultarMsg.trim(),
+      });
+      if (result.error) {
+        setConsultarStatus("error");
+        setConsultarError(result.error);
+      } else {
+        setConsultarStatus("success");
+        toast.success("Consulta enviada");
+      }
+    } catch (err) {
+      setConsultarStatus("error");
+      setConsultarError(err instanceof Error ? err.message : "No se pudo enviar la consulta");
     }
   };
 
@@ -449,26 +493,7 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={async () => {
-                  if (!currentUser?.email) {
-                    toast.error("Sesión no disponible");
-                    return;
-                  }
-                  try {
-                    const result = await enviarSolicitudInformacion({
-                      assetId,
-                      nombre: currentUser.nombre,
-                      email: currentUser.email,
-                      mensaje: `Consulta interna admin sobre el activo ${assetId}`,
-                    });
-                    if (result.error) toast.error(result.error);
-                    else toast.success("Consulta enviada");
-                  } catch (err) {
-                    toast.error("No se pudo enviar la consulta", {
-                      description: err instanceof Error ? err.message : String(err),
-                    });
-                  }
-                }}
+                onClick={handleOpenConsultar}
                 className="flex items-center justify-center gap-1.5 rounded-lg border border-border py-2.5 text-xs font-medium text-navy hover:bg-cream"
               >
                 <MessageSquare size={13} /> Consultar
@@ -483,6 +508,74 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
           </div>
         </div>
       </div>
+      {showConsultarModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={() => consultarStatus !== "sending" && setShowConsultarModal(false)}>
+          <div className="w-full max-w-md rounded-xl border border-border bg-white shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <h3 className="text-base font-semibold text-navy">Enviar consulta</h3>
+              <button
+                type="button"
+                onClick={() => consultarStatus !== "sending" && setShowConsultarModal(false)}
+                disabled={consultarStatus === "sending"}
+                className="rounded-lg p-1.5 text-muted hover:bg-cream hover:text-navy disabled:opacity-50"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5">
+              {consultarStatus === "success" ? (
+                <div className="flex flex-col items-center gap-3 py-4 text-center">
+                  <CheckCircle2 size={32} className="text-green" />
+                  <p className="text-sm font-medium text-navy">Consulta enviada correctamente</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowConsultarModal(false)}
+                    className="mt-2 rounded-lg bg-navy px-4 py-2 text-xs font-medium text-white hover:bg-navy3"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-muted">Mensaje</label>
+                  <textarea
+                    value={consultarMsg}
+                    onChange={(e) => setConsultarMsg(e.target.value)}
+                    disabled={consultarStatus === "sending"}
+                    rows={5}
+                    className="w-full rounded-md border border-border bg-cream2 p-3 text-sm text-text outline-none focus:border-navy disabled:opacity-50"
+                    placeholder="Escribe tu consulta sobre este activo..."
+                  />
+                  {consultarStatus === "error" && consultarError && (
+                    <div className="mt-2 flex items-center gap-2 rounded-lg bg-red/10 px-3 py-2 text-xs text-red">
+                      <AlertCircle size={14} /> {consultarError}
+                    </div>
+                  )}
+                  <div className="mt-4 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowConsultarModal(false)}
+                      disabled={consultarStatus === "sending"}
+                      className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text hover:bg-cream disabled:opacity-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleSendConsultar()}
+                      disabled={consultarStatus === "sending" || !consultarMsg.trim()}
+                      className="flex items-center gap-1.5 rounded-md bg-gold px-3 py-1.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
+                    >
+                      {consultarStatus === "sending" ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                      {consultarStatus === "sending" ? "Enviando..." : "Enviar"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       <SectionCard title="Descripción del Activo">
         <textarea
           value={descDraft}

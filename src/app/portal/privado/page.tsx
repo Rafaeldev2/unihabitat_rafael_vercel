@@ -9,6 +9,7 @@ import { signOut } from "@/app/login/actions";
 import { createClient } from "@/lib/supabase/client";
 import type { Asset } from "@/lib/types";
 import { fmtM, getPortalPriceDisplay, shortAddr } from "@/lib/utils";
+import { assetPrivateHref } from "@/lib/public-slug";
 import { shouldBackfillMapFromAddress } from "@/lib/map-default";
 import { useFavoritos } from "@/hooks/useFavoritos";
 import Link from "next/link";
@@ -168,7 +169,7 @@ export default function PortalPrivadoPage() {
   };
 
   const AssetCard = ({ a, badge }: { a: Asset; badge?: string }) => (
-    <Link href={`/portal/privado/${a.id}`} className="group overflow-hidden rounded-xl border border-border bg-white shadow-sm transition-all hover:shadow-md">
+    <Link href={assetPrivateHref(a)} className="group overflow-hidden rounded-xl border border-border bg-white shadow-sm transition-all hover:shadow-md">
       <div className="relative">
         <InteractiveMap
           key={`map-${a.id}-${a.lat ?? "x"}-${a.lng ?? "x"}`}
