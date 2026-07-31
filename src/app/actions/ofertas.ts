@@ -9,7 +9,8 @@ import { fetchCompradorByEmail } from "@/app/actions/compradores";
 
 export interface OfertaRow {
   id: string;
-  comprador_id: string;
+  comprador_id: string | null;
+  vendedor_id: string | null;
   asset_id: string;
   propuesta_euros: number;
   comentarios: string | null;
@@ -25,25 +26,27 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 async function notifyOfferRecipients(
   ofertaId: string,
   assetId: string,
-  compradorId: string,
+  compradorId: string | null,
   propuestaEuros: number,
   comentarios: string | null,
+  vendedorId?: string | null,
 ): Promise<void> {
   try {
     const sb = await createServiceClient();
-    const [{ data: assetRow }, { data: compRow }, { data: vaRows }] = await Promise.all([
-      sb.from("assets")
-        .select("id, full_addr, addr, pob, prov, cp, tip, precio, owner_mail")
-        .eq("id", assetId)
-        .maybeSingle(),
-      sb.from("compradores")
-        .select("nombre, email, tel")
-        .eq("id", compradorId)
-        .maybeSingle(),
-      sb.from("vendedor_assets")
-        .select("vendedor_id")
-        .eq("asset_id", assetId),
-    ]);
+    const [{ data: assetRow }, { data: compRow }, { data: vendRow }, { data: vaRows }] =
+      await Promise.all([
+        sb.from("assets")
+          .select("id, full_addr, addr, pob, prov, cp, tip, precio, owner_mail")
+          .eq("id", assetId)
+          .maybeSingle(),
+        compradorId
+          ? sb.from("compradores").select("nombre, email, tel").eq("id", compradorId).maybeSingle()
+          : Promise.resolve({ data: null }),
+        vendedorId
+          ? sb.from("vendedores").select("nombre, email").eq("id", vendedorId).maybeSingle()
+          : Promise.resolve({ data: null }),
+        sb.from("vendedor_assets").select("vendedor_id").eq("asset_id", assetId),
+      ]);
 
     const vendorIds = (vaRows ?? []).map(r => r.vendedor_id as string).filter(Boolean);
     let vendorEmails: string[] = [];
@@ -64,10 +67,16 @@ async function notifyOfferRecipients(
 
     const recipients = vendorEmails.length > 0 ? vendorEmails : [EMAIL_SUPPORT];
 
-    const buyerEmail = (compRow?.email as string | undefined)?.trim() ?? "";
+    const buyerEmail = (compRow?.email as string | undefined)?.trim()
+      ?? (vendRow?.email as string | undefined)?.trim()
+      ?? "";
+    const buyerNombre = (compRow?.nombre as string | undefined)
+      ?? (vendRow?.nombre as string | undefined)
+      ?? (vendedorId ? "Agente" : "Comprador");
+
     const tpl = offerTemplate({
       buyer: {
-        nombre: (compRow?.nombre as string | undefined) ?? "Comprador",
+        nombre: buyerNombre,
         email: buyerEmail,
         telefono: (compRow?.tel as string | undefined) || undefined,
       },
@@ -126,27 +135,27 @@ export async function createOferta(params: {
     oferta.comprador_id,
     oferta.propuesta_euros,
     oferta.comentarios,
+    oferta.vendedor_id,
   );
   return oferta;
 }
 
 /**
  * Alta de oferta desde admin/vendedor (ficha del activo).
- * Usa service role para no depender del RLS del comprador.
+ * Agente: se asigna a session.vendedorId (sin comprador).
+ * Admin: requiere compradorId.
  */
 export async function createOfertaAdmin(params: {
-  compradorId: string;
+  compradorId?: string;
   assetId: string;
   propuestaEuros: number;
   comentarios?: string;
 }): Promise<OfertaRow> {
-  await requireAdminOrVendor();
+  const session = await requireAdminOrVendor();
 
-  const compradorId = params.compradorId?.trim();
   const assetId = params.assetId?.trim();
   const propuesta = Number(params.propuestaEuros);
 
-  if (!compradorId) throw new Error("Selecciona un comprador");
   if (!assetId) throw new Error("Falta el activo");
   if (!Number.isFinite(propuesta) || propuesta <= 0) {
     throw new Error("El importe debe ser un número mayor que 0");
@@ -154,20 +163,44 @@ export async function createOfertaAdmin(params: {
 
   const supabase = await createServiceClient();
 
-  const [{ data: assetRow, error: assetErr }, { data: compRow, error: compErr }] =
-    await Promise.all([
-      supabase.from("assets").select("id").eq("id", assetId).maybeSingle(),
-      supabase.from("compradores").select("id").eq("id", compradorId).maybeSingle(),
-    ]);
+  const { data: assetRow, error: assetErr } = await supabase
+    .from("assets")
+    .select("id")
+    .eq("id", assetId)
+    .maybeSingle();
   if (assetErr) throw new Error(assetErr.message);
-  if (compErr) throw new Error(compErr.message);
   if (!assetRow) throw new Error("Activo no encontrado");
-  if (!compRow) throw new Error("Comprador no encontrado");
+
+  let compradorId: string | null = null;
+  let vendedorId: string | null = null;
+
+  if (session.role === "vendedor") {
+    if (!session.vendedorId) throw new Error("Vendedor sin ID asignado");
+    vendedorId = session.vendedorId;
+    const { data: vendRow, error: vendErr } = await supabase
+      .from("vendedores")
+      .select("id")
+      .eq("id", vendedorId)
+      .maybeSingle();
+    if (vendErr) throw new Error(vendErr.message);
+    if (!vendRow) throw new Error("Agente no encontrado");
+  } else {
+    compradorId = params.compradorId?.trim() || null;
+    if (!compradorId) throw new Error("Selecciona un comprador");
+    const { data: compRow, error: compErr } = await supabase
+      .from("compradores")
+      .select("id")
+      .eq("id", compradorId)
+      .maybeSingle();
+    if (compErr) throw new Error(compErr.message);
+    if (!compRow) throw new Error("Comprador no encontrado");
+  }
 
   const { data, error } = await supabase
     .from("ofertas")
     .insert({
       comprador_id: compradorId,
+      vendedor_id: vendedorId,
       asset_id: assetId,
       propuesta_euros: propuesta,
       comentarios: params.comentarios?.trim() || null,
@@ -184,6 +217,7 @@ export async function createOfertaAdmin(params: {
     oferta.comprador_id,
     oferta.propuesta_euros,
     oferta.comentarios,
+    oferta.vendedor_id,
   );
   return oferta;
 }

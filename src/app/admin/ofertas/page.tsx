@@ -44,7 +44,7 @@ export default function OfertasPage() {
 }
 
 function OfertasPageInner() {
-  const { assets } = useApp();
+  const { assets, vendedores } = useApp();
   const searchParams = useSearchParams();
   const router = useRouter();
   const assetFilter = searchParams.get("asset") ?? "";
@@ -54,6 +54,12 @@ function OfertasPageInner() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [compradores, setCompradores] = useState<Map<string, Comprador>>(new Map());
   const [assetsMap, setAssetsMap] = useState<Map<string, Asset>>(new Map());
+
+  const vendedoresMap = useMemo(() => {
+    const m = new Map<string, (typeof vendedores)[number]>();
+    vendedores.forEach((v) => m.set(v.id, v));
+    return m;
+  }, [vendedores]);
 
   useEffect(() => {
     loadData();
@@ -190,9 +196,23 @@ function OfertasPageInner() {
         ) : (
           <div className="space-y-3">
             {filteredOfertas.map(oferta => {
-              const comprador = compradores.get(oferta.comprador_id);
+              const comprador = oferta.comprador_id ? compradores.get(oferta.comprador_id) : undefined;
+              const agente = oferta.vendedor_id ? vendedoresMap.get(oferta.vendedor_id) : undefined;
               const asset = assetsMap.get(oferta.asset_id);
-              if (!comprador || !asset) return null;
+              if (!asset) return null;
+              if (!comprador && !agente && !oferta.vendedor_id) return null;
+
+              const actorNombre = comprador?.nombre
+                ?? agente?.nombre
+                ?? (oferta.vendedor_id ? "Agente" : "—");
+              const actorEmail = comprador?.email ?? agente?.email ?? "";
+              const actorIni = comprador?.ini ?? agente?.ini ?? "AG";
+              const actorCol = comprador?.col ?? agente?.col ?? "#1e3a5f,#3d6b9f";
+              const actorHref = comprador
+                ? `/admin/compradores/${comprador.id}`
+                : oferta.vendedor_id
+                  ? `/admin/agentes/${oferta.vendedor_id}`
+                  : null;
 
               const estadoColors: Record<OfertaRow["estado"], string> = {
                 pendiente: "bg-blue/10 text-blue",
@@ -212,23 +232,29 @@ function OfertasPageInner() {
                       <div className="mb-2 flex items-center gap-3">
                         <div
                           className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                          style={{ background: `linear-gradient(135deg,${comprador.col})` }}
+                          style={{ background: `linear-gradient(135deg,${actorCol})` }}
                         >
-                          {comprador.ini}
+                          {actorIni}
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <Link
-                              href={`/admin/compradores/${comprador.id}`}
-                              className="text-sm font-semibold text-navy hover:underline"
-                            >
-                              {comprador.nombre}
-                            </Link>
+                            {actorHref ? (
+                              <Link
+                                href={actorHref}
+                                className="text-sm font-semibold text-navy hover:underline"
+                              >
+                                {comprador ? actorNombre : `Agente: ${actorNombre}`}
+                              </Link>
+                            ) : (
+                              <span className="text-sm font-semibold text-navy">
+                                {oferta.vendedor_id ? `Agente: ${actorNombre}` : actorNombre}
+                              </span>
+                            )}
                             <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${estadoColors[oferta.estado]}`}>
                               {oferta.estado.replace("_", " ")}
                             </span>
                           </div>
-                          <div className="text-xs text-muted">{comprador.email}</div>
+                          <div className="text-xs text-muted">{actorEmail}</div>
                         </div>
                       </div>
                       <div className="ml-12">

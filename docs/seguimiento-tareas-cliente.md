@@ -44,8 +44,9 @@ Detalle: [staging.md](operacoes/staging.md).
 | 1 | [`supabase-migration-feedback-cliente-staging.sql`](../supabase-migration-feedback-cliente-staging.sql) | `assets.referencia` + `public_slug` + drop CHECK categoría + RPC preflight — **obligatorio para import OCUPADO y URLs slug** |
 | 2 | [`supabase-migration-categoria-libre.sql`](../supabase-migration-categoria-libre.sql) | Idempotente: categoría libre (si no usaste el #1 completo) |
 | 3 | [`supabase-migration-comprador-acceso.sql`](../supabase-migration-comprador-acceso.sql) | Columna `compradores.acceso` (`sin_acceso` \| `activo`) |
+| 4 | [`supabase-migration-ofertas-vendedor.sql`](../supabase-migration-ofertas-vendedor.sql) | `ofertas.vendedor_id` + uniques parciales — oferta del agente sin comprador — **obligatorio antes de probar Oferta como agente** |
 
-Script auxiliar: `node scripts/run-migration-feedback-cliente.mjs` (intenta `exec_sql`; si falla, pegar SQL en el Editor).
+Script auxiliar: `node scripts/run-migration-feedback-cliente.mjs` / `node scripts/run-migration-ofertas-vendedor.mjs` (intentan `exec_sql`; si falla, pegar SQL en el Editor staging).
 
 Si staging es un proyecto vacío, aplica antes el schema base + migraciones históricas ([migrations-supabase.md](operacoes/migrations-supabase.md)).
 

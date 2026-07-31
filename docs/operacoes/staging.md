@@ -41,7 +41,8 @@ Nunca pegues `supabase-migration-*.sql` en el SQL Editor de **producción** hast
 7. `supabase-migration-categoria-libre.sql`
 8. `supabase-migration-comprador-acceso.sql`
 9. **`supabase-migration-feedback-cliente-staging.sql`** — `referencia` + `public_slug` + drop CHECK + RPC preflight (feedback OCUPADO / URLs)
-10. `supabase-dev-policies.sql` — **solo staging**
+10. **`supabase-migration-ofertas-vendedor.sql`** — `ofertas.vendedor_id` + uniques parciales (oferta del agente sin comprador)
+11. `supabase-dev-policies.sql` — **solo staging**
 
 Verificar tras (9): `node scripts/run-migration-feedback-cliente.mjs`
 

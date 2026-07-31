@@ -70,13 +70,14 @@ const STEPS: Step[] = [
     href: "/admin",
     what: [
       "Consultar abre modal con mensaje editable (enviando / éxito / error).",
-      "Oferta abre modal para registrar oferta (comprador + importe); queda pendiente.",
+      "Admin: Oferta pide comprador + importe. Agente: sin comprador; se asigna al agente de la sesión.",
       "Tras guardar, enlace a /admin/ofertas?asset=…; empty state con «Volver al activo».",
+      "Requiere migración supabase-migration-ofertas-vendedor.sql en staging.",
       "En staging EMAIL_DRY_RUN=true (no spamea).",
     ],
     howToTest: [
       "Abre un activo → Consultar → edita mensaje → enviar → ver éxito o dry-run.",
-      "Pulsa Oferta → elige comprador + importe → Registrar → ver éxito y listado filtrado.",
+      "Login como agente → Oferta → no hay selector comprador → importe → ver «Agente: …» en listado.",
     ],
   },
   {

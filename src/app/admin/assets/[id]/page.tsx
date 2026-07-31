@@ -308,7 +308,8 @@ function DocItemRow({ doc, onDelete }: { doc: DocRow; onDelete?: () => void }) {
 }
 
 function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asset: Asset; assetId: string; currentUser: { nombre: string; email: string } | null; reloadAsset: () => void }) {
-  const { compradores } = useApp();
+  const { compradores, session } = useApp();
+  const isAgente = session?.role === "vendedor";
   const [generalNote, setGeneralNote] = useState("");
   const [assetNotesList, setAssetNotesList] = useState<NotaRow[]>([]);
   const [saving, setSaving] = useState(false);
@@ -394,7 +395,7 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
   };
 
   const handleSendOferta = async () => {
-    if (!ofertaCompradorId) {
+    if (!isAgente && !ofertaCompradorId) {
       setOfertaStatus("error");
       setOfertaError("Selecciona un comprador");
       return;
@@ -409,13 +410,15 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
     setOfertaError("");
     try {
       await createOfertaAdmin({
-        compradorId: ofertaCompradorId,
+        ...(isAgente ? {} : { compradorId: ofertaCompradorId }),
         assetId,
         propuestaEuros: importe,
         comentarios: ofertaComentarios.trim() || undefined,
       });
       setOfertaStatus("success");
-      toast.success("Oferta registrada", { description: "Estado: pendiente" });
+      toast.success("Oferta registrada", {
+        description: isAgente ? "Asignada a tu usuario · pendiente" : "Estado: pendiente",
+      });
     } catch (err) {
       setOfertaStatus("error");
       setOfertaError(err instanceof Error ? err.message : "No se pudo registrar la oferta");
@@ -602,20 +605,28 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
                 </div>
               ) : (
                 <>
-                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-muted">Comprador</label>
-                  <select
-                    value={ofertaCompradorId}
-                    onChange={(e) => setOfertaCompradorId(e.target.value)}
-                    disabled={ofertaStatus === "sending"}
-                    className="mb-3 w-full rounded-md border border-border bg-cream2 px-3 py-2 text-sm text-text outline-none focus:border-navy disabled:opacity-50"
-                  >
-                    <option value="">Seleccionar comprador…</option>
-                    {compradores.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nombre}{c.email ? ` · ${c.email}` : ""}
-                      </option>
-                    ))}
-                  </select>
+                  {isAgente ? (
+                    <p className="mb-3 rounded-md border border-border bg-cream2 px-3 py-2 text-sm text-navy">
+                      Oferta a nombre de: <span className="font-semibold">{session?.nombre ?? "Agente"}</span>
+                    </p>
+                  ) : (
+                    <>
+                      <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-muted">Comprador</label>
+                      <select
+                        value={ofertaCompradorId}
+                        onChange={(e) => setOfertaCompradorId(e.target.value)}
+                        disabled={ofertaStatus === "sending"}
+                        className="mb-3 w-full rounded-md border border-border bg-cream2 px-3 py-2 text-sm text-text outline-none focus:border-navy disabled:opacity-50"
+                      >
+                        <option value="">Seleccionar comprador…</option>
+                        {compradores.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.nombre}{c.email ? ` · ${c.email}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  )}
                   <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-muted">Importe (€)</label>
                   <input
                     type="text"
@@ -639,7 +650,7 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
                       <AlertCircle size={14} /> {ofertaError}
                     </div>
                   )}
-                  {compradores.length === 0 && (
+                  {!isAgente && compradores.length === 0 && (
                     <p className="mt-2 text-xs text-muted">No hay compradores cargados. Créalos en Admin → Compradores.</p>
                   )}
                   <div className="mt-4 flex justify-end gap-2">
@@ -654,7 +665,11 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
                     <button
                       type="button"
                       onClick={() => void handleSendOferta()}
-                      disabled={ofertaStatus === "sending" || !ofertaCompradorId || !ofertaImporte.trim()}
+                      disabled={
+                        ofertaStatus === "sending"
+                        || !ofertaImporte.trim()
+                        || (!isAgente && !ofertaCompradorId)
+                      }
                       className="flex items-center gap-1.5 rounded-md bg-gold px-3 py-1.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
                     >
                       {ofertaStatus === "sending" ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
