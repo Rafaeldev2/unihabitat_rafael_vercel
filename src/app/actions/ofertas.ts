@@ -130,6 +130,64 @@ export async function createOferta(params: {
   return oferta;
 }
 
+/**
+ * Alta de oferta desde admin/vendedor (ficha del activo).
+ * Usa service role para no depender del RLS del comprador.
+ */
+export async function createOfertaAdmin(params: {
+  compradorId: string;
+  assetId: string;
+  propuestaEuros: number;
+  comentarios?: string;
+}): Promise<OfertaRow> {
+  await requireAdminOrVendor();
+
+  const compradorId = params.compradorId?.trim();
+  const assetId = params.assetId?.trim();
+  const propuesta = Number(params.propuestaEuros);
+
+  if (!compradorId) throw new Error("Selecciona un comprador");
+  if (!assetId) throw new Error("Falta el activo");
+  if (!Number.isFinite(propuesta) || propuesta <= 0) {
+    throw new Error("El importe debe ser un número mayor que 0");
+  }
+
+  const supabase = await createServiceClient();
+
+  const [{ data: assetRow, error: assetErr }, { data: compRow, error: compErr }] =
+    await Promise.all([
+      supabase.from("assets").select("id").eq("id", assetId).maybeSingle(),
+      supabase.from("compradores").select("id").eq("id", compradorId).maybeSingle(),
+    ]);
+  if (assetErr) throw new Error(assetErr.message);
+  if (compErr) throw new Error(compErr.message);
+  if (!assetRow) throw new Error("Activo no encontrado");
+  if (!compRow) throw new Error("Comprador no encontrado");
+
+  const { data, error } = await supabase
+    .from("ofertas")
+    .insert({
+      comprador_id: compradorId,
+      asset_id: assetId,
+      propuesta_euros: propuesta,
+      comentarios: params.comentarios?.trim() || null,
+      estado: "pendiente",
+    })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+
+  const oferta = data as OfertaRow;
+  await notifyOfferRecipients(
+    oferta.id,
+    oferta.asset_id,
+    oferta.comprador_id,
+    oferta.propuesta_euros,
+    oferta.comentarios,
+  );
+  return oferta;
+}
+
 export async function fetchOfertasByAsset(assetId: string): Promise<OfertaRow[]> {
   const supabase = await createClient();
   const { data, error } = await supabase

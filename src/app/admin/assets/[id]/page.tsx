@@ -12,6 +12,7 @@ import { fetchCompradores } from "@/app/actions/compradores";
 import { fetchAssetByIdForAdmin, toggleAssetPub, updateAssetFields, updatePropiedadFields } from "@/app/actions/assets";
 import { inviteCompradorToAsset, revokeCompradorFromAsset, fetchInvitedCompradores } from "@/app/actions/invitations";
 import { enviarSolicitudInformacion } from "@/app/actions/email-info-request";
+import { createOfertaAdmin } from "@/app/actions/ofertas";
 import { refreshAssetCatastro } from "@/app/actions/catastro";
 import { getAssetAgente, setAssetAgente } from "@/app/actions/vendedores";
 import type { Comprador } from "@/lib/types";
@@ -22,7 +23,7 @@ import { listEmptyExcelFields } from "@/lib/excel-raw-utils";
 import { FASE_INTERNA_OPTIONS, faseToCode } from "@/lib/fase-interna";
 import {
   getDescriptionText, getCategoria, getFaseInterna, getPropietario, getOwnerTel,
-  getOwnerMail, getDeudaTotal, fmt,
+  getOwnerMail, getDeudaTotal, fmt, parseLocaleMoneyInput,
 } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 
@@ -307,6 +308,7 @@ function DocItemRow({ doc, onDelete }: { doc: DocRow; onDelete?: () => void }) {
 }
 
 function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asset: Asset; assetId: string; currentUser: { nombre: string; email: string } | null; reloadAsset: () => void }) {
+  const { compradores } = useApp();
   const [generalNote, setGeneralNote] = useState("");
   const [assetNotesList, setAssetNotesList] = useState<NotaRow[]>([]);
   const [saving, setSaving] = useState(false);
@@ -318,6 +320,12 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
   const [consultarMsg, setConsultarMsg] = useState("");
   const [consultarStatus, setConsultarStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
   const [consultarError, setConsultarError] = useState("");
+  const [showOfertaModal, setShowOfertaModal] = useState(false);
+  const [ofertaCompradorId, setOfertaCompradorId] = useState("");
+  const [ofertaImporte, setOfertaImporte] = useState("");
+  const [ofertaComentarios, setOfertaComentarios] = useState("");
+  const [ofertaStatus, setOfertaStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
+  const [ofertaError, setOfertaError] = useState("");
 
   useEffect(() => {
     setDescDraft(asset.desc && asset.desc !== "—" ? asset.desc : "");
@@ -374,6 +382,44 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
     setConsultarStatus("idle");
     setConsultarError("");
     setShowConsultarModal(true);
+  };
+
+  const handleOpenOferta = () => {
+    setOfertaCompradorId("");
+    setOfertaImporte("");
+    setOfertaComentarios("");
+    setOfertaStatus("idle");
+    setOfertaError("");
+    setShowOfertaModal(true);
+  };
+
+  const handleSendOferta = async () => {
+    if (!ofertaCompradorId) {
+      setOfertaStatus("error");
+      setOfertaError("Selecciona un comprador");
+      return;
+    }
+    const importe = parseLocaleMoneyInput(ofertaImporte);
+    if (importe == null || importe <= 0) {
+      setOfertaStatus("error");
+      setOfertaError("Indica un importe válido mayor que 0");
+      return;
+    }
+    setOfertaStatus("sending");
+    setOfertaError("");
+    try {
+      await createOfertaAdmin({
+        compradorId: ofertaCompradorId,
+        assetId,
+        propuestaEuros: importe,
+        comentarios: ofertaComentarios.trim() || undefined,
+      });
+      setOfertaStatus("success");
+      toast.success("Oferta registrada", { description: "Estado: pendiente" });
+    } catch (err) {
+      setOfertaStatus("error");
+      setOfertaError(err instanceof Error ? err.message : "No se pudo registrar la oferta");
+    }
   };
 
   const handleSendConsultar = async () => {
@@ -498,16 +544,129 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
               >
                 <MessageSquare size={13} /> Consultar
               </button>
-              <Link
-                href={`/admin/ofertas?asset=${encodeURIComponent(assetId)}`}
+              <button
+                type="button"
+                onClick={handleOpenOferta}
                 className="flex items-center justify-center gap-1.5 rounded-lg bg-gold py-2.5 text-xs font-medium text-white hover:bg-gold2"
               >
                 <FileText size={13} /> Oferta
-              </Link>
+              </button>
             </div>
+            <Link
+              href={`/admin/ofertas?asset=${encodeURIComponent(assetId)}`}
+              className="block text-center text-[11px] font-medium text-navy underline-offset-2 hover:underline"
+            >
+              Ver ofertas de este activo
+            </Link>
           </div>
         </div>
       </div>
+      {showOfertaModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          onClick={() => ofertaStatus !== "sending" && setShowOfertaModal(false)}
+        >
+          <div className="w-full max-w-md rounded-xl border border-border bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <h3 className="text-base font-semibold text-navy">Registrar oferta</h3>
+              <button
+                type="button"
+                onClick={() => ofertaStatus !== "sending" && setShowOfertaModal(false)}
+                disabled={ofertaStatus === "sending"}
+                className="rounded-lg p-1.5 text-muted hover:bg-cream hover:text-navy disabled:opacity-50"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5">
+              {ofertaStatus === "success" ? (
+                <div className="flex flex-col items-center gap-3 py-4 text-center">
+                  <CheckCircle2 size={32} className="text-green" />
+                  <p className="text-sm font-medium text-navy">Oferta registrada correctamente</p>
+                  <p className="text-xs text-muted">Queda en estado pendiente.</p>
+                  <div className="mt-2 flex flex-wrap justify-center gap-2">
+                    <Link
+                      href={`/admin/ofertas?asset=${encodeURIComponent(assetId)}`}
+                      className="rounded-lg border border-border px-4 py-2 text-xs font-medium text-navy hover:bg-cream"
+                    >
+                      Ver ofertas de este activo
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setShowOfertaModal(false)}
+                      className="rounded-lg bg-navy px-4 py-2 text-xs font-medium text-white hover:bg-navy3"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-muted">Comprador</label>
+                  <select
+                    value={ofertaCompradorId}
+                    onChange={(e) => setOfertaCompradorId(e.target.value)}
+                    disabled={ofertaStatus === "sending"}
+                    className="mb-3 w-full rounded-md border border-border bg-cream2 px-3 py-2 text-sm text-text outline-none focus:border-navy disabled:opacity-50"
+                  >
+                    <option value="">Seleccionar comprador…</option>
+                    {compradores.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nombre}{c.email ? ` · ${c.email}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-muted">Importe (€)</label>
+                  <input
+                    type="text"
+                    value={ofertaImporte}
+                    onChange={(e) => setOfertaImporte(e.target.value)}
+                    disabled={ofertaStatus === "sending"}
+                    placeholder="Ej. 125.000,00"
+                    className="mb-3 w-full rounded-md border border-border bg-cream2 px-3 py-2 text-sm text-text outline-none focus:border-navy disabled:opacity-50"
+                  />
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-muted">Comentarios (opcional)</label>
+                  <textarea
+                    value={ofertaComentarios}
+                    onChange={(e) => setOfertaComentarios(e.target.value)}
+                    disabled={ofertaStatus === "sending"}
+                    rows={3}
+                    className="w-full rounded-md border border-border bg-cream2 p-3 text-sm text-text outline-none focus:border-navy disabled:opacity-50"
+                    placeholder="Notas internas sobre la oferta…"
+                  />
+                  {ofertaStatus === "error" && ofertaError && (
+                    <div className="mt-2 flex items-center gap-2 rounded-lg bg-red/10 px-3 py-2 text-xs text-red">
+                      <AlertCircle size={14} /> {ofertaError}
+                    </div>
+                  )}
+                  {compradores.length === 0 && (
+                    <p className="mt-2 text-xs text-muted">No hay compradores cargados. Créalos en Admin → Compradores.</p>
+                  )}
+                  <div className="mt-4 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowOfertaModal(false)}
+                      disabled={ofertaStatus === "sending"}
+                      className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text hover:bg-cream disabled:opacity-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleSendOferta()}
+                      disabled={ofertaStatus === "sending" || !ofertaCompradorId || !ofertaImporte.trim()}
+                      className="flex items-center gap-1.5 rounded-md bg-gold px-3 py-1.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
+                    >
+                      {ofertaStatus === "sending" ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
+                      {ofertaStatus === "sending" ? "Guardando…" : "Registrar oferta"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {showConsultarModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={() => consultarStatus !== "sending" && setShowConsultarModal(false)}>
           <div className="w-full max-w-md rounded-xl border border-border bg-white shadow-xl" onClick={e => e.stopPropagation()}>

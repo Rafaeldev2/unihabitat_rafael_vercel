@@ -65,17 +65,18 @@ const STEPS: Step[] = [
   {
     id: "f1-detalle",
     fase: "Fase 1",
-    title: "Detalle del activo: Consultar (modal) y Oferta filtrada",
+    title: "Detalle del activo: Consultar y Oferta (modales de alta)",
     where: "Admin → Activos → clic en una fila",
     href: "/admin",
     what: [
       "Consultar abre modal con mensaje editable (enviando / éxito / error).",
-      "Oferta abre /admin/ofertas?asset=… filtrado a ese activo.",
+      "Oferta abre modal para registrar oferta (comprador + importe); queda pendiente.",
+      "Tras guardar, enlace a /admin/ofertas?asset=…; empty state con «Volver al activo».",
       "En staging EMAIL_DRY_RUN=true (no spamea).",
     ],
     howToTest: [
       "Abre un activo → Consultar → edita mensaje → enviar → ver éxito o dry-run.",
-      "Pulsa Oferta y comprueba el chip de filtro por activo + limpiar filtro.",
+      "Pulsa Oferta → elige comprador + importe → Registrar → ver éxito y listado filtrado.",
     ],
   },
   {

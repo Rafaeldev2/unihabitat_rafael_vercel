@@ -166,6 +166,26 @@ function OfertasPageInner() {
             <p className="text-sm text-muted">
               {assetFilter ? "No hay ofertas para este activo" : "No hay ofertas pendientes"}
             </p>
+            {assetFilter ? (
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <p className="w-full text-xs text-muted">
+                  Para registrar una oferta, ábrela desde el detalle del activo (botón Oferta).
+                </p>
+                <Link
+                  href={`/admin/assets/${encodeURIComponent(assetFilter)}`}
+                  className="rounded-lg bg-navy px-4 py-2 text-xs font-medium text-white hover:bg-navy3"
+                >
+                  Volver al activo
+                </Link>
+                <button
+                  type="button"
+                  onClick={clearAssetFilter}
+                  className="rounded-lg border border-border px-4 py-2 text-xs font-medium text-navy hover:bg-cream"
+                >
+                  Quitar filtro
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="space-y-3">
