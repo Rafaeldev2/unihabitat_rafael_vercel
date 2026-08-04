@@ -125,46 +125,36 @@ Orden fijo: **SQL prod → merge `staging`→`main` → smoke**. Nunca al revés
 
 - [x] Schema staging: `ofertas.vendedor_id`, `assets.public_slug`, `compradores.acceso`
 - [x] Tests críticos + `npm run build` en `staging` (`a97f770`)
-- [ ] OK explícito del cliente en staging (Oferta agente, OCUPADO, portal)
+- [x] OK para promover (SQL prod aplicado + merge 2026-08-04)
 
 ### 1) SQL en Supabase **prod** (`ywvczogdjanhdnibzmfg`)
 
-Pegar **una vez** el archivo combinado:
-
-[`supabase-migration-prod-promote-staging.sql`](../supabase-migration-prod-promote-staging.sql)
-
-Editor: https://supabase.com/dashboard/project/ywvczogdjanhdnibzmfg/sql/new  
+- [x] Aplicado [`supabase-migration-prod-promote-staging.sql`](../supabase-migration-prod-promote-staging.sql)
+- [x] `node scripts/verify-prod-schema.mjs` → 3 ✅ (`public_slug`, `acceso`, `vendedor_id`)
 
 **No** aplicar `supabase-dev-policies.sql`.
 
-Verificar:
-
-```bash
-node scripts/verify-prod-schema.mjs
-```
-
-Debe mostrar ✅ `assets.public_slug`, `compradores.acceso`, `ofertas.vendedor_id`.
-
 ### 2) Env Vercel Production (proyecto `unihabitat_producion_vercel` / team unihabitats)
 
-- [ ] Keys Supabase = prod (`ywvczog…`), no staging
-- [ ] `APP_ORIGIN` / `NEXT_PUBLIC_APP_URL` = `https://www.unihabitat.net`
-- [ ] `EMAIL_DRY_RUN` ausente o `false`
-- [ ] `NEXT_PUBLIC_SHOW_STAGING_GUIDE` ausente o `false`
+- [x] Keys Supabase = prod (`ywvczog…`) — sitio sirve datos prod
+- [x] `EMAIL_DRY_RUN` / guía staging: no activos en pull local (confirmar en dashboard si se tocan env)
+- [ ] `APP_ORIGIN` / `NEXT_PUBLIC_APP_URL` = `https://www.unihabitat.net` (revisar dashboard)
 - [ ] Auth redirects prod incluyen `https://www.unihabitat.net/**`
 
 ### 3) Código
 
-- [ ] PR `staging` → `main` (rollback SHA: `100f3c7`)
-- [ ] Merge + deploy Production READY en `www.unihabitat.net`
+- [x] PR [#1](https://github.com/Rafaeldev2/unihabitat_rafael_vercel/pull/1) `staging` → `main` (rollback SHA: `100f3c7`)
+- [x] Merge `e1fb6f7` + deploy Production READY (`www.unihabitat.net`)
 
-### 4) Smoke prod
+### 4) Smoke prod (2026-08-04)
 
-- [ ] Login admin → ficha activo
-- [ ] Login agente → Oferta sin comprador → listado
-- [ ] Portal slug `/portal/inmueble/...`
-- [ ] `sin_acceso` bloquea `/portal/privado`
-- [ ] Oferta portal (comprador) OK
+- [x] Home / portal / login 200; marca Unihabitat; 2597 activos en admin
+- [x] Portal slug `/portal/inmueble/...` 200
+- [x] `/portal/privado` y `/admin` redirigen a login sin sesión
+- [x] Login admin demo → ficha activo → Oferta con selector comprador
+- [x] Login agente demo → Oferta **sin** comprador (“a nombre de: Carlos Martínez”)
+- [ ] Insert oferta agente con usuario real (el demo no tiene fila en `vendedores` → `vendedorId` vacío)
+- [ ] Oferta portal (comprador) OK (manual)
 
 ---
 
