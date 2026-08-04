@@ -119,10 +119,52 @@ Sin (1), el import de OCUPADO falla y las URLs slug no existen. Sin (3), el bloq
 
 ## Promoción a producción (solo cuando staging esté OK)
 
-- [ ] Smoke staging completo.
-- [ ] Ejecutar las **mismas** migraciones en Supabase **prod**.
-- [ ] Deploy Production / merge a `main`.
-- [ ] Smoke mínimo en prod.
+Orden fijo: **SQL prod → merge `staging`→`main` → smoke**. Nunca al revés.
+
+### Gate staging
+
+- [x] Schema staging: `ofertas.vendedor_id`, `assets.public_slug`, `compradores.acceso`
+- [x] Tests críticos + `npm run build` en `staging` (`a97f770`)
+- [ ] OK explícito del cliente en staging (Oferta agente, OCUPADO, portal)
+
+### 1) SQL en Supabase **prod** (`ywvczogdjanhdnibzmfg`)
+
+Pegar **una vez** el archivo combinado:
+
+[`supabase-migration-prod-promote-staging.sql`](../supabase-migration-prod-promote-staging.sql)
+
+Editor: https://supabase.com/dashboard/project/ywvczogdjanhdnibzmfg/sql/new  
+
+**No** aplicar `supabase-dev-policies.sql`.
+
+Verificar:
+
+```bash
+node scripts/verify-prod-schema.mjs
+```
+
+Debe mostrar ✅ `assets.public_slug`, `compradores.acceso`, `ofertas.vendedor_id`.
+
+### 2) Env Vercel Production (proyecto `unihabitat_producion_vercel` / team unihabitats)
+
+- [ ] Keys Supabase = prod (`ywvczog…`), no staging
+- [ ] `APP_ORIGIN` / `NEXT_PUBLIC_APP_URL` = `https://www.unihabitat.net`
+- [ ] `EMAIL_DRY_RUN` ausente o `false`
+- [ ] `NEXT_PUBLIC_SHOW_STAGING_GUIDE` ausente o `false`
+- [ ] Auth redirects prod incluyen `https://www.unihabitat.net/**`
+
+### 3) Código
+
+- [ ] PR `staging` → `main` (rollback SHA: `100f3c7`)
+- [ ] Merge + deploy Production READY en `www.unihabitat.net`
+
+### 4) Smoke prod
+
+- [ ] Login admin → ficha activo
+- [ ] Login agente → Oferta sin comprador → listado
+- [ ] Portal slug `/portal/inmueble/...`
+- [ ] `sin_acceso` bloquea `/portal/privado`
+- [ ] Oferta portal (comprador) OK
 
 ---
 

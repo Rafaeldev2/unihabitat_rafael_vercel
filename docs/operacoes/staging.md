@@ -114,10 +114,18 @@ npm run dev
 
 ## 5. Promoción a producción
 
+Orden: **SQL prod → merge → smoke**. Checklist detallado: [seguimiento-tareas-cliente.md](../seguimiento-tareas-cliente.md) § Promoción.
+
 1. Smoke staging OK + OK cliente  
-2. Mismas migraciones nuevas en Supabase **prod**  
-3. Merge `staging` → `main`  
-4. Smoke mínimo en prod  
+2. Pegar [`supabase-migration-prod-promote-staging.sql`](../../supabase-migration-prod-promote-staging.sql) en SQL Editor **prod** (`ywvczogdjanhdnibzmfg`)  
+3. `node scripts/verify-prod-schema.mjs` → 3 ✅  
+4. Revisar env Vercel **Production** (no keys staging; sin `NEXT_PUBLIC_SHOW_STAGING_GUIDE`)  
+5. PR/merge `staging` → `main` (proyecto Vercel `unihabitat_producion_vercel`)  
+6. Smoke mínimo en `www.unihabitat.net`  
+7. Rollback código: redeploy SHA `100f3c7` si la app falla  
+
+**No** desplegar el proyecto `unihabitat-staging` como prod.  
+**No** aplicar `supabase-dev-policies.sql` en prod.
 
 ---
 
