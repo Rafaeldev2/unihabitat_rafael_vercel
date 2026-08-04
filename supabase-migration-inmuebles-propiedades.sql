@@ -95,7 +95,8 @@ create table if not exists public.propiedades (
   activo_id text not null,
 
   -- Categoría del producto (col "Categoria" del Excel).
-  categoria text not null default 'CDR' check (categoria in ('CDR', 'NPL')),
+  -- Categoría libre (CDR, NPL, OCUPADO, …). Sin CHECK: ver migration-categoria-libre.
+  categoria text not null default 'CDR',
 
   -- Comerciales (propietario del préstamo) — col 0-3 del Excel.
   propietario text default '—',

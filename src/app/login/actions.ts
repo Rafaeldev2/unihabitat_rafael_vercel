@@ -380,6 +380,7 @@ export async function signUp(formData: FormData): Promise<{ error?: string }> {
       estado: "Nuevo",
       estadoC: "fp-nd",
       nda: "Pendiente",
+      acceso: "sin_acceso",
     });
   } catch (e) {
     console.warn(

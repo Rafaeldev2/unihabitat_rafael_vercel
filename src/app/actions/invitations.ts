@@ -3,6 +3,12 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth-server";
 import { createNotificacion } from "@/app/actions/notificaciones";
+import { sendEmail } from "@/lib/email/send";
+import { assetSharedTemplate } from "@/lib/email/templates";
+import { getPublicAppOrigin } from "@/lib/app-public-url";
+import { getDeudaTotal, fmt } from "@/lib/utils";
+import { assetPortalHref } from "@/lib/public-slug";
+import { rowToAsset } from "@/lib/supabase/db";
 
 export interface CompradorAssetRow {
   comprador_id: string;
@@ -33,17 +39,20 @@ export async function inviteCompradorToAsset(
       .eq("id", compradorId)
       .maybeSingle();
 
-    const { data: asset } = await supabase
+    const { data: assetRow } = await supabase
       .from("assets")
-      .select("pob, prov")
+      .select("*")
       .eq("id", assetId)
       .maybeSingle();
 
     const nombre = comp?.nombre ?? compradorId;
-    const lugar = asset ? `${asset.pob}, ${asset.prov}` : assetId;
+    const asset = assetRow ? rowToAsset(assetRow) : null;
+    const lugar = asset ? [asset.pob, asset.prov].filter(Boolean).join(", ") : assetId;
+    const tipologia = asset?.tip || undefined;
+    const precioLabel = asset?.precio != null && asset.precio > 0 ? fmt(asset.precio) : undefined;
+    const deuda = asset ? getDeudaTotal(asset) : null;
+    const deudaLabel = deuda != null && deuda > 0 ? fmt(deuda) : undefined;
 
-    // Resolver user_id por email si la fila no lo tiene aún (mismo patrón
-    // que `resolveAgenteUserId` en vendedores.ts).
     let userId: string | null = (comp?.user_id as string | null) ?? null;
     const compEmail = ((comp?.email as string | undefined) ?? "").trim().toLowerCase();
     if (!userId && compEmail) {
@@ -58,8 +67,26 @@ export async function inviteCompradorToAsset(
             .eq("id", compradorId);
         }
       } catch {
-        /* admin API caída — seguimos sin notificación entregable */
+        /* admin API caída */
       }
+    }
+
+    const origin = getPublicAppOrigin();
+    const path = asset ? assetPortalHref(asset) : `/portal/${encodeURIComponent(assetId)}`;
+    const actionUrl = `${origin}${path}`;
+
+    // Email dedicado con ficha del activo (no mirror genérico de bienvenida).
+    if (compEmail) {
+      const tpl = assetSharedTemplate({
+        recipientName: nombre,
+        assetId,
+        lugar,
+        tipologia,
+        precioLabel,
+        deudaLabel,
+        actionUrl,
+      });
+      await sendEmail({ to: compEmail, ...tpl });
     }
 
     await createNotificacion({
@@ -67,11 +94,11 @@ export async function inviteCompradorToAsset(
       tipo: "invitacion",
       mensaje: `${nombre}, se te ha compartido un activo en ${lugar}`,
       referenciaId: assetId,
-      email: compEmail || undefined,
+      email: undefined,
       recipientName: nombre,
     });
-  } catch {
-    // notification is best-effort
+  } catch (err) {
+    console.warn("[inviteCompradorToAsset] email/notif best-effort failed:", err);
   }
 
   return { success: true };

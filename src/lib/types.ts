@@ -21,8 +21,8 @@ export interface Propiedad {
   inmuebleId: string;
   /** Agrupador de propiedades del mismo activo/préstamo (col "ID1" del Excel). */
   activoId: string;
-  /** Categoría del producto (col "Categoria"). */
-  categoria: "CDR" | "NPL";
+  /** Categoría del producto (col "Categoria") — texto libre del Excel. */
+  categoria: string;
 
   // Comerciales — propietario del préstamo (col 0-3 del Excel).
   propietario: string;
@@ -75,8 +75,10 @@ export interface Asset {
   /** PK compuesta = `${activoId}__${referencia}` (cuando se carga desde Excel).
    *  Permite que la misma Referencia catastral aparezca en varios activos. */
   id: string;
-  /** Referencia catastral limpia, para mostrar en UI. */
+  /** Referencia catastral limpia, para mostrar en UI admin (no en URL pública). */
   referencia: string;
+  /** Slug público opaco para /portal/inmueble/[slug]. */
+  publicSlug?: string;
   prov: string;
   pob: string;
   cp: string;
@@ -113,6 +115,8 @@ export interface Asset {
   propiedades: Propiedad[];
 }
 
+export type CompradorAcceso = "sin_acceso" | "activo";
+
 export interface Comprador {
   id: string;
   nombre: string;
@@ -129,6 +133,8 @@ export interface Comprador {
   estado: string;
   estadoC: string;
   nda: "Firmada" | "Pendiente";
+  /** Portal privado: sin_acceso hasta activación manual admin. */
+  acceso: CompradorAcceso;
 }
 
 export interface Vendedor {

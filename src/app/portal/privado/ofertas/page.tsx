@@ -9,6 +9,7 @@ import type { Asset } from "@/lib/types";
 import Link from "next/link";
 import { ArrowLeft, FileText, CheckCircle2, Clock, XCircle, Loader2, Euro, AlertCircle, PenTool } from "lucide-react";
 import { fmt } from "@/lib/utils";
+import { assetPrivateHref } from "@/lib/public-slug";
 import { toast } from "@/lib/toast";
 
 export default function MisOfertasPage() {
@@ -122,7 +123,7 @@ export default function MisOfertasPage() {
                   <div className="flex-1">
                     <div className="mb-2 flex items-center gap-2">
                       <Link
-                        href={`/portal/privado/${asset.id}`}
+                        href={assetPrivateHref(asset)}
                         className="text-base font-semibold text-navy hover:underline"
                       >
                         {asset.pob}, {asset.prov}
@@ -132,7 +133,7 @@ export default function MisOfertasPage() {
                         {config.label}
                       </span>
                     </div>
-                    <div className="mb-2 text-xs text-muted">ID: {asset.id} · {asset.tip}</div>
+                    <div className="mb-2 text-xs text-muted">{asset.tip}</div>
                     {oferta.comentarios && (
                       <div className="mt-2 rounded-md bg-cream2 px-3 py-2">
                         <div className="text-[10px] font-semibold uppercase tracking-wider text-muted mb-1">
@@ -203,7 +204,7 @@ export default function MisOfertasPage() {
                       Ya tienes acceso completo a la información de esta propiedad.
                     </p>
                     <Link
-                      href={`/portal/privado/${asset.id}`}
+                      href={assetPrivateHref(asset)}
                       className="mt-3 inline-block text-xs font-medium text-gold hover:underline"
                     >
                       Ver información completa →

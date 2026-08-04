@@ -1,14 +1,22 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Lock } from "lucide-react";
-import { fetchAssetById, fetchPublicAssets } from "@/app/actions/assets";
+import { fetchAssetById, fetchPublicAssetsByActivoId } from "@/app/actions/assets";
+import { publicAssetPath } from "@/lib/public-slug";
 import PortalDetailClient from "./PortalDetailClient";
 
-export default async function PortalDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+/**
+ * Ruta legacy `/portal/{id}` → redirige a `/portal/inmueble/{slug}` canónico.
+ * Si aún no hay slug (migración pendiente), renderiza la ficha como fallback.
+ */
+export default async function PortalDetailLegacyPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id: raw } = await params;
+  const id = decodeURIComponent(raw);
 
-  // Leemos directamente de Supabase (cliente anónimo, RLS `assets_public_read`)
-  // para que la "verdad" de `pub` no dependa del contexto cliente, que podía
-  // estar a medio cargar o estar desincronizado tras publicar el activo.
   const asset = await fetchAssetById(id);
 
   if (!asset || !asset.pub) {
@@ -16,19 +24,23 @@ export default async function PortalDetailPage({ params }: { params: Promise<{ i
       <div className="mx-auto max-w-7xl px-6 py-20 text-center">
         <Lock size={40} strokeWidth={1} className="mx-auto text-border" />
         <p className="mt-3 text-sm text-muted">Esta propiedad no está disponible públicamente</p>
-        <Link href="/portal" className="mt-3 inline-block text-sm text-gold hover:underline">Volver al listado</Link>
+        <Link href="/portal" className="mt-3 inline-block text-sm text-gold hover:underline">
+          Volver al listado
+        </Link>
       </div>
     );
   }
 
-  let siblings: Awaited<ReturnType<typeof fetchPublicAssets>> = [];
+  if (asset.publicSlug) {
+    redirect(publicAssetPath(asset.publicSlug));
+  }
+
+  let siblings: Awaited<ReturnType<typeof fetchPublicAssetsByActivoId>> = [];
   const activoId = asset.propiedades[0]?.activoId ?? "";
   if (activoId && activoId !== "—" && activoId.trim()) {
     try {
-      const all = await fetchPublicAssets();
-      siblings = all.filter(
-        (a) => a.id !== asset.id && a.propiedades.some((p) => p.activoId === activoId),
-      );
+      const group = await fetchPublicAssetsByActivoId(activoId);
+      siblings = group.filter((a) => a.id !== asset.id);
     } catch {
       siblings = [];
     }

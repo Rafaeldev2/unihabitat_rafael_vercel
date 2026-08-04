@@ -11,6 +11,7 @@ import { buildStaticMapUrl } from "@/lib/catastro/geoapify";
 import {
   requireAdmin, requireAdminOrVendor, requireEditPermission, requireAssetAccess,
 } from "@/lib/auth-server";
+import { buildPublicSlug } from "@/lib/public-slug";
 
 // PostgREST aplica `db-max-rows = 1000` por request; paginamos manualmente.
 const POSTGREST_PAGE_SIZE = 1000;
@@ -94,6 +95,57 @@ export async function fetchAssetsByIds(ids: string[]): Promise<Asset[]> {
   return collected.map(rowToAssetPublic);
 }
 
+/**
+ * Inmuebles públicos del mismo grupo (activoId / ID1), vía query a `propiedades`.
+ * Incluye el inmueble actual si está publicado.
+ */
+export async function fetchPublicAssetsByActivoId(activoId: string): Promise<Asset[]> {
+  const key = activoId?.trim();
+  if (!key || key === "—") return [];
+  const supabase = await createClient();
+  const { data: propRows, error: propErr } = await supabase
+    .from("propiedades")
+    .select("inmueble_id")
+    .eq("activo_id", key);
+  if (propErr) throw new Error(propErr.message);
+  const inmuebleIds = [...new Set((propRows ?? []).map((r) => r.inmueble_id as string).filter(Boolean))];
+  if (inmuebleIds.length === 0) return [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const assetRows: any[] = [];
+  for (let i = 0; i < inmuebleIds.length; i += POSTGREST_PAGE_SIZE) {
+    const slice = inmuebleIds.slice(i, i + POSTGREST_PAGE_SIZE);
+    const { data, error } = await supabase
+      .from("assets")
+      .select("*")
+      .in("id", slice)
+      .eq("pub", true);
+    if (error) throw new Error(error.message);
+    if (data) assetRows.push(...data);
+  }
+  const inmuebles = assetRows.map(rowToAssetPublic);
+  if (inmuebles.length === 0) return inmuebles;
+
+  const ids = inmuebles.map((a) => a.id);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const propsCollected: any[] = [];
+  for (let i = 0; i < ids.length; i += POSTGREST_PAGE_SIZE) {
+    const slice = ids.slice(i, i + POSTGREST_PAGE_SIZE);
+    const { data, error } = await supabase.from("propiedades").select("*").in("inmueble_id", slice);
+    if (error) throw new Error(error.message);
+    if (data) propsCollected.push(...data);
+  }
+  const byInmueble = new Map<string, ReturnType<typeof rowToPropiedadPublic>[]>();
+  for (const row of propsCollected) {
+    const p = rowToPropiedadPublic(row);
+    const list = byInmueble.get(p.inmuebleId);
+    if (list) list.push(p);
+    else byInmueble.set(p.inmuebleId, [p]);
+  }
+  for (const a of inmuebles) a.propiedades = byInmueble.get(a.id) ?? [];
+  return inmuebles;
+}
+
 export async function fetchAssetById(id: string): Promise<Asset | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -106,6 +158,60 @@ export async function fetchAssetById(id: string): Promise<Asset | null> {
   if (pErr) throw new Error(pErr.message);
   asset.propiedades = (props ?? []).map(rowToPropiedadPublic);
   return asset;
+}
+
+/** Resuelve ficha pública/privada por slug opaco (sin catastral en URL). */
+export async function fetchAssetByPublicSlug(slug: string): Promise<Asset | null> {
+  const key = slug?.trim();
+  if (!key) return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("assets").select("*").eq("public_slug", key).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  const asset = rowToAssetPublic(data);
+  const { data: props, error: pErr } = await supabase
+    .from("propiedades").select("*").eq("inmueble_id", asset.id);
+  if (pErr) throw new Error(pErr.message);
+  asset.propiedades = (props ?? []).map(rowToPropiedadPublic);
+  return asset;
+}
+
+export interface ImportSchemaPreflightResult {
+  ok: boolean;
+  errors: string[];
+}
+
+/**
+ * Fail-fast antes de escribir batches: columnas/constraints requeridos por el importador.
+ * Requiere RPC `import_schema_preflight` (migración feedback-cliente).
+ */
+export async function assertImportSchemaReady(): Promise<ImportSchemaPreflightResult> {
+  await requireAdmin();
+  const supabase = await createServiceClient();
+  const errors: string[] = [];
+
+  const { error: colErr } = await supabase
+    .from("assets")
+    .select("id, referencia, public_slug")
+    .limit(1);
+  if (colErr) {
+    errors.push(`Schema assets incompatible: ${colErr.message}`);
+  }
+
+  const { data: rpcData, error: rpcErr } = await supabase.rpc("import_schema_preflight");
+  if (rpcErr) {
+    errors.push(
+      `No se pudo validar schema (¿migración aplicada?): ${rpcErr.message}`,
+    );
+  } else if (rpcData && typeof rpcData === "object") {
+    const payload = rpcData as { ok?: boolean; errors?: string[] };
+    if (payload.ok === false && Array.isArray(payload.errors)) {
+      errors.push(...payload.errors);
+    }
+  }
+
+  return { ok: errors.length === 0, errors };
 }
 
 export async function fetchAssetByIdForAdmin(id: string): Promise<Asset | null> {
@@ -247,9 +353,31 @@ export async function upsertAssets(assets: Asset[]): Promise<UpsertAssetsResult>
   let inserted = 0;
   let updated = 0;
 
+  const preflight = await assertImportSchemaReady();
+  if (!preflight.ok) {
+    return {
+      inserted: 0,
+      updated: 0,
+      errors: preflight.errors.map((e) => `Preflight: ${e}`),
+      duplicatesMerged: {},
+    };
+  }
+
   const { deduped, duplicates } = dedupAssetsById(assets);
   const duplicatesMerged: Record<string, number> = {};
   for (const [id, n] of duplicates) duplicatesMerged[id] = n;
+
+  // Prefetch slugs existentes (paginado) para evitar colisiones en el batch.
+  const takenSlugs = new Set<string>();
+  {
+    const slugRows = await fetchAllPaginated<{ public_slug: string | null }>(
+      "upsertAssets.slugs",
+      () => supabase.from("assets").select("public_slug"),
+    );
+    for (const r of slugRows) {
+      if (r.public_slug) takenSlugs.add(String(r.public_slug));
+    }
+  }
 
   const BATCH_SIZE = 50;
   for (let i = 0; i < deduped.length; i += BATCH_SIZE) {
@@ -265,9 +393,24 @@ export async function upsertAssets(assets: Asset[]): Promise<UpsertAssetsResult>
     for (const row of existingRows ?? []) existingMap.set(row.id, row);
 
     const rows = batch.map((a) => {
-      const incoming = assetToRow(a);
       const existing = existingMap.get(a.id);
+      const keepSlug = existing?.public_slug ? String(existing.public_slug) : a.publicSlug;
+      if (keepSlug) takenSlugs.delete(keepSlug);
+      const publicSlug = buildPublicSlug(
+        { id: a.id, tip: a.tip, pob: a.pob, publicSlug: keepSlug },
+        takenSlugs,
+      );
+      takenSlugs.add(publicSlug);
+      a.publicSlug = publicSlug;
+
+      const incoming = assetToRow(a);
+      incoming.public_slug = publicSlug;
+      if (!incoming.referencia) {
+        incoming.referencia = a.referencia || (existing?.referencia ?? "") || a.id.split("__")[1] || a.id;
+      }
       const merged = existing ? mergeRowPreferNonEmpty(existing, incoming) : incoming;
+      merged.public_slug = publicSlug;
+      if (!merged.referencia) merged.referencia = incoming.referencia;
       applyMapFromLatLng(merged);
       return merged;
     });
@@ -324,6 +467,16 @@ export async function upsertPropiedades(propiedades: Propiedad[]): Promise<Upser
   const errors: string[] = [];
   let inserted = 0;
   let updated = 0;
+
+  const preflight = await assertImportSchemaReady();
+  if (!preflight.ok) {
+    return {
+      inserted: 0,
+      updated: 0,
+      errors: preflight.errors.map((e) => `Preflight: ${e}`),
+      duplicatesMerged: {},
+    };
+  }
 
   const { deduped, duplicates } = dedupPropiedadesById(propiedades);
   const duplicatesMerged: Record<string, number> = {};
@@ -389,6 +542,17 @@ export async function toggleAssetPub(id: string): Promise<boolean> {
   const { error: updateErr } = await supabase
     .from("assets").update({ pub: newPub }).eq("id", id);
   if (updateErr) throw new Error(updateErr.message);
+
+  // Al publicar, recalcular matching y notificar compradores top.
+  if (newPub) {
+    try {
+      const { computeMatchesForAsset } = await import("@/app/actions/matching");
+      await computeMatchesForAsset(id);
+    } catch (err) {
+      console.warn("[toggleAssetPub] matching falló (best-effort):", err);
+    }
+  }
+
   return newPub;
 }
 
@@ -401,6 +565,18 @@ export async function updateAssetFields(
   await requireAssetAccess(session, id);
   const supabase = await createServiceClient();
   const { error } = await supabase.from("assets").update(fields).eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+/** Actualiza campos de una fila en `propiedades` (fase_interna, proceso, etc.). */
+export async function updatePropiedadFields(
+  propiedadId: string,
+  fields: Record<string, string | number | null>,
+): Promise<void> {
+  if (!propiedadId || Object.keys(fields).length === 0) return;
+  await requireEditPermission("activos");
+  const supabase = await createServiceClient();
+  const { error } = await supabase.from("propiedades").update(fields).eq("id", propiedadId);
   if (error) throw new Error(error.message);
 }
 

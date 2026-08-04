@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { Lock } from "lucide-react";
 import { NotificationBell } from "@/components/NotificationBell";
 import { SiteFooter } from "@/components/SiteFooter";
+import { BrandMark } from "@/components/BrandMark";
 import { createClient } from "@/lib/supabase/client";
 
 function initialsOf(nombre: string): string {
@@ -70,9 +70,8 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       {/* ── Header ── */}
       <header className="sticky top-0 z-50 border-b border-border bg-white shadow-sm">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
-          <Link href="/" className="flex items-center gap-2.5">
-            <Image src="/LogoAzul.svg" alt="Unihabitat" width={32} height={32} className="h-8 w-auto" priority />
-            <span className="text-base font-bold tracking-tight text-navy">Unihabitat</span>
+          <Link href="/" className="flex items-center">
+            <BrandMark size={32} textClassName="text-base text-navy" />
           </Link>
 
           <nav className="hidden items-center gap-5 md:flex">

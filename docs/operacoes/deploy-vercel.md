@@ -20,9 +20,14 @@ Framework preset: **Next.js**. Comando default da Vercel funciona (`next build`)
 
 ## Variáveis de ambiente
 
-Configurar no dashboard Vercel (Production + Preview):
+Configurar no dashboard Vercel **separando ambientes**:
 
-**Obrigatórias:**
+| Ambiente Vercel | Supabase | Notas |
+|-----------------|----------|--------|
+| **Production** | Proyecto **prod** | Dominio `www.unihabitat.net` |
+| **Preview** | Proyecto **staging** | Migraciones y smoke aquí; ver [staging.md](staging.md) |
+
+**Obrigatórias (em cada ambiente, com keys do Supabase correspondente):**
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
@@ -33,10 +38,12 @@ Configurar no dashboard Vercel (Production + Preview):
 - `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_SUPPORT`
 - `GEOAPIFY_API_KEY`
 
-**Não usar em produção:**
+**Staging / Preview:**
 - `EMAIL_DRY_RUN=true`
+- `APP_ORIGIN` / `NEXT_PUBLIC_APP_URL` = URL do Preview ou `https://staging.…`
 
-Lista completa: [variaveis-ambiente.md](variaveis-ambiente.md).
+Lista completa: [variaveis-ambiente.md](variaveis-ambiente.md).  
+Staging ponta a ponta: [staging.md](staging.md).
 
 ## Auth redirects
 

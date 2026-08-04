@@ -1,6 +1,7 @@
 "use server";
 
 import { createServiceClient } from "@/lib/supabase/server";
+import { createNotificacion } from "@/app/actions/notificaciones";
 
 export async function fetchFavoritosByComprador(compradorId: string): Promise<string[]> {
   if (!compradorId) return [];
@@ -31,6 +32,44 @@ export async function addFavorito(
       { onConflict: "comprador_id,asset_id" },
     );
   if (error) return { success: false, error: error.message };
+
+  // Notificar admin / agente asignado (best-effort).
+  try {
+    const [{ data: comp }, { data: agentLink }] = await Promise.all([
+      supabase.from("compradores").select("nombre, email, agente").eq("id", compradorId).maybeSingle(),
+      supabase.from("vendedor_compradores").select("vendedor_id").eq("comprador_id", compradorId).maybeSingle(),
+    ]);
+    const nombre = comp?.nombre ?? compradorId;
+    const mensaje = `${nombre} marcó como favorito el activo ${assetId}`;
+
+    if (agentLink?.vendedor_id) {
+      const { data: vend } = await supabase
+        .from("vendedores")
+        .select("user_id, email, nombre")
+        .eq("id", agentLink.vendedor_id)
+        .maybeSingle();
+      if (vend?.user_id || vend?.email) {
+        await createNotificacion({
+          userId: vend.user_id ?? undefined,
+          tipo: "favorito",
+          mensaje,
+          referenciaId: assetId,
+          email: vend.email ?? undefined,
+          recipientName: vend.nombre ?? undefined,
+        });
+      }
+    } else {
+      // Fallback: notificar a admins vía EMAIL_SUPPORT mirror (sin userId).
+      await createNotificacion({
+        tipo: "favorito",
+        mensaje,
+        referenciaId: assetId,
+      });
+    }
+  } catch (err) {
+    console.warn("[addFavorito] notificación falló:", err);
+  }
+
   return { success: true };
 }
 

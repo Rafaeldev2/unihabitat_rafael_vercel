@@ -1,10 +1,11 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useApp } from "@/lib/context";
 import { chatMessages } from "@/lib/mock-data";
 import Link from "next/link";
-import type { Comprador } from "@/lib/types";
+import type { Comprador, CompradorAcceso } from "@/lib/types";
 import {
   User,
   FolderOpen,
@@ -15,12 +16,20 @@ import {
   Download,
   Send,
   Save,
-  Plus,
   Loader2,
   CheckCircle,
   UserCog,
+  Trash2,
+  Shield,
 } from "lucide-react";
 import { getCompradorAgente, setCompradorAgente } from "@/app/actions/vendedores";
+import {
+  deleteComprador,
+  setCompradorAcceso,
+  updateCompradorFields,
+} from "@/app/actions/compradores";
+import { fetchOfertasByComprador, type OfertaRow } from "@/app/actions/ofertas";
+import { fmt } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 
 const tabs = [
@@ -31,9 +40,11 @@ const tabs = [
 
 export default function CompradorDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { getComprador } = useApp();
+  const router = useRouter();
+  const { getComprador, refreshCompradores } = useApp();
   const c = getComprador(id);
   const [tab, setTab] = useState(0);
+  const [deleting, setDeleting] = useState(false);
 
   if (!c) return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted">
@@ -43,15 +54,46 @@ export default function CompradorDetailPage({ params }: { params: Promise<{ id: 
     </div>
   );
 
+  async function handleDelete() {
+    if (!confirm(`¿Eliminar comprador ${c!.nombre}? Esta acción no se puede deshacer.`)) return;
+    setDeleting(true);
+    try {
+      await deleteComprador(c!.id);
+      toast.success("Comprador eliminado");
+      await refreshCompradores();
+      router.push("/admin/compradores");
+    } catch (err) {
+      toast.error("No se pudo eliminar", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <>
       <div className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-border bg-white px-6">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold text-navy">{c.nombre}</h1>
-          <span className="rounded-md bg-cream px-2.5 py-0.5 text-xs text-muted">{c.id}</span>
+          <span
+            className={`rounded-md px-2.5 py-0.5 text-xs font-medium ${
+              c.acceso === "activo" ? "bg-green/10 text-green" : "bg-red/10 text-red"
+            }`}
+          >
+            {c.acceso === "activo" ? "Acceso activo" : "Sin acceso"}
+          </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="rounded-md bg-gold/10 px-2.5 py-1 text-xs font-medium text-gold">Admin</span>
+          <button
+            type="button"
+            onClick={() => void handleDelete()}
+            disabled={deleting}
+            className="flex items-center gap-1.5 rounded-lg border border-red/30 px-3.5 py-2 text-xs font-medium text-red hover:bg-red/5 disabled:opacity-50"
+          >
+            {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+            Eliminar
+          </button>
           <Link href="/admin/compradores" className="flex items-center gap-1.5 rounded-lg border border-border bg-white px-3.5 py-2 text-xs font-medium text-navy hover:bg-cream"><ArrowLeft size={14} /> Volver</Link>
         </div>
       </div>
@@ -104,15 +146,19 @@ function TabDatos({ c }: { c: Comprador }) {
           <div className="flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: `linear-gradient(135deg,${c.col})` }}>{c.ini}</div>
           <div className="flex-1">
             <div className="text-base font-semibold text-white">{c.nombre}</div>
-            <div className="text-xs text-white/40">{c.tipo} · NDA {c.nda} · {c.id}</div>
+            <div className="text-xs text-white/40">{c.tipo} · NDA {c.nda}</div>
           </div>
           <span className="rounded-md bg-white/10 px-2.5 py-1 text-xs font-medium text-gold">{c.estado}</span>
         </div>
       </div>
 
+      <div className="mb-4">
+        <AccesoYNdaCard c={c} />
+      </div>
+
       <div className="mb-4"><SectionCard title="Información de Contacto">
         <div className="grid grid-cols-3 gap-2">
-          <DataPill label="Teléfono" value={c.tel} />
+          <DataPill label="Teléfono" value={c.tel || "—"} />
           <DataPill label="Email" value={c.email} />
           <DataPill label="Agente (legacy)" value={c.agente || "—"} />
         </div>
@@ -124,33 +170,177 @@ function TabDatos({ c }: { c: Comprador }) {
 
       <div className="mb-4"><SectionCard title="Perfil de Búsqueda">
         <div className="grid grid-cols-3 gap-2">
-          <DataPill label="Intereses" value={c.intereses} />
-          <DataPill label="Presupuesto" value={c.presupuesto} />
-          <DataPill label="Activos vinculados" value={c.activos} />
-          <DataPill label="Financiación" value="Sí — Banco Santander" />
-          <DataPill label="Sup. mínima" value="80 m²" />
-          <DataPill label="Zona" value="Andalucía preferente" />
+          <DataPill label="Intereses" value={c.intereses || "—"} />
+          <DataPill label="Presupuesto" value={c.presupuesto || "—"} />
+          <DataPill label="Activos vinculados" value={c.activos || "0"} />
         </div>
       </SectionCard></div>
 
-      <div className="mb-4"><SectionCard title="Historial de Ofertas">
-        <div className="flex items-center gap-3 rounded-md border border-border bg-cream2 p-3">
-          <FileText size={16} className="flex-shrink-0 text-blue" />
-          <div className="flex-1">
-            <div className="text-sm font-medium text-navy">Oferta sobre activo 20257589 (Arriate)</div>
-            <div className="text-[11px] text-muted">95.000 € · Presentada el 28 Feb 2026</div>
-          </div>
-          <span className="rounded-md bg-blue/8 px-2 py-0.5 text-[10px] font-semibold text-blue">En negociación</span>
-        </div>
-      </SectionCard></div>
-
-      <SectionCard title="Notas internas">
-        <textarea className="w-full rounded-md border border-border bg-cream2 p-3 text-sm text-text outline-none focus:border-navy" rows={3} placeholder="Añade notas sobre este comprador..." />
-        <div className="mt-2 flex justify-end">
-          <button className="flex items-center gap-1.5 rounded-md bg-gold px-3 py-1.5 text-xs font-medium text-white hover:bg-gold2"><Save size={12} /> Guardar</button>
-        </div>
-      </SectionCard>
+      <div className="mb-4">
+        <HistorialOfertasCard compradorId={c.id} />
+      </div>
     </>
+  );
+}
+
+function AccesoYNdaCard({ c }: { c: Comprador }) {
+  const { refreshCompradores } = useApp();
+  const [acceso, setAcceso] = useState<CompradorAcceso>(c.acceso);
+  const [nda, setNda] = useState<"Firmada" | "Pendiente">(c.nda);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setAcceso(c.acceso);
+    setNda(c.nda);
+  }, [c.acceso, c.nda]);
+
+  async function save() {
+    setSaving(true);
+    try {
+      await updateCompradorFields(c.id, { acceso, nda });
+      await refreshCompradores();
+      toast.success("Acceso y NDA actualizados");
+    } catch (err) {
+      toast.error("No se pudo guardar", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleAccesoRapido(next: CompradorAcceso) {
+    setSaving(true);
+    try {
+      await setCompradorAcceso(c.id, next);
+      setAcceso(next);
+      await refreshCompradores();
+      toast.success(next === "activo" ? "Acceso activado" : "Acceso desactivado");
+    } catch (err) {
+      toast.error("No se pudo cambiar el acceso", {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <SectionCard title="Acceso al portal y NDA">
+      <div className="mb-3 flex items-start gap-2 text-xs text-muted">
+        <Shield size={14} className="mt-0.5 flex-shrink-0 text-gold" />
+        <p>
+          El acceso al área privada es manual. Firmar NDA en una oferta actualiza el flag NDA,
+          pero no abre el portal automáticamente.
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Acceso portal</label>
+          <select
+            value={acceso}
+            onChange={(e) => setAcceso(e.target.value as CompradorAcceso)}
+            className="rounded-md border border-border bg-cream2 px-2.5 py-2 text-sm outline-none focus:border-navy"
+          >
+            <option value="sin_acceso">Sin acceso</option>
+            <option value="activo">Activo</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">NDA</label>
+          <select
+            value={nda}
+            onChange={(e) => setNda(e.target.value as "Firmada" | "Pendiente")}
+            className="rounded-md border border-border bg-cream2 px-2.5 py-2 text-sm outline-none focus:border-navy"
+          >
+            <option value="Pendiente">Pendiente</option>
+            <option value="Firmada">Firmada</option>
+          </select>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap justify-end gap-2">
+        {acceso === "sin_acceso" ? (
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => void toggleAccesoRapido("activo")}
+            className="rounded-md border border-green/30 px-3 py-1.5 text-xs font-medium text-green hover:bg-green/5 disabled:opacity-50"
+          >
+            Activar acceso
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => void toggleAccesoRapido("sin_acceso")}
+            className="rounded-md border border-red/30 px-3 py-1.5 text-xs font-medium text-red hover:bg-red/5 disabled:opacity-50"
+          >
+            Desactivar acceso
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => void save()}
+          className="flex items-center gap-1.5 rounded-md bg-gold px-3 py-1.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
+        >
+          {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+          Guardar
+        </button>
+      </div>
+    </SectionCard>
+  );
+}
+
+function HistorialOfertasCard({ compradorId }: { compradorId: string }) {
+  const [ofertas, setOfertas] = useState<OfertaRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchOfertasByComprador(compradorId)
+      .then((rows) => {
+        if (!cancelled) setOfertas(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setOfertas([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [compradorId]);
+
+  return (
+    <SectionCard title="Historial de Ofertas">
+      {loading ? (
+        <div className="flex items-center gap-2 py-4 text-xs text-muted">
+          <Loader2 size={14} className="animate-spin" /> Cargando ofertas…
+        </div>
+      ) : ofertas.length === 0 ? (
+        <p className="py-2 text-sm text-muted">Sin ofertas registradas para este comprador.</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {ofertas.map((o) => (
+            <div key={o.id} className="flex items-center gap-3 rounded-md border border-border bg-cream2 p-3">
+              <FileText size={16} className="flex-shrink-0 text-blue" />
+              <div className="flex-1 overflow-hidden">
+                <div className="truncate text-sm font-medium text-navy">Activo {o.asset_id}</div>
+                <div className="text-[11px] text-muted">
+                  {fmt(o.propuesta_euros)} € · {new Date(o.created_at).toLocaleDateString("es-ES")}
+                </div>
+              </div>
+              <span className="rounded-md bg-blue/8 px-2 py-0.5 text-[10px] font-semibold text-blue">
+                {o.estado}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </SectionCard>
   );
 }
 

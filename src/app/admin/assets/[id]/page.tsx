@@ -3,15 +3,16 @@
 import { use, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useApp } from "@/lib/context";
 import { isAdmin } from "@/lib/auth-helpers";
-import { assetNotes, assetDocs, docNotes, adminNotes, chatMessages } from "@/lib/mock-data";
 import Link from "next/link";
-import type { Asset, NoteEntry, DocItem, ChatMessage } from "@/lib/types";
-import { Home, FolderOpen, Briefcase, Users, Lock, ArrowLeft, Upload, Download, FileText, FileSpreadsheet, Image, MessageSquare, Send, Save, Plus, Mail, X, Loader2, AlertCircle, CheckCircle2, CheckCircle, Building, ExternalLink, RefreshCw, UserCog } from "lucide-react";
+import type { Asset } from "@/lib/types";
+import { Home, FolderOpen, Briefcase, Users, Lock, ArrowLeft, Upload, Download, FileText, FileSpreadsheet, Image, MessageSquare, Save, Plus, Mail, X, Loader2, AlertCircle, CheckCircle2, CheckCircle, Building, ExternalLink, RefreshCw, UserCog, Send } from "lucide-react";
 import { uploadDocumento, fetchDocumentos, deleteDocumento, getDocumentUrl, type DocRow } from "@/app/actions/documentos";
 import { createNota, fetchNotas, type NotaRow } from "@/app/actions/notas";
 import { fetchCompradores } from "@/app/actions/compradores";
-import { fetchAssetByIdForAdmin, toggleAssetPub, updateAssetFields } from "@/app/actions/assets";
+import { fetchAssetByIdForAdmin, toggleAssetPub, updateAssetFields, updatePropiedadFields } from "@/app/actions/assets";
 import { inviteCompradorToAsset, revokeCompradorFromAsset, fetchInvitedCompradores } from "@/app/actions/invitations";
+import { enviarSolicitudInformacion } from "@/app/actions/email-info-request";
+import { createOfertaAdmin } from "@/app/actions/ofertas";
 import { refreshAssetCatastro } from "@/app/actions/catastro";
 import { getAssetAgente, setAssetAgente } from "@/app/actions/vendedores";
 import type { Comprador } from "@/lib/types";
@@ -19,9 +20,10 @@ import { InteractiveMap } from "@/components/InteractiveMap";
 import { EditableSection, type FieldDef } from "@/components/EditableSection";
 import { EditableExcelRawSection } from "@/components/EditableExcelRawSection";
 import { listEmptyExcelFields } from "@/lib/excel-raw-utils";
+import { FASE_INTERNA_OPTIONS, faseToCode } from "@/lib/fase-interna";
 import {
   getDescriptionText, getCategoria, getFaseInterna, getPropietario, getOwnerTel,
-  getOwnerMail, getDeudaTotal,
+  getOwnerMail, getDeudaTotal, fmt, parseLocaleMoneyInput,
 } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 
@@ -119,7 +121,7 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href={`/portal/${id}`}
+            href={asset?.publicSlug ? `/portal/inmueble/${encodeURIComponent(asset.publicSlug)}` : `/portal/${encodeURIComponent(id)}`}
             target="_blank"
             className="flex items-center gap-1.5 rounded-lg border border-gold/30 bg-gold/5 px-3.5 py-2 text-xs font-medium text-gold transition-colors hover:bg-gold/10"
           >
@@ -225,12 +227,12 @@ function DataPill({ label, value, mono }: { label: string; value: string; mono?:
   );
 }
 
-function NoteCard({ note }: { note: NoteEntry | NotaRow }) {
+function NoteCard({ note }: { note: NotaRow }) {
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
     return d.toLocaleDateString("es-ES", { day: "numeric", month: "short", year: "numeric" });
   };
-  const date = "date" in note ? note.date : formatDate(note.created_at);
+  const date = formatDate(note.created_at);
   return (
     <div className="rounded-lg border border-border bg-white p-3">
       <div className="mb-1 flex items-center justify-between">
@@ -305,22 +307,43 @@ function DocItemRow({ doc, onDelete }: { doc: DocRow; onDelete?: () => void }) {
   );
 }
 
-function ChatBubble({ msg }: { msg: ChatMessage }) {
-  return (
-    <div className={`max-w-[76%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
-      msg.from === "cli" ? "self-start bg-cream2 text-text" : "self-end bg-navy text-white"
-    }`}>
-      {msg.text}
-      <div className={`mt-0.5 text-[10px] ${msg.from === "cli" ? "text-muted" : "text-right text-white/40"}`}>{msg.time}</div>
-    </div>
-  );
-}
-
 function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asset: Asset; assetId: string; currentUser: { nombre: string; email: string } | null; reloadAsset: () => void }) {
+  const { compradores, session } = useApp();
+  const isAgente = session?.role === "vendedor";
   const [generalNote, setGeneralNote] = useState("");
+  const [assetNotesList, setAssetNotesList] = useState<NotaRow[]>([]);
   const [saving, setSaving] = useState(false);
+  const [descDraft, setDescDraft] = useState(asset.desc && asset.desc !== "—" ? asset.desc : "");
+  const [savingDesc, setSavingDesc] = useState(false);
   const [catastroRefreshing, setCatastroRefreshing] = useState(false);
   const [catastroMsg, setCatastroMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [showConsultarModal, setShowConsultarModal] = useState(false);
+  const [consultarMsg, setConsultarMsg] = useState("");
+  const [consultarStatus, setConsultarStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
+  const [consultarError, setConsultarError] = useState("");
+  const [showOfertaModal, setShowOfertaModal] = useState(false);
+  const [ofertaCompradorId, setOfertaCompradorId] = useState("");
+  const [ofertaImporte, setOfertaImporte] = useState("");
+  const [ofertaComentarios, setOfertaComentarios] = useState("");
+  const [ofertaStatus, setOfertaStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
+  const [ofertaError, setOfertaError] = useState("");
+
+  useEffect(() => {
+    setDescDraft(asset.desc && asset.desc !== "—" ? asset.desc : "");
+  }, [asset.desc, assetId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const notes = await fetchNotas({ assetId });
+        if (!cancelled) setAssetNotesList(notes);
+      } catch {
+        if (!cancelled) setAssetNotesList([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [assetId]);
 
   // La columna `referencia` guarda la RC limpia; el id es compuesto (id1__ref).
   const hasCatRef = !!asset.referencia && asset.referencia !== "—";
@@ -352,6 +375,86 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
       setCatastroMsg({ ok: false, text: err instanceof Error ? err.message : "Error de conexión" });
     } finally {
       setCatastroRefreshing(false);
+    }
+  };
+
+  const handleOpenConsultar = () => {
+    setConsultarMsg(`Consulta interna admin sobre el activo ${assetId}`);
+    setConsultarStatus("idle");
+    setConsultarError("");
+    setShowConsultarModal(true);
+  };
+
+  const handleOpenOferta = () => {
+    setOfertaCompradorId("");
+    setOfertaImporte("");
+    setOfertaComentarios("");
+    setOfertaStatus("idle");
+    setOfertaError("");
+    setShowOfertaModal(true);
+  };
+
+  const handleSendOferta = async () => {
+    if (!isAgente && !ofertaCompradorId) {
+      setOfertaStatus("error");
+      setOfertaError("Selecciona un comprador");
+      return;
+    }
+    const importe = parseLocaleMoneyInput(ofertaImporte);
+    if (importe == null || importe <= 0) {
+      setOfertaStatus("error");
+      setOfertaError("Indica un importe válido mayor que 0");
+      return;
+    }
+    setOfertaStatus("sending");
+    setOfertaError("");
+    try {
+      await createOfertaAdmin({
+        ...(isAgente ? {} : { compradorId: ofertaCompradorId }),
+        assetId,
+        propuestaEuros: importe,
+        comentarios: ofertaComentarios.trim() || undefined,
+      });
+      setOfertaStatus("success");
+      toast.success("Oferta registrada", {
+        description: isAgente ? "Asignada a tu usuario · pendiente" : "Estado: pendiente",
+      });
+    } catch (err) {
+      setOfertaStatus("error");
+      setOfertaError(err instanceof Error ? err.message : "No se pudo registrar la oferta");
+    }
+  };
+
+  const handleSendConsultar = async () => {
+    if (!currentUser?.email) {
+      setConsultarStatus("error");
+      setConsultarError("Sesión no disponible");
+      return;
+    }
+    if (!consultarMsg.trim()) {
+      setConsultarStatus("error");
+      setConsultarError("Escribe un mensaje antes de enviar");
+      return;
+    }
+    setConsultarStatus("sending");
+    setConsultarError("");
+    try {
+      const result = await enviarSolicitudInformacion({
+        assetId,
+        nombre: currentUser.nombre,
+        email: currentUser.email,
+        mensaje: consultarMsg.trim(),
+      });
+      if (result.error) {
+        setConsultarStatus("error");
+        setConsultarError(result.error);
+      } else {
+        setConsultarStatus("success");
+        toast.success("Consulta enviada");
+      }
+    } catch (err) {
+      setConsultarStatus("error");
+      setConsultarError(err instanceof Error ? err.message : "No se pudo enviar la consulta");
     }
   };
 
@@ -426,24 +529,275 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
           )}
           <div className="flex flex-col gap-2">
             <EditableSection title="Precio" assetId={assetId} fields={precioFields} cols={1} onSaved={reloadAsset} />
+            {(getDeudaTotal(asset) != null || asset.propiedades[0]?.proceso) && (
+              <div className="rounded-lg border border-border bg-cream2 px-3 py-2 text-xs text-text">
+                {getDeudaTotal(asset) != null && (
+                  <p><span className="font-semibold text-muted">Deuda: </span>{fmt(getDeudaTotal(asset)!)}</p>
+                )}
+                {asset.propiedades[0]?.proceso && (
+                  <p className="mt-0.5"><span className="font-semibold text-muted">Proceso: </span>{asset.propiedades[0].proceso}</p>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2">
-              <button type="button" className="flex items-center justify-center gap-1.5 rounded-lg border border-border py-2.5 text-xs font-medium text-navy hover:bg-cream"><MessageSquare size={13} /> Consultar</button>
-              <button type="button" className="flex items-center justify-center gap-1.5 rounded-lg bg-gold py-2.5 text-xs font-medium text-white hover:bg-gold2"><FileText size={13} /> Oferta</button>
+              <button
+                type="button"
+                onClick={handleOpenConsultar}
+                className="flex items-center justify-center gap-1.5 rounded-lg border border-border py-2.5 text-xs font-medium text-navy hover:bg-cream"
+              >
+                <MessageSquare size={13} /> Consultar
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenOferta}
+                className="flex items-center justify-center gap-1.5 rounded-lg bg-gold py-2.5 text-xs font-medium text-white hover:bg-gold2"
+              >
+                <FileText size={13} /> Oferta
+              </button>
             </div>
+            <Link
+              href={`/admin/ofertas?asset=${encodeURIComponent(assetId)}`}
+              className="block text-center text-[11px] font-medium text-navy underline-offset-2 hover:underline"
+            >
+              Ver ofertas de este activo
+            </Link>
           </div>
         </div>
       </div>
+      {showOfertaModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          onClick={() => ofertaStatus !== "sending" && setShowOfertaModal(false)}
+        >
+          <div className="w-full max-w-md rounded-xl border border-border bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <h3 className="text-base font-semibold text-navy">Registrar oferta</h3>
+              <button
+                type="button"
+                onClick={() => ofertaStatus !== "sending" && setShowOfertaModal(false)}
+                disabled={ofertaStatus === "sending"}
+                className="rounded-lg p-1.5 text-muted hover:bg-cream hover:text-navy disabled:opacity-50"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5">
+              {ofertaStatus === "success" ? (
+                <div className="flex flex-col items-center gap-3 py-4 text-center">
+                  <CheckCircle2 size={32} className="text-green" />
+                  <p className="text-sm font-medium text-navy">Oferta registrada correctamente</p>
+                  <p className="text-xs text-muted">Queda en estado pendiente.</p>
+                  <div className="mt-2 flex flex-wrap justify-center gap-2">
+                    <Link
+                      href={`/admin/ofertas?asset=${encodeURIComponent(assetId)}`}
+                      className="rounded-lg border border-border px-4 py-2 text-xs font-medium text-navy hover:bg-cream"
+                    >
+                      Ver ofertas de este activo
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setShowOfertaModal(false)}
+                      className="rounded-lg bg-navy px-4 py-2 text-xs font-medium text-white hover:bg-navy3"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {isAgente ? (
+                    <p className="mb-3 rounded-md border border-border bg-cream2 px-3 py-2 text-sm text-navy">
+                      Oferta a nombre de: <span className="font-semibold">{session?.nombre ?? "Agente"}</span>
+                    </p>
+                  ) : (
+                    <>
+                      <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-muted">Comprador</label>
+                      <select
+                        value={ofertaCompradorId}
+                        onChange={(e) => setOfertaCompradorId(e.target.value)}
+                        disabled={ofertaStatus === "sending"}
+                        className="mb-3 w-full rounded-md border border-border bg-cream2 px-3 py-2 text-sm text-text outline-none focus:border-navy disabled:opacity-50"
+                      >
+                        <option value="">Seleccionar comprador…</option>
+                        {compradores.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.nombre}{c.email ? ` · ${c.email}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  )}
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-muted">Importe (€)</label>
+                  <input
+                    type="text"
+                    value={ofertaImporte}
+                    onChange={(e) => setOfertaImporte(e.target.value)}
+                    disabled={ofertaStatus === "sending"}
+                    placeholder="Ej. 125.000,00"
+                    className="mb-3 w-full rounded-md border border-border bg-cream2 px-3 py-2 text-sm text-text outline-none focus:border-navy disabled:opacity-50"
+                  />
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-muted">Comentarios (opcional)</label>
+                  <textarea
+                    value={ofertaComentarios}
+                    onChange={(e) => setOfertaComentarios(e.target.value)}
+                    disabled={ofertaStatus === "sending"}
+                    rows={3}
+                    className="w-full rounded-md border border-border bg-cream2 p-3 text-sm text-text outline-none focus:border-navy disabled:opacity-50"
+                    placeholder="Notas internas sobre la oferta…"
+                  />
+                  {ofertaStatus === "error" && ofertaError && (
+                    <div className="mt-2 flex items-center gap-2 rounded-lg bg-red/10 px-3 py-2 text-xs text-red">
+                      <AlertCircle size={14} /> {ofertaError}
+                    </div>
+                  )}
+                  {!isAgente && compradores.length === 0 && (
+                    <p className="mt-2 text-xs text-muted">No hay compradores cargados. Créalos en Admin → Compradores.</p>
+                  )}
+                  <div className="mt-4 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowOfertaModal(false)}
+                      disabled={ofertaStatus === "sending"}
+                      className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text hover:bg-cream disabled:opacity-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleSendOferta()}
+                      disabled={
+                        ofertaStatus === "sending"
+                        || !ofertaImporte.trim()
+                        || (!isAgente && !ofertaCompradorId)
+                      }
+                      className="flex items-center gap-1.5 rounded-md bg-gold px-3 py-1.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
+                    >
+                      {ofertaStatus === "sending" ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
+                      {ofertaStatus === "sending" ? "Guardando…" : "Registrar oferta"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {showConsultarModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={() => consultarStatus !== "sending" && setShowConsultarModal(false)}>
+          <div className="w-full max-w-md rounded-xl border border-border bg-white shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-border px-5 py-4">
+              <h3 className="text-base font-semibold text-navy">Enviar consulta</h3>
+              <button
+                type="button"
+                onClick={() => consultarStatus !== "sending" && setShowConsultarModal(false)}
+                disabled={consultarStatus === "sending"}
+                className="rounded-lg p-1.5 text-muted hover:bg-cream hover:text-navy disabled:opacity-50"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5">
+              {consultarStatus === "success" ? (
+                <div className="flex flex-col items-center gap-3 py-4 text-center">
+                  <CheckCircle2 size={32} className="text-green" />
+                  <p className="text-sm font-medium text-navy">Consulta enviada correctamente</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowConsultarModal(false)}
+                    className="mt-2 rounded-lg bg-navy px-4 py-2 text-xs font-medium text-white hover:bg-navy3"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-muted">Mensaje</label>
+                  <textarea
+                    value={consultarMsg}
+                    onChange={(e) => setConsultarMsg(e.target.value)}
+                    disabled={consultarStatus === "sending"}
+                    rows={5}
+                    className="w-full rounded-md border border-border bg-cream2 p-3 text-sm text-text outline-none focus:border-navy disabled:opacity-50"
+                    placeholder="Escribe tu consulta sobre este activo..."
+                  />
+                  {consultarStatus === "error" && consultarError && (
+                    <div className="mt-2 flex items-center gap-2 rounded-lg bg-red/10 px-3 py-2 text-xs text-red">
+                      <AlertCircle size={14} /> {consultarError}
+                    </div>
+                  )}
+                  <div className="mt-4 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowConsultarModal(false)}
+                      disabled={consultarStatus === "sending"}
+                      className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text hover:bg-cream disabled:opacity-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleSendConsultar()}
+                      disabled={consultarStatus === "sending" || !consultarMsg.trim()}
+                      className="flex items-center gap-1.5 rounded-md bg-gold px-3 py-1.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
+                    >
+                      {consultarStatus === "sending" ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                      {consultarStatus === "sending" ? "Enviando..." : "Enviar"}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       <SectionCard title="Descripción del Activo">
-        <p className="text-sm leading-[1.7] text-text">{getDescriptionText(asset)}</p>
+        <textarea
+          value={descDraft}
+          onChange={(e) => setDescDraft(e.target.value)}
+          rows={4}
+          className="w-full rounded-md border border-border bg-cream2 p-3 text-sm leading-[1.7] text-text outline-none focus:border-navy"
+          placeholder={getDescriptionText(asset)}
+        />
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            disabled={savingDesc}
+            onClick={async () => {
+              setSavingDesc(true);
+              try {
+                await updateAssetFields(assetId, { descr: descDraft.trim() || null });
+                reloadAsset();
+                toast.success("Descripción guardada");
+              } catch (err) {
+                toast.error("No se pudo guardar la descripción", {
+                  description: err instanceof Error ? err.message : String(err),
+                });
+              } finally {
+                setSavingDesc(false);
+              }
+            }}
+            className="flex items-center gap-1.5 rounded-md bg-gold px-3 py-1.5 text-xs font-medium text-white hover:bg-gold2 disabled:opacity-50"
+          >
+            {savingDesc ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />} Guardar descripción
+          </button>
+        </div>
       </SectionCard>
       <div className="mt-3">
         <SectionCard title="Notas del activo">
+          <p className="mb-2 text-[11px] text-muted">Notas visibles para agentes. Solo administración/agentes con permiso las añaden aquí.</p>
+          {assetNotesList.length > 0 && (
+            <div className="mb-3 flex flex-col gap-2">
+              {assetNotesList.map((n) => (
+                <NoteCard key={n.id} note={n} />
+              ))}
+            </div>
+          )}
           <textarea
             value={generalNote}
             onChange={(e) => setGeneralNote(e.target.value)}
             className="w-full rounded-md border border-border bg-cream2 p-3 text-sm text-text outline-none focus:border-navy"
             rows={3}
-            placeholder="Añade notas generales sobre el activo..."
+            placeholder="Añade notas adicionales sobre el activo..."
           />
           <div className="mt-2 flex justify-end">
             <button
@@ -457,6 +811,8 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
                     text: generalNote.trim(),
                   });
                   setGeneralNote("");
+                  const notes = await fetchNotas({ assetId });
+                  setAssetNotesList(notes);
                   toast.success("Nota guardada", { description: "La nota general fue añadida al activo." });
                 } catch (err) {
                   toast.error("Error al guardar la nota", { description: err instanceof Error ? err.message : String(err) });
@@ -986,10 +1342,16 @@ function TabClientes({ assetId }: { assetId: string }) {
 }
 
 function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset }: { asset: Asset; assetId: string; togglePub: () => void; currentUser: { nombre: string; email: string } | null; reloadAsset: () => void }) {
-  const [adminNote, setAdminNote] = useState("Revisar situación judicial el 15/03. Hablar con el banco sobre cargas previas.");
+  const [adminNote, setAdminNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [savingFase, setSavingFase] = useState(false);
   const [notes, setNotes] = useState<NotaRow[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(true);
+  const [faseInterna, setFaseInterna] = useState(getFaseInterna(asset));
+
+  useEffect(() => {
+    setFaseInterna(getFaseInterna(asset));
+  }, [asset]);
 
   // El propietario vive en la PROPIEDAD (lien) — no en el inmueble. Mostramos
   // los datos de la primera propiedad asociada como referencia. La edición
@@ -1080,8 +1442,40 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset }: { ass
             <span className={`text-xs font-semibold ${asset.pub ? "text-green" : "text-red"}`}>{asset.pub ? "Publicado" : "Suspendido"}</span>
           </div>
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted">Fase interna</p>
-          <select className="w-full cursor-pointer appearance-none rounded-md border border-border bg-cream2 px-3 py-2 text-xs text-text outline-none focus:border-navy">
-            <option>Seguimiento</option><option>Info. Solicitada</option><option>Reservado</option><option>No Disponible</option>
+          <select
+            value={faseInterna === "—" ? "" : faseInterna}
+            disabled={savingFase || !asset.propiedades[0]?.id}
+            onChange={async (e) => {
+              const next = e.target.value;
+              const propId = asset.propiedades[0]?.id;
+              if (!propId || !next) return;
+              setFaseInterna(next);
+              setSavingFase(true);
+              try {
+                await updatePropiedadFields(propId, {
+                  fase_interna: next,
+                  fase_c: faseToCode(next),
+                });
+                reloadAsset();
+                toast.success("Fase interna actualizada");
+              } catch (err) {
+                setFaseInterna(getFaseInterna(asset));
+                toast.error("No se pudo guardar la fase interna", {
+                  description: err instanceof Error ? err.message : String(err),
+                });
+              } finally {
+                setSavingFase(false);
+              }
+            }}
+            className="w-full cursor-pointer appearance-none rounded-md border border-border bg-cream2 px-3 py-2 text-xs text-text outline-none focus:border-navy disabled:opacity-50"
+          >
+            <option value="">—</option>
+            {FASE_INTERNA_OPTIONS.map((f) => (
+              <option key={f} value={f}>{f}</option>
+            ))}
+            {faseInterna && faseInterna !== "—" && !(FASE_INTERNA_OPTIONS as readonly string[]).includes(faseInterna) && (
+              <option value={faseInterna}>{faseInterna}</option>
+            )}
           </select>
         </SectionCard>
         <SectionCard title="Propietario / Vendedor (primera propiedad)">
@@ -1181,20 +1575,11 @@ function TabAdmin({ asset, assetId, togglePub, currentUser, reloadAsset }: { ass
         </SectionCard>
       </div>
 
-      {/* Chat */}
-      <div className="overflow-hidden rounded-lg border border-border bg-white">
-        <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-navy"><MessageSquare size={13} /> Conversaciones</div>
-          <span className="text-[11px] text-muted">3 activas</span>
-        </div>
-        <div className="flex max-h-[220px] flex-col gap-2 overflow-y-auto p-3.5">
-          {chatMessages.map((m, i) => <ChatBubble key={i} msg={m} />)}
-        </div>
-        <div className="flex gap-2 border-t border-border p-3">
-          <textarea className="flex-1 rounded-md border border-border p-2 text-sm outline-none focus:border-navy" rows={1} placeholder="Escribe una respuesta..." />
-          <button className="flex items-center gap-1 rounded-md bg-gold px-3 py-2 text-xs font-medium text-white hover:bg-gold2"><Send size={12} /></button>
-        </div>
-      </div>
+      <SectionCard title="Conversaciones">
+        <p className="text-xs text-muted">
+          El chat interno aún no está disponible. Usa Consultar (pestaña Características) o el email del propietario.
+        </p>
+      </SectionCard>
     </>
   );
 }

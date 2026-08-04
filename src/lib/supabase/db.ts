@@ -42,6 +42,7 @@ export function rowToAsset(r: any): Asset {
   return {
     id: r.id,
     referencia: r.referencia ?? "",
+    publicSlug: r.public_slug ?? undefined,
     prov: r.prov ?? "", pob: r.pob ?? "", cp: r.cp ?? "",
     addr: r.addr ?? "", tip: r.tip ?? "", tipC: r.tip_c ?? "",
     precio: r.precio != null ? Number(r.precio) : null,
@@ -81,6 +82,7 @@ export function assetToRow(a: Asset) {
     coef: a.coef, ccaa: a.ccaa, full_addr: a.fullAddr, descr: a.desc,
     pub: a.pub, age: a.age,
   };
+  if (a.publicSlug) row.public_slug = a.publicSlug;
   if (a.lat != null) row.lat = a.lat;
   if (a.lng != null) row.lng = a.lng;
   return row;
@@ -96,7 +98,7 @@ export function rowToPropiedad(r: any): Propiedad {
     id: r.id,
     inmuebleId: r.inmueble_id,
     activoId: r.activo_id,
-    categoria: (r.categoria === "NPL" ? "NPL" : "CDR") as "CDR" | "NPL",
+    categoria: String(r.categoria ?? "").trim() || "CDR",
     propietario: r.propietario ?? "—",
     contacto: r.contacto ?? "—",
     telefono: r.telefono ?? "—",
@@ -208,6 +210,7 @@ export function attachPropiedades(assets: Asset[], propiedades: Propiedad[]): As
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function rowToComprador(r: any): Comprador {
+  const acceso = r.acceso === "sin_acceso" ? "sin_acceso" : "activo";
   return {
     id: r.id, nombre: r.nombre, ini: r.ini ?? "", col: r.col ?? "#2563a8,#0d2a4a",
     tipo: r.tipo ?? "Free", agente: r.agente ?? "Admin", email: r.email,
@@ -215,6 +218,7 @@ export function rowToComprador(r: any): Comprador {
     activos: r.activos ?? "0", actividad: r.actividad ?? "",
     estado: r.estado ?? "Nuevo", estadoC: r.estado_c ?? "fp-nd",
     nda: r.nda ?? "Pendiente",
+    acceso,
   };
 }
 
@@ -224,6 +228,7 @@ export function compradorToRow(c: Comprador) {
     agente: c.agente, email: c.email, tel: c.tel, intereses: c.intereses,
     presupuesto: c.presupuesto, activos: c.activos, actividad: c.actividad,
     estado: c.estado, estado_c: c.estadoC, nda: c.nda,
+    acceso: c.acceso === "sin_acceso" ? "sin_acceso" : "activo",
   };
 }
 

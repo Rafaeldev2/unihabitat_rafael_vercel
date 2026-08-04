@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useApp } from "@/lib/context";
-import { fmt, fmtM, displayAssetAddress } from "@/lib/utils";
+import { fmt, fmtM, displayAssetAddress, getProceso, getDeudaTotal } from "@/lib/utils";
 import {
   buildAssetListFilterOptions,
   assetMatchesListFilters,
@@ -14,10 +14,10 @@ import { UploadActivosModal } from "./UploadActivosModal";
 import { FilterSelect } from "@/components/FilterSelect";
 import { deleteAllAssets, deleteAssetsByIds, toggleAssetPub } from "@/app/actions/assets";
 import { isAdmin } from "@/lib/auth-helpers";
-import { getCategoria, getFaseInterna, getFaseC, getPropietario, getActivoId } from "@/lib/utils";
+import { getCategoria, getFaseInterna, getFaseC, getActivoId } from "@/lib/utils";
 import { toast } from "@/lib/toast";
 
-type SortCol = "prov" | "pob" | "sqm" | "precio" | "cat" | "addr" | "cp" | "tip" | "fase" | "pub";
+type SortCol = "prov" | "pob" | "sqm" | "precio" | "cat" | "addr" | "cp" | "tip" | "fase" | "proceso" | "deuda" | "pub";
 
 const PAGE_SIZE_OPTIONS = [250, 500, 1000] as const;
 const DEFAULT_PAGE_SIZE = 500;
@@ -30,7 +30,11 @@ const pillClass: Record<string, string> = {
   "fp-pub": "bg-green/8 text-green",
   "fp-sus": "bg-red/8 text-red",
   "fp-seg": "bg-blue/8 text-blue",
+  "fp-info": "bg-blue/8 text-blue",
+  "fp-ofe": "bg-gold/15 text-gold3",
+  "fp-neg": "bg-orange/8 text-orange",
   "fp-res": "bg-orange/8 text-orange",
+  "fp-cer": "bg-muted/8 text-muted",
   "fp-nd": "bg-muted/8 text-muted",
 };
 
@@ -47,6 +51,8 @@ export default function ActivosPage() {
   const [fTipo, setFTipo] = useState("");
   const [fEstado, setFEstado] = useState("");
   const [fFase, setFFase] = useState("");
+  const [fProceso, setFProceso] = useState("");
+  const [fDeuda, setFDeuda] = useState("");
   const [favOnly, setFavOnly] = useState(false);
   const [sortCol, setSortCol] = useState<SortCol>("prov");
   const [sortDir, setSortDir] = useState<1 | -1>(1);
@@ -62,6 +68,8 @@ export default function ActivosPage() {
         tipo: fTipo,
         estado: fEstado,
         fase: fFase,
+        proceso: fProceso,
+        deuda: fDeuda,
       })) return false;
       if (favOnly && !a.fav) return false;
       if (q) {
@@ -86,11 +94,15 @@ export default function ActivosPage() {
       const va = sortCol === "addr" ? displayAssetAddress(a)
         : sortCol === "cat" ? getCategoria(a)
         : sortCol === "fase" ? getFaseInterna(a)
+        : sortCol === "proceso" ? getProceso(a)
+        : sortCol === "deuda" ? getDeudaTotal(a)
         : sortCol === "pub" ? (a.pub ? 1 : 0)
         : a[sortCol as keyof Asset];
       const vb = sortCol === "addr" ? displayAssetAddress(b)
         : sortCol === "cat" ? getCategoria(b)
         : sortCol === "fase" ? getFaseInterna(b)
+        : sortCol === "proceso" ? getProceso(b)
+        : sortCol === "deuda" ? getDeudaTotal(b)
         : sortCol === "pub" ? (b.pub ? 1 : 0)
         : b[sortCol as keyof Asset];
       if (va === null || va === undefined) return sortDir;
@@ -100,13 +112,13 @@ export default function ActivosPage() {
       return 0;
     });
     return res;
-  }, [assets, q, fCat, fProv, fPob, fTipo, fEstado, fFase, favOnly, sortCol, sortDir]);
+  }, [assets, q, fCat, fProv, fPob, fTipo, fEstado, fFase, fProceso, fDeuda, favOnly, sortCol, sortDir]);
 
   // Reinicia a la página 1 cuando cambian filtros, búsqueda, orden o pageSize:
   // evita quedar "atrapado" en página 5 tras filtrar a 3 resultados.
   useEffect(() => {
     setCurrentPage(1);
-  }, [q, fCat, fProv, fPob, fTipo, fEstado, fFase, favOnly, sortCol, sortDir, pageSize]);
+  }, [q, fCat, fProv, fPob, fTipo, fEstado, fFase, fProceso, fDeuda, favOnly, sortCol, sortDir, pageSize]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(Math.max(1, currentPage), totalPages);
@@ -116,12 +128,17 @@ export default function ActivosPage() {
   );
 
   const activeListFilters = useMemo(
-    () => ({ cat: fCat, prov: fProv, pob: fPob, tipo: fTipo, estado: fEstado, fase: fFase }),
-    [fCat, fProv, fPob, fTipo, fEstado, fFase],
+    () => ({
+      cat: fCat, prov: fProv, pob: fPob, tipo: fTipo, estado: fEstado,
+      fase: fFase, proceso: fProceso, deuda: fDeuda,
+    }),
+    [fCat, fProv, fPob, fTipo, fEstado, fFase, fProceso, fDeuda],
   );
 
-  const { cat: catOptions, prov: provOptions, pob: pobOptions, tip: tipOptions, estado: estadoOptions, fase: faseOptions } =
-    useMemo(() => buildAssetListFilterOptions(assets, activeListFilters), [assets, activeListFilters]);
+  const {
+    cat: catOptions, prov: provOptions, pob: pobOptions, tip: tipOptions,
+    estado: estadoOptions, fase: faseOptions, proceso: procesoOptions, deuda: deudaOptions,
+  } = useMemo(() => buildAssetListFilterOptions(assets, activeListFilters), [assets, activeListFilters]);
 
   const handleCatChange = (v: string) => {
     setFCat(v);
@@ -140,7 +157,8 @@ export default function ActivosPage() {
   };
 
   const clearFilters = () => {
-    setQ(""); setFCat(""); setFProv(""); setFPob(""); setFTipo(""); setFEstado(""); setFFase("");
+    setQ(""); setFCat(""); setFProv(""); setFPob(""); setFTipo(""); setFEstado("");
+    setFFase(""); setFProceso(""); setFDeuda("");
     if (favOnly) setFavOnly(false);
   };
 
@@ -194,6 +212,16 @@ export default function ActivosPage() {
     }
   };
 
+  const groupCountByActivoId = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const a of assets) {
+      const id = getActivoId(a);
+      if (!id || id === "—") continue;
+      m.set(id, (m.get(id) ?? 0) + 1);
+    }
+    return m;
+  }, [assets]);
+
   const allChk = filtered.length > 0 && filtered.every(a => a.chk);
 
   const SortIcon = ({ col }: { col: SortCol }) => {
@@ -245,6 +273,8 @@ export default function ActivosPage() {
             <FilterSelect label="Tipología" value={fTipo} onChange={setFTipo} options={tipOptions} />
             <FilterSelect label="Estado" value={fEstado} onChange={setFEstado} options={estadoOptions} />
             <FilterSelect label="Situación" value={fFase} onChange={setFFase} options={faseOptions} />
+            <FilterSelect label="Proceso" value={fProceso} onChange={setFProceso} options={procesoOptions} />
+            <FilterSelect label="Deuda" value={fDeuda} onChange={setFDeuda} options={deudaOptions} />
             <div className="flex min-w-[90px] flex-col gap-1">
               <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Favoritos</label>
               <button
@@ -257,8 +287,7 @@ export default function ActivosPage() {
             </div>
             <div className="h-8 w-px self-end bg-border2" />
             <div className="flex gap-1.5 self-end">
-              <button className="rounded-md bg-navy px-4 py-[7px] text-xs font-medium text-white hover:bg-navy3">Buscar</button>
-              <button onClick={clearFilters} className="rounded-md border border-border px-2.5 py-[7px] text-muted transition-colors hover:border-red hover:text-red"><X size={14} /></button>
+              <button type="button" onClick={clearFilters} className="rounded-md border border-border px-2.5 py-[7px] text-muted transition-colors hover:border-red hover:text-red" title="Limpiar filtros"><X size={14} /></button>
             </div>
           </div>
         </div>
@@ -308,15 +337,15 @@ export default function ActivosPage() {
 
         {/* Table */}
         <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
-          <div className="grid grid-cols-[32px_28px_72px_100px_100px_1fr_56px_56px_100px_minmax(7rem,1fr)_90px_95px_28px] items-center gap-1.5 bg-navy px-3.5 py-2.5">
+          <div className="grid grid-cols-[32px_28px_72px_100px_100px_1fr_56px_56px_100px_minmax(6rem,1fr)_minmax(4.5rem,88px)_72px_90px_95px_28px] items-center gap-1.5 bg-navy px-3.5 py-2.5">
             <div
               className={`flex h-4 w-4 cursor-pointer items-center justify-center rounded-[3px] border-[1.5px] transition-all ${allChk ? "border-gold bg-gold text-white" : "border-white/25 hover:border-white/50"}`}
               onClick={() => toggleChkAll(filtered.map(a => a.id))}
             >{allChk && <Check size={10} strokeWidth={3} />}</div>
             <div />
-            {(["cat","prov","pob","addr","cp","sqm","tip","fase","pub","precio"] as SortCol[]).map(col => (
+            {(["cat","prov","pob","addr","cp","sqm","tip","fase","proceso","deuda","pub","precio"] as SortCol[]).map(col => (
               <div key={col} className={`flex cursor-pointer select-none items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wider transition-colors ${sortCol === col ? "text-gold" : "text-white/35 hover:text-white/60"}`} onClick={() => handleSort(col)}>
-                {{cat:"Cat.",prov:"Provincia",pob:"Población",addr:"Dirección",cp:"C.P.",sqm:"m²",tip:"Tipo",fase:"Situación",pub:"Estado",precio:"Precio"}[col]}
+                {{cat:"Cat.",prov:"Provincia",pob:"Población",addr:"Dirección",cp:"C.P.",sqm:"m²",tip:"Tipo",fase:"Situación",proceso:"Proceso",deuda:"Deuda",pub:"Estado",precio:"Precio"}[col]}
               </div>
             ))}
             <div />
@@ -329,7 +358,7 @@ export default function ActivosPage() {
               <Link
                 key={a.id}
                 href={`/admin/assets/${a.id}`}
-                className="grid grid-cols-[32px_28px_72px_100px_100px_1fr_56px_56px_100px_minmax(7rem,1fr)_90px_95px_28px] items-start gap-1.5 border-b border-border2 px-3.5 py-1.5 transition-colors last:border-b-0 hover:bg-cream/50 min-h-[46px]"
+                className="grid grid-cols-[32px_28px_72px_100px_100px_1fr_56px_56px_100px_minmax(6rem,1fr)_minmax(4.5rem,88px)_72px_90px_95px_28px] items-start gap-1.5 border-b border-border2 px-3.5 py-1.5 transition-colors last:border-b-0 hover:bg-cream/50 min-h-[46px]"
               >
                 <div
                   className={`flex h-4 w-4 cursor-pointer items-center justify-center rounded-[3px] border-[1.5px] transition-all ${a.chk ? "border-navy bg-navy text-white" : "border-border hover:border-navy/40"}`}
@@ -341,7 +370,14 @@ export default function ActivosPage() {
                 >
                   <Star size={14} className={`transition-all ${a.fav ? "fill-gold text-gold" : "text-border hover:text-gold/50"}`} />
                 </div>
-                <span className="truncate text-xs">{getCategoria(a)}</span>
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="truncate text-xs">{getCategoria(a)}</span>
+                  {(groupCountByActivoId.get(getActivoId(a)) ?? 0) > 1 && (
+                    <span className="w-fit rounded bg-navy/8 px-1 py-px text-[9px] font-semibold text-navy">
+                      {groupCountByActivoId.get(getActivoId(a))} inmuebles
+                    </span>
+                  )}
+                </span>
                 <span className="truncate text-xs">{a.prov}</span>
                 <span className="truncate text-xs">{a.pob}</span>
                 <span className="truncate text-xs text-muted">{displayAssetAddress(a)}</span>
@@ -349,6 +385,8 @@ export default function ActivosPage() {
                 <span className="text-xs text-muted">{fmtM(a.sqm)}</span>
                 <span className={`inline-flex w-fit rounded-md px-2 py-0.5 text-[10px] font-semibold ${pillClass[a.tipC] || ""}`}>{a.tip}</span>
                 <span className={`min-w-0 max-w-full rounded-md px-2 py-0.5 text-left text-[10px] font-semibold leading-snug whitespace-normal break-words ${pillClass[getFaseC(a)] || ""}`}>{getFaseInterna(a)}</span>
+                <span className="truncate text-[10px] text-muted" title={getProceso(a)}>{getProceso(a)}</span>
+                <span className="text-xs font-medium text-navy">{getDeudaTotal(a) != null ? fmt(getDeudaTotal(a)!) : "—"}</span>
                 <button
                   type="button"
                   onClick={e => { e.preventDefault(); e.stopPropagation(); void handleTogglePub(a.id); }}

@@ -23,10 +23,18 @@ test.describe("Bug 2 — portal asset detail", () => {
     ).toBeVisible();
   });
 
+  test("slug inexistente: muestra el candado de privacidad", async ({ page }) => {
+    await page.goto("/portal/inmueble/slug-inexistente-zzzzzz");
+    await expect(
+      page.getByText(/Esta propiedad no está disponible públicamente/),
+    ).toBeVisible();
+  });
+
   test("activo publicado: renderiza la ficha (sin candado)", async ({ page }) => {
     const realId = process.env.PLAYWRIGHT_PUBLIC_ASSET_ID;
-    test.skip(!realId, "PLAYWRIGHT_PUBLIC_ASSET_ID no definido — necesario un id real publicado en BD");
-    await page.goto(`/portal/${realId}`);
+    const realSlug = process.env.PLAYWRIGHT_PUBLIC_ASSET_SLUG;
+    test.skip(!realId && !realSlug, "PLAYWRIGHT_PUBLIC_ASSET_ID o _SLUG no definido");
+    await page.goto(realSlug ? `/portal/inmueble/${realSlug}` : `/portal/${realId}`);
     await expect(
       page.getByText(/Esta propiedad no está disponible públicamente/),
     ).not.toBeVisible();

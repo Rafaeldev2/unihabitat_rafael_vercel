@@ -4,6 +4,8 @@ import { useState, useMemo } from "react";
 import { useApp } from "@/lib/context";
 import Link from "next/link";
 import { Search, X, Plus, ChevronRight, Loader2, AlertCircle } from "lucide-react";
+import { createComprador } from "@/app/actions/compradores";
+import { toast } from "@/lib/toast";
 
 const pillClass: Record<string, string> = {
   "fp-pub": "bg-green/8 text-green",
@@ -32,6 +34,8 @@ export default function CompradoresPage() {
   const [fEstado, setFEstado] = useState("");
   const [fAgente, setFAgente] = useState("");
   const [fNda, setFNda] = useState("");
+  const [fAcceso, setFAcceso] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
 
   const agenteOptions = useMemo(() => {
     const set = new Set<string>();
@@ -47,12 +51,14 @@ export default function CompradoresPage() {
     let firmados = 0;
     let negociacion = 0;
     let cerradas = 0;
+    let sinAcceso = 0;
     for (const c of compradores) {
       if (c.nda === "Firmada") firmados += 1;
       if (NEGOCIACION_ESTADOS.has(c.estado)) negociacion += 1;
       if (CERRADO_ESTADOS.has(c.estado)) cerradas += 1;
+      if (c.acceso === "sin_acceso") sinAcceso += 1;
     }
-    return { total, firmados, negociacion, cerradas };
+    return { total, firmados, negociacion, cerradas, sinAcceso };
   }, [compradores]);
 
   const filtered = useMemo(() => {
@@ -61,6 +67,7 @@ export default function CompradoresPage() {
       if (fEstado && p.estado !== fEstado) return false;
       if (fAgente && p.agente !== fAgente) return false;
       if (fNda && p.nda !== fNda) return false;
+      if (fAcceso && p.acceso !== fAcceso) return false;
       if (q) {
         const blob = [p.nombre, p.email, p.tel, p.agente, p.estado, p.intereses]
           .join(" ")
@@ -69,7 +76,7 @@ export default function CompradoresPage() {
       }
       return true;
     });
-  }, [compradores, q, fTipo, fEstado, fAgente, fNda]);
+  }, [compradores, q, fTipo, fEstado, fAgente, fNda, fAcceso]);
 
   const clearFilters = () => {
     setQ("");
@@ -77,6 +84,7 @@ export default function CompradoresPage() {
     setFEstado("");
     setFAgente("");
     setFNda("");
+    setFAcceso("");
   };
 
   return (
@@ -87,10 +95,19 @@ export default function CompradoresPage() {
           <span className="rounded-md bg-cream px-2.5 py-0.5 text-xs font-medium text-muted">
             {compradoresLoading ? "Cargando…" : `${stats.total} compradores`}
           </span>
+          {stats.sinAcceso > 0 && (
+            <span className="rounded-md bg-orange/10 px-2.5 py-0.5 text-xs font-medium text-orange">
+              {stats.sinAcceso} sin acceso
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <span className="rounded-md bg-gold/10 px-2.5 py-1 text-xs font-medium text-gold">Admin</span>
-          <button className="flex items-center gap-1.5 rounded-lg bg-navy px-3.5 py-2 text-xs font-medium text-white hover:bg-navy3">
+          <button
+            type="button"
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-navy px-3.5 py-2 text-xs font-medium text-white hover:bg-navy3"
+          >
             <Plus size={14} /> Nuevo Comprador
           </button>
         </div>
@@ -117,12 +134,11 @@ export default function CompradoresPage() {
           </div>
         )}
 
-        {/* KPIs reales calculados desde Supabase */}
         <div className="mb-4 grid grid-cols-4 gap-3">
           <Kpi value={stats.total} label="Total compradores" />
           <Kpi value={stats.firmados} label="Con NDA firmada" />
           <Kpi value={stats.negociacion} label="En negociación" />
-          <Kpi value={stats.cerradas} label="Ops. cerradas" />
+          <Kpi value={stats.sinAcceso} label="Sin acceso portal" />
         </div>
 
         <div className="relative mb-3">
@@ -141,18 +157,22 @@ export default function CompradoresPage() {
             <FSelect label="Estado" value={fEstado} onChange={setFEstado} options={ESTADO_OPTIONS} />
             <FSelect label="Agente" value={fAgente} onChange={setFAgente} options={agenteOptions} />
             <FSelect label="NDA" value={fNda} onChange={setFNda} options={["Firmada", "Pendiente"]} />
+            <FSelect
+              label="Acceso"
+              value={fAcceso}
+              onChange={setFAcceso}
+              options={["activo", "sin_acceso"]}
+              optionLabels={{ activo: "Activo", sin_acceso: "Sin acceso" }}
+            />
             <div className="h-8 w-px self-end bg-border2" />
-            <div className="flex gap-1.5 self-end">
-              <button className="rounded-md bg-navy px-4 py-[7px] text-xs font-medium text-white hover:bg-navy3">
-                Buscar
-              </button>
-              <button
-                onClick={clearFilters}
-                className="rounded-md border border-border px-2.5 py-[7px] text-muted hover:border-red hover:text-red"
-              >
-                <X size={14} />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="self-end rounded-md border border-border px-2.5 py-[7px] text-muted hover:border-red hover:text-red"
+              title="Limpiar filtros"
+            >
+              <X size={14} />
+            </button>
           </div>
         </div>
 
@@ -162,14 +182,12 @@ export default function CompradoresPage() {
         </p>
 
         <div className="overflow-hidden rounded-lg border border-border bg-white shadow-sm">
-          <div className="grid grid-cols-[2fr_72px_120px_100px_100px_110px_100px_72px_28px] items-center gap-2 bg-navy px-3.5 py-2.5">
-            {["Cliente", "Tipo", "Agente", "Intereses", "Presupuesto", "Últ. actividad", "Estado", "NDA", ""].map(
-              (h) => (
-                <div key={h} className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
-                  {h}
-                </div>
-              ),
-            )}
+          <div className="grid grid-cols-[2fr_72px_88px_120px_100px_100px_72px_28px] items-center gap-2 bg-navy px-3.5 py-2.5">
+            {["Cliente", "Tipo", "Acceso", "Agente", "Presupuesto", "Estado", "NDA", ""].map((h, i) => (
+              <div key={`${h}-${i}`} className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                {h}
+              </div>
+            ))}
           </div>
 
           {compradoresLoading ? (
@@ -189,7 +207,7 @@ export default function CompradoresPage() {
               <Link
                 key={p.id}
                 href={`/admin/compradores/${p.id}`}
-                className="grid grid-cols-[2fr_72px_120px_100px_100px_110px_100px_72px_28px] items-center gap-2 border-b border-border2 px-3.5 transition-colors last:border-b-0 hover:bg-cream/50"
+                className="grid grid-cols-[2fr_72px_88px_120px_100px_100px_72px_28px] items-center gap-2 border-b border-border2 px-3.5 transition-colors last:border-b-0 hover:bg-cream/50"
                 style={{ height: 48 }}
               >
                 <div className="flex items-center gap-2 overflow-hidden">
@@ -209,10 +227,15 @@ export default function CompradoresPage() {
                 >
                   {p.tipo}
                 </span>
+                <span
+                  className={`inline-flex w-fit rounded-md px-2 py-0.5 text-[10px] font-semibold ${
+                    p.acceso === "activo" ? pillClass["fp-pub"] : pillClass["fp-sus"]
+                  }`}
+                >
+                  {p.acceso === "activo" ? "Activo" : "Sin acceso"}
+                </span>
                 <span className="truncate text-xs">{p.agente || "—"}</span>
-                <span className="truncate text-xs text-muted">{p.intereses || "—"}</span>
                 <span className="text-xs font-semibold text-navy">{p.presupuesto || "—"}</span>
-                <span className="text-xs text-muted">{p.actividad || "—"}</span>
                 <span className={`inline-flex w-fit rounded-md px-2 py-0.5 text-[10px] font-semibold ${pillClass[p.estadoC] || ""}`}>
                   {p.estado || "—"}
                 </span>
@@ -227,7 +250,140 @@ export default function CompradoresPage() {
           )}
         </div>
       </div>
+
+      {showCreate && (
+        <NuevoCompradorModal
+          onClose={() => setShowCreate(false)}
+          onCreated={async () => {
+            setShowCreate(false);
+            await refreshCompradores();
+          }}
+        />
+      )}
     </>
+  );
+}
+
+function NuevoCompradorModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: () => Promise<void>;
+}) {
+  const [nombre, setNombre] = useState("");
+  const [email, setEmail] = useState("");
+  const [tel, setTel] = useState("");
+  const [tipo, setTipo] = useState<"Privado" | "Free">("Privado");
+  const [acceso, setAcceso] = useState<"sin_acceso" | "activo">("sin_acceso");
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await createComprador({ nombre, email, tel, tipo, acceso });
+      toast.success("Comprador creado", {
+        description: acceso === "sin_acceso"
+          ? "Queda sin acceso al portal hasta que lo actives."
+          : "Tiene acceso activo al área privada.",
+      });
+      await onCreated();
+    } catch (err) {
+      toast.error("No se pudo crear", {
+        description: err instanceof Error ? err.message : "Error desconocido",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <form
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={(e) => void handleSubmit(e)}
+        className="w-full max-w-md rounded-xl border border-border bg-white p-5 shadow-xl"
+      >
+        <h2 className="mb-1 text-base font-semibold text-navy">Nuevo comprador</h2>
+        <p className="mb-4 text-xs text-muted">
+          Por defecto queda sin acceso al portal privado hasta activación manual.
+        </p>
+        <div className="flex flex-col gap-3">
+          <Field label="Nombre *" value={nombre} onChange={setNombre} required />
+          <Field label="Email *" value={email} onChange={setEmail} type="email" required />
+          <Field label="Teléfono" value={tel} onChange={setTel} />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Tipo</label>
+              <select
+                value={tipo}
+                onChange={(e) => setTipo(e.target.value as "Privado" | "Free")}
+                className="rounded-md border border-border bg-cream2 px-2.5 py-2 text-sm outline-none focus:border-navy"
+              >
+                <option value="Privado">Privado</option>
+                <option value="Free">Free</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">Acceso portal</label>
+              <select
+                value={acceso}
+                onChange={(e) => setAcceso(e.target.value as "sin_acceso" | "activo")}
+                className="rounded-md border border-border bg-cream2 px-2.5 py-2 text-sm outline-none focus:border-navy"
+              >
+                <option value="sin_acceso">Sin acceso</option>
+                <option value="activo">Activo</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-border px-3.5 py-2 text-xs font-medium text-navy hover:bg-cream"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex items-center gap-1.5 rounded-lg bg-navy px-3.5 py-2 text-xs font-medium text-white hover:bg-navy3 disabled:opacity-60"
+          >
+            {saving && <Loader2 size={14} className="animate-spin" />}
+            Crear
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  type = "text",
+  required,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+  required?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="text-[10px] font-semibold uppercase tracking-wider text-muted">{label}</label>
+      <input
+        type={type}
+        value={value}
+        required={required}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded-md border border-border bg-cream2 px-2.5 py-2 text-sm outline-none focus:border-navy focus:bg-white"
+      />
+    </div>
   );
 }
 
@@ -245,11 +401,13 @@ function FSelect({
   value,
   onChange,
   options,
+  optionLabels,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: string[];
+  optionLabels?: Record<string, string>;
 }) {
   return (
     <div className="flex min-w-[90px] flex-1 flex-col gap-1">
@@ -262,7 +420,7 @@ function FSelect({
         <option value="">Todos</option>
         {options.map((o) => (
           <option key={o} value={o}>
-            {o}
+            {optionLabels?.[o] ?? o}
           </option>
         ))}
       </select>

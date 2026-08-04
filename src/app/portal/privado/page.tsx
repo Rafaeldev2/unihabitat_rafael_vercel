@@ -8,7 +8,8 @@ import { ensureCompradorForEmail } from "@/app/actions/compradores";
 import { signOut } from "@/app/login/actions";
 import { createClient } from "@/lib/supabase/client";
 import type { Asset } from "@/lib/types";
-import { fmt, fmtM, shortAddr } from "@/lib/utils";
+import { fmtM, getPortalPriceDisplay, shortAddr } from "@/lib/utils";
+import { assetPrivateHref } from "@/lib/public-slug";
 import { shouldBackfillMapFromAddress } from "@/lib/map-default";
 import { useFavoritos } from "@/hooks/useFavoritos";
 import Link from "next/link";
@@ -168,7 +169,7 @@ export default function PortalPrivadoPage() {
   };
 
   const AssetCard = ({ a, badge }: { a: Asset; badge?: string }) => (
-    <Link href={`/portal/privado/${a.id}`} className="group overflow-hidden rounded-xl border border-border bg-white shadow-sm transition-all hover:shadow-md">
+    <Link href={assetPrivateHref(a)} className="group overflow-hidden rounded-xl border border-border bg-white shadow-sm transition-all hover:shadow-md">
       <div className="relative">
         <InteractiveMap
           key={`map-${a.id}-${a.lat ?? "x"}-${a.lng ?? "x"}`}
@@ -193,7 +194,7 @@ export default function PortalPrivadoPage() {
         <h3 className="text-base font-semibold text-navy">{a.pob}, {a.prov}</h3>
         <p className="mt-0.5 truncate text-xs text-muted">{shortAddr(a)}</p>
         <div className="mt-3 flex items-center justify-between">
-          <span className="text-lg font-bold text-navy">{a.precio ? fmt(a.precio) : "Haz tu Oferta"}</span>
+          <span className="text-lg font-bold text-navy">{getPortalPriceDisplay(a).value}</span>
           {a.sqm && <span className="text-xs text-muted">{fmtM(a.sqm)}</span>}
         </div>
       </div>

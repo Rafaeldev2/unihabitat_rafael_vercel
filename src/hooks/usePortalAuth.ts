@@ -38,7 +38,8 @@ export function usePortalAuth(): PortalAuthState {
           setPortalLoggedIn(true);
           setPortalAuthChecked(true);
           setRole(devRole);
-          if (devRole === "cliente") {
+          // Cliente y vendedor pueden presentar oferta / solicitar info en portal.
+          if (devRole === "cliente" || devRole === "vendedor") {
             setCurrentUser({ email: dev.email, nombre: dev.nombre });
           } else {
             setCurrentUser(null);
@@ -55,7 +56,7 @@ export function usePortalAuth(): PortalAuthState {
         if (user) {
           const userRole = normalizeRole(user.user_metadata?.role as string | undefined) ?? "cliente";
           setRole(userRole);
-          if (userRole === "cliente" && user.email) {
+          if ((userRole === "cliente" || userRole === "vendedor") && user.email) {
             setCurrentUser({
               email: user.email,
               nombre: (user.user_metadata?.nombre as string | undefined) || "Usuario",

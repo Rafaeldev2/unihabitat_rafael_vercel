@@ -8,6 +8,10 @@
 
 create table if not exists public.assets (
   id text primary key,
+  -- Referencia catastral limpia (UI / import). El PK compuesto vive en id.
+  referencia text default '',
+  -- Slug público opaco para /portal/inmueble/[slug] (sin catastral en URL).
+  public_slug text,
   cat text default '—',
   prov text default '—',
   pob text default '—',
@@ -194,6 +198,7 @@ create table if not exists public.notificaciones (
 create table if not exists public.ofertas (
   id uuid primary key default gen_random_uuid(),
   comprador_id text references public.compradores(id) on delete cascade,
+  vendedor_id text references public.vendedores(id) on delete set null,
   asset_id text references public.assets(id) on delete cascade,
   propuesta_euros numeric not null,
   comentarios text,
@@ -202,8 +207,18 @@ create table if not exists public.ofertas (
   nda_firmado_at timestamptz,
   created_at timestamptz default now(),
   updated_at timestamptz default now(),
-  unique (comprador_id, asset_id)
+  constraint ofertas_actor_chk check (comprador_id is not null or vendedor_id is not null)
 );
+
+create unique index if not exists ofertas_comprador_asset_uidx
+  on public.ofertas (comprador_id, asset_id)
+  where comprador_id is not null;
+
+create unique index if not exists ofertas_vendedor_asset_uidx
+  on public.ofertas (vendedor_id, asset_id)
+  where vendedor_id is not null;
+
+create index if not exists idx_ofertas_vendedor on public.ofertas (vendedor_id);
 
 -- COMPRADOR ↔ ASSETS invitation (admin shares assets with specific buyers)
 create table if not exists public.comprador_assets (

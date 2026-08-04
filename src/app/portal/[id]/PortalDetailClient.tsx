@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { fmt, fmtM, shortAddr, formatFullAddress, getDescriptionText, getCategoria } from "@/lib/utils";
+import { fmt, fmtM, shortAddr, formatFullAddress, getDescriptionText, getCategoria, getPortalPriceDisplay } from "@/lib/utils";
+import { assetPortalHref } from "@/lib/public-slug";
 import type { Asset } from "@/lib/types";
 import Link from "next/link";
 import {
@@ -129,7 +130,7 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
                 getCategoria(asset) === "NPL" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
               }`}>{getCategoria(asset)}</span>
             )}
-            <span className="text-sm font-bold text-navy">{asset.precio ? fmt(asset.precio) : "Haz tu Oferta"}</span>
+            <span className="text-sm font-bold text-navy">{getPortalPriceDisplay(asset).value}</span>
           </div>
         </div>
       </div>
@@ -252,59 +253,70 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
               <section id="colaterales" ref={el => { sectionRefs.current.colaterales = el; }}>
                 <div className="rounded-lg border border-border bg-white p-5 shadow-sm">
                   <SectionTitle>
-                    Activos colaterales asociados a la deuda ({siblings.length + 1})
+                    Grupo del contrato ({siblings.length + 1} inmuebles)
                   </SectionTitle>
                   <p className="mb-4 text-xs text-muted">
-                    Este activo forma parte de un grupo de {siblings.length + 1} inmuebles vinculados al mismo contrato.
+                    Mismo ID1 / activo: {siblings.length + 1} inmuebles publicados (coherente con el listado).
                   </p>
                   <div className="flex flex-col gap-3">
-                    {siblings.map(s => (
-                      <Link
-                        key={s.id}
-                        href={`/portal/${s.id}`}
-                        className="group flex gap-4 rounded-lg border border-border p-3 transition-all hover:border-gold/40 hover:shadow-sm"
-                      >
-                        <InteractiveMap
-                          key={`map-${s.id}-${s.lat ?? "x"}-${s.lng ?? "x"}`}
-                          lat={s.lat}
-                          lng={s.lng}
-                          mapImageUrl={s.map}
-                          className="h-[80px] w-[120px] shrink-0 rounded-md"
-                        />
-                        <div className="flex min-w-0 flex-1 flex-col justify-center">
-                          <div className="text-sm font-semibold text-navy group-hover:text-gold">
-                            {s.bien || s.tip} en {shortAddr(s)}
-                          </div>
-                          <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted">
-                            <span className="flex items-center gap-1">
-                              <MapPin size={10} /> {s.pob}, {s.prov}
-                            </span>
-                            {s.sqm && (
+                    {[{ ...asset, _current: true as const }, ...siblings.map((s) => ({ ...s, _current: false as const }))].map((s) => {
+                      const price = getPortalPriceDisplay(s);
+                      const body = (
+                        <>
+                          <InteractiveMap
+                            key={`map-${s.id}-${s.lat ?? "x"}-${s.lng ?? "x"}`}
+                            lat={s.lat}
+                            lng={s.lng}
+                            mapImageUrl={s.map}
+                            className="h-[80px] w-[120px] shrink-0 rounded-md"
+                          />
+                          <div className="flex min-w-0 flex-1 flex-col justify-center">
+                            <div className="text-sm font-semibold text-navy group-hover:text-gold">
+                              {s._current ? "Este inmueble · " : ""}
+                              {s.bien || s.tip} en {shortAddr(s)}
+                            </div>
+                            <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted">
                               <span className="flex items-center gap-1">
-                                <Ruler size={10} /> {fmtM(s.sqm)}
+                                <MapPin size={10} /> {s.pob}, {s.prov}
                               </span>
+                              {s.sqm && (
+                                <span className="flex items-center gap-1">
+                                  <Ruler size={10} /> {fmtM(s.sqm)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 flex-col items-end justify-center">
+                            <span className="text-[10px] uppercase text-muted">{price.label}</span>
+                            <span className="text-sm font-bold text-navy">{price.value}</span>
+                            {getCategoria(s) !== "—" && (
+                              <span className={`mt-1 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${
+                                getCategoria(s) === "NPL" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
+                              }`}>{getCategoria(s)}</span>
                             )}
                           </div>
-                          {sensitiveVisible && s.referencia && (
-                            <div className="mt-1.5 inline-flex w-fit items-center gap-1 rounded border border-border px-2 py-0.5 font-mono text-[10px] text-muted">
-                              Ref: {s.referencia}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex shrink-0 flex-col items-end justify-center">
-                          {s.precio ? (
-                            <span className="text-sm font-bold text-navy">{fmt(s.precio)}</span>
-                          ) : (
-                            <span className="text-xs text-muted">Consultar</span>
-                          )}
-                          {getCategoria(s) !== "—" && (
-                            <span className={`mt-1 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${
-                              getCategoria(s) === "NPL" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
-                            }`}>{getCategoria(s)}</span>
-                          )}
-                        </div>
-                      </Link>
-                    ))}
+                        </>
+                      );
+                      if (s._current) {
+                        return (
+                          <div
+                            key={s.id}
+                            className="flex gap-4 rounded-lg border border-gold/40 bg-gold/5 p-3"
+                          >
+                            {body}
+                          </div>
+                        );
+                      }
+                      return (
+                        <Link
+                          key={s.id}
+                          href={assetPortalHref(s)}
+                          className="group flex gap-4 rounded-lg border border-border p-3 transition-all hover:border-gold/40 hover:shadow-sm"
+                        >
+                          {body}
+                        </Link>
+                      );
+                    })}
                   </div>
                 </div>
               </section>
@@ -316,15 +328,22 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
             <div className="flex flex-col gap-4">
               {/* Price card */}
               <div className="rounded-lg border border-border bg-white p-5 shadow-sm">
-                <div className="mb-1 text-2xl font-bold text-navy">{asset.precio ? fmt(asset.precio) : "Haz tu Oferta"}</div>
-                {asset.precio && (
-                  <div className="mb-1 text-[11px] text-muted">Precio estimado</div>
-                )}
-                {asset.sqm && asset.precio && (
-                  <div className="mb-4 text-xs text-muted">
-                    {asset.sqm} m² · {Math.round(asset.precio / asset.sqm).toLocaleString("es-ES")} €/m²
-                  </div>
-                )}
+                {(() => {
+                  const price = getPortalPriceDisplay(asset);
+                  return (
+                    <>
+                      <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">{price.label}</div>
+                      <div className="mb-1 text-2xl font-bold text-navy">{price.value}</div>
+                      {price.kind === "precio" && asset.sqm && asset.precio ? (
+                        <div className="mb-4 text-xs text-muted">
+                          {asset.sqm} m² · {Math.round(asset.precio / asset.sqm).toLocaleString("es-ES")} €/m²
+                        </div>
+                      ) : (
+                        <div className="mb-4" />
+                      )}
+                    </>
+                  );
+                })()}
 
                 {/* Quick data */}
                 <div className="mb-4 flex flex-col gap-1.5 border-b border-border pb-4">
@@ -429,9 +448,9 @@ export default function PortalDetailClient({ asset, siblings }: PortalDetailClie
                         className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-border accent-navy" />
                       <span>
                         He leído y acepto el{" "}
-                        <a href="#" className="font-medium text-navy underline underline-offset-2">Aviso Legal</a>{" "}
+                        <a href="/legal/privacidad#aviso-legal" className="font-medium text-navy underline underline-offset-2">Aviso Legal</a>{" "}
                         y la{" "}
-                        <a href="#" className="font-medium text-navy underline underline-offset-2">Política de Privacidad</a>
+                        <a href="/legal/privacidad#privacidad" className="font-medium text-navy underline underline-offset-2">Política de Privacidad</a>
                       </span>
                     </label>
                     {contactError && (
@@ -588,7 +607,7 @@ function OfertaModal({
           <div className="mb-4 rounded-lg border border-border bg-cream2 p-3">
             <div className="text-xs font-semibold text-muted">Activo</div>
             <div className="text-sm font-medium text-navy">{asset.pob}, {asset.prov}</div>
-            <div className="text-xs text-muted">{asset.id}</div>
+            <div className="text-xs text-muted">{asset.tip}</div>
           </div>
 
           <div className="mb-4">
@@ -601,9 +620,15 @@ function OfertaModal({
                 className="w-full rounded-lg border border-border bg-white py-2.5 pl-8 pr-4 text-sm text-text outline-none placeholder:text-muted/70 focus:border-navy focus:ring-2 focus:ring-navy/5 disabled:opacity-50"
               />
             </div>
-            {asset.precio && (
-              <p className="mt-1 text-[11px] text-muted">Precio estimado: {fmt(asset.precio)}</p>
-            )}
+            {(() => {
+              const price = getPortalPriceDisplay(asset);
+              if (price.kind === "oferta") return null;
+              return (
+                <p className="mt-1 text-[11px] text-muted">
+                  {price.label}: {price.value}
+                </p>
+              );
+            })()}
           </div>
 
           <div className="mb-4">

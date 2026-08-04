@@ -3,27 +3,15 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Search, X, Building2, ChevronDown } from "lucide-react";
+import { Search, X, ChevronDown } from "lucide-react";
 import { SiteFooter } from "@/components/SiteFooter";
+import { BrandMark } from "@/components/BrandMark";
 import { useApp } from "@/lib/context";
-import { normalizeTipo } from "@/lib/normalize-excel";
-
-const TIPOS_VALIDOS = [
-  "Casa / Chalet",
-  "Comercial",
-  "Edificio",
-  "Garaje",
-  "Nave",
-  "Obra Sin Finalizar",
-  "Oficina",
-  "Piso",
-  "Suelo",
-  "Suelo Industrial",
-  "Trastero",
-  "Vivienda",
-];
-
-const TIPOS_VALIDOS_SET = new Set(TIPOS_VALIDOS);
+import {
+  buildAssetListFilterOptions,
+  buildCatFilterOptions,
+  portalCatalogAssets,
+} from "@/lib/asset-filters";
 
 const STATS = [
   { value: "500+", label: "Activos publicados" },
@@ -34,43 +22,51 @@ const STATS = [
 export default function HomePage() {
   const router = useRouter();
   const { assets } = useApp();
+  const [cat, setCat] = useState("");
+  const [prov, setProv] = useState("");
+  const [pob, setPob] = useState("");
   const [tipo, setTipo] = useState("");
-  const [provincia, setProvincia] = useState("");
-  const [poblacion, setPoblacion] = useState("");
 
-  const publicAssets = useMemo(() => assets.filter(a => a.pub), [assets]);
+  const catalogAssets = useMemo(() => portalCatalogAssets(assets, false), [assets]);
 
-  const tipoOptions = useMemo(() => {
-    const normalized = publicAssets
-      .map(a => normalizeTipo(a.tip))
-      .filter(t => t && t !== "—" && TIPOS_VALIDOS_SET.has(t));
-    const fromData = [...new Set(normalized)].sort((a, b) => a.localeCompare(b));
-    return fromData.length > 0 ? fromData : TIPOS_VALIDOS;
-  }, [publicAssets]);
-
-  const provinciaOptions = useMemo(
-    () => [...new Set(publicAssets.map(a => a.prov).filter(v => v && v !== "—"))].sort((a, b) => a.localeCompare(b)),
-    [publicAssets],
+  const activeFilters = useMemo(
+    () => ({ cat, prov, pob, tipo }),
+    [cat, prov, pob, tipo],
   );
 
-  const poblacionOptions = useMemo(
-    () => [...new Set(publicAssets.map(a => a.pob).filter(v => v && v !== "—"))].sort((a, b) => a.localeCompare(b)),
-    [publicAssets],
+  const { prov: provOptions, pob: pobOptions, tip: tipOptions } = useMemo(
+    () => buildAssetListFilterOptions(catalogAssets, activeFilters),
+    [catalogAssets, activeFilters],
   );
+
+  const catOptions = useMemo(() => buildCatFilterOptions(assets), [assets]);
+
+  function handleCatChange(value: string) {
+    setCat(value);
+    setProv("");
+    setPob("");
+  }
+
+  function handleProvChange(value: string) {
+    setProv(value);
+    if (pob) setPob("");
+  }
 
   function handleSearch() {
     const params = new URLSearchParams();
+    if (cat) params.set("cat", cat);
+    if (prov) params.set("prov", prov);
+    if (pob) params.set("pob", pob);
     if (tipo) params.set("tipo", tipo);
-    if (provincia) params.set("prov", provincia);
-    if (poblacion) params.set("pob", poblacion);
     const qs = params.toString();
     router.push(`/portal${qs ? `?${qs}` : ""}`);
   }
 
   function handleReset() {
+    setCat("");
+    setProv("");
+    setPob("");
     setTipo("");
-    setProvincia("");
-    setPoblacion("");
   }
 
   return (
@@ -78,11 +74,8 @@ export default function HomePage() {
       {/* ── NAV ── */}
       <header className="fixed inset-x-0 top-0 z-50 border-b border-black/5 bg-white/95 backdrop-blur-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
-          <Link href="/" className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center">
-            <img src="/LogoAzul.svg" alt="Unihabitat" width={28} height={28} className="h-7 w-auto" />
-            </div>
-            <span className="text-lg font-bold text-navy tracking-tight">Unihabitat<span className="text-gold">*</span></span>
+          <Link href="/" className="flex items-center">
+            <BrandMark size={28} textClassName="text-lg text-navy" />
           </Link>
           <nav className="hidden items-center gap-6 text-sm font-medium text-navy/70 md:flex">
             <Link href="/portal" className="transition-colors hover:text-navy">Propiedades</Link>
@@ -157,20 +150,20 @@ export default function HomePage() {
               </div>
 
               <div className="space-y-4 p-6">
-                {/* Tipo */}
+                {/* Categoría */}
                 <div>
                   <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-navy/50">
-                    Tipo
+                    Categoría
                   </label>
                   <div className="relative">
                     <select
-                      value={tipo}
-                      onChange={(e) => setTipo(e.target.value)}
+                      value={cat}
+                      onChange={(e) => handleCatChange(e.target.value)}
                       className="w-full appearance-none rounded-lg border border-border bg-cream/50 px-4 py-3 pr-10 text-sm text-navy focus:border-navy/40 focus:outline-none focus:ring-2 focus:ring-navy/10"
                     >
                       <option value="">Todas</option>
-                      {tipoOptions.map((t) => (
-                        <option key={t} value={t}>{t}</option>
+                      {catOptions.map((c) => (
+                        <option key={c} value={c}>{c}</option>
                       ))}
                     </select>
                     <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-navy/40" />
@@ -184,12 +177,12 @@ export default function HomePage() {
                   </label>
                   <div className="relative">
                     <select
-                      value={provincia}
-                      onChange={(e) => setProvincia(e.target.value)}
+                      value={prov}
+                      onChange={(e) => handleProvChange(e.target.value)}
                       className="w-full appearance-none rounded-lg border border-border bg-cream/50 px-4 py-3 pr-10 text-sm text-navy focus:border-navy/40 focus:outline-none focus:ring-2 focus:ring-navy/10"
                     >
                       <option value="">Todas</option>
-                      {provinciaOptions.map((p) => (
+                      {provOptions.map((p) => (
                         <option key={p} value={p}>{p}</option>
                       ))}
                     </select>
@@ -204,13 +197,33 @@ export default function HomePage() {
                   </label>
                   <div className="relative">
                     <select
-                      value={poblacion}
-                      onChange={(e) => setPoblacion(e.target.value)}
+                      value={pob}
+                      onChange={(e) => setPob(e.target.value)}
                       className="w-full appearance-none rounded-lg border border-border bg-cream/50 px-4 py-3 pr-10 text-sm text-navy focus:border-navy/40 focus:outline-none focus:ring-2 focus:ring-navy/10"
                     >
                       <option value="">Todas</option>
-                      {poblacionOptions.map((c) => (
+                      {pobOptions.map((c) => (
                         <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-navy/40" />
+                  </div>
+                </div>
+
+                {/* Tipología */}
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-navy/50">
+                    Tipología
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={tipo}
+                      onChange={(e) => setTipo(e.target.value)}
+                      className="w-full appearance-none rounded-lg border border-border bg-cream/50 px-4 py-3 pr-10 text-sm text-navy focus:border-navy/40 focus:outline-none focus:ring-2 focus:ring-navy/10"
+                    >
+                      <option value="">Todas</option>
+                      {tipOptions.map((t) => (
+                        <option key={t} value={t}>{t}</option>
                       ))}
                     </select>
                     <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-navy/40" />
@@ -250,15 +263,16 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl px-6">
           <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
             {[
-              { title: "Cesión de Remate", desc: "Adquiere activos inmobiliarios con grandes descuentos sobre el valor de tasación.", cat: "CDR" },
-              { title: "Carteras NPL", desc: "Accede a carteras completas de préstamos hipotecarios con potencial de máxima rentabilidad.", cat: "NPL" },
-              { title: "REO Directo", desc: "Inmuebles adjudicados listos para comprar, sin cargas ocultas ni procesos judiciales.", cat: "REO" },
+              { title: "Cesión de Remate", desc: "Adquiere activos inmobiliarios con grandes descuentos sobre el valor de tasación.", href: "/portal?cat=CDR" },
+              { title: "Carteras NPL", desc: "Accede a carteras completas de préstamos hipotecarios con potencial de máxima rentabilidad.", href: "/portal?cat=NPL" },
+              { title: "Catálogo completo", desc: "Explora todos los activos publicados (CDR, NPL y resto de categorías).", href: "/portal" },
             ].map((f) => (
               <div key={f.title} className="rounded-xl border border-border bg-white p-6 shadow-sm">
                 <h3 className="text-base font-bold text-navy">{f.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-navy/50">{f.desc}</p>
                 <button
-                  onClick={() => router.push(`/portal?cat=${f.cat}`)}
+                  type="button"
+                  onClick={() => router.push(f.href)}
                   className="mt-4 text-xs font-semibold text-gold underline underline-offset-2 hover:text-gold2"
                 >
                   Ver propiedades →
