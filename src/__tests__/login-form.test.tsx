@@ -149,6 +149,7 @@ describe("LoginPage registration form", () => {
     await user.type(screen.getByPlaceholderText(/000 00 00 00/), "612345678");
     await user.type(screen.getByPlaceholderText("tu@email.com"), "juan@test.com");
     await user.type(screen.getByPlaceholderText("Mínimo 6 caracteres"), "secret123");
+    await user.type(screen.getByPlaceholderText("Repite la contraseña"), "secret123");
 
     // Submit
     await user.click(screen.getByText("Crear cuenta"));
@@ -170,6 +171,7 @@ describe("LoginPage registration form", () => {
     await user.type(screen.getByPlaceholderText("Tu nombre"), "Ana");
     await user.type(screen.getByPlaceholderText("tu@email.com"), "ana@test.com");
     await user.type(screen.getByPlaceholderText("Mínimo 6 caracteres"), "secret123");
+    await user.type(screen.getByPlaceholderText("Repite la contraseña"), "secret123");
 
     await user.click(screen.getByText("Crear cuenta"));
 
