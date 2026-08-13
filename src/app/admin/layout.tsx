@@ -91,7 +91,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </Link>
 
         {session && (
-          <div className="mb-4 flex flex-col items-center gap-1">
+          <div className="mb-4 flex flex-shrink-0 flex-col items-center gap-1">
             <div
               className="flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-bold text-white"
               style={{ background: session.role === "admin" ? "linear-gradient(135deg,#b8933a,#0d1b2a)" : "linear-gradient(135deg,#2563a8,#0d2a4a)" }}
@@ -106,7 +106,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         )}
 
-        <nav className="flex flex-1 flex-col items-center gap-1">
+        <nav className="flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto">
           {visibleNav.map((item) => {
             const active = isActive(item.href);
             const Icon = item.icon;
@@ -127,7 +127,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           })}
         </nav>
 
-        <form action={signOut} className="mt-auto">
+        <form action={signOut} className="mt-auto flex-shrink-0">
           <button
             type="submit"
             className="flex w-14 flex-col items-center justify-center gap-1.5 rounded-lg py-2.5 text-white/40 transition-all hover:bg-white/[0.05] hover:text-red-400"

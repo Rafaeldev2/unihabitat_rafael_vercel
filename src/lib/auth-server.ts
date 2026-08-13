@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import type { UserSession, SectionId } from "./permissions";
+import { isDevAuthEnabled, resolveRole } from "./auth-role";
 
 /**
  * Resuelve la sesión actual desde cookies. Prioriza `dev-auth` (cuentas demo)
@@ -9,7 +10,7 @@ import type { UserSession, SectionId } from "./permissions";
 export async function getServerSession(): Promise<UserSession | null> {
   const cookieStore = await cookies();
   const raw = cookieStore.get("dev-auth")?.value;
-  if (raw) {
+  if (raw && isDevAuthEnabled()) {
     try {
       return JSON.parse(raw) as UserSession;
     } catch {
@@ -28,12 +29,8 @@ export async function getServerSession(): Promise<UserSession | null> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
-    const role =
-      (user.user_metadata?.role as string | undefined) === "admin"
-        ? "admin"
-        : (user.user_metadata?.role as string | undefined) === "vendedor"
-        ? "vendedor"
-        : "cliente";
+    const metadataRole = user.user_metadata?.role as string | undefined;
+    const role = resolveRole(metadataRole, user.email);
 
     const nombre =
       (user.user_metadata?.nombre as string | undefined) ||

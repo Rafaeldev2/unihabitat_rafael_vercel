@@ -6,8 +6,29 @@ type SessionInfo = {
   email?: string;
 } | null;
 
+const VALID_ROLES = new Set(["admin", "vendedor"]);
+const CORP_DOMAIN = "@unihabitat.net";
+
+function isDevAuthEnabled(): boolean {
+  if (process.env.ALLOW_DEV_AUTH === "true") return true;
+  return process.env.NODE_ENV !== "production";
+}
+
+function resolveRoleMiddleware(metadataRole: string | undefined | null, email: string | undefined | null): "admin" | "vendedor" | "cliente" {
+  const roleStr = metadataRole?.toLowerCase()?.trim();
+  if (roleStr && VALID_ROLES.has(roleStr)) {
+    return roleStr as "admin" | "vendedor";
+  }
+  const emailLower = email?.toLowerCase()?.trim() ?? "";
+  if (emailLower.endsWith(CORP_DOMAIN)) {
+    return "admin";
+  }
+  return "cliente";
+}
+
 /** Lee el dev-auth cookie usado para los usuarios demo en local. */
 function getDevUser(request: NextRequest): SessionInfo {
+  if (!isDevAuthEnabled()) return null;
   const raw = request.cookies.get("dev-auth")?.value;
   if (!raw) return null;
   try {
@@ -73,11 +94,8 @@ async function getSupabaseUser(
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return { user: null, outResponse };
-    const role =
-      ((user.user_metadata?.role as string | undefined) === "admin" ||
-        (user.user_metadata?.role as string | undefined) === "vendedor")
-        ? (user.user_metadata?.role as "admin" | "vendedor")
-        : "cliente";
+    const metadataRole = user.user_metadata?.role as string | undefined;
+    const role = resolveRoleMiddleware(metadataRole, user.email);
     return { user: { role, email: user.email ?? undefined }, outResponse };
   } catch {
     return { user: null, outResponse };

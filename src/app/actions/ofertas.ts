@@ -175,7 +175,9 @@ export async function createOfertaAdmin(params: {
   let vendedorId: string | null = null;
 
   if (session.role === "vendedor") {
-    if (!session.vendedorId) throw new Error("Vendedor sin ID asignado");
+    if (!session.vendedorId) {
+      throw new Error("El agente no tiene una fila vendedores asociada. Contacte al administrador.");
+    }
     vendedorId = session.vendedorId;
     const { data: vendRow, error: vendErr } = await supabase
       .from("vendedores")
@@ -183,7 +185,9 @@ export async function createOfertaAdmin(params: {
       .eq("id", vendedorId)
       .maybeSingle();
     if (vendErr) throw new Error(vendErr.message);
-    if (!vendRow) throw new Error("Agente no encontrado");
+    if (!vendRow) {
+      throw new Error("La fila vendedores del agente no existe en la base de datos. Contacte al administrador.");
+    }
   } else {
     compradorId = params.compradorId?.trim() || null;
     if (!compradorId) throw new Error("Selecciona un comprador");
@@ -255,10 +259,20 @@ export async function fetchOfertasPendientes(): Promise<OfertaRow[]> {
   return (data ?? []) as OfertaRow[];
 }
 
-/** Todas las ofertas (histórico admin). Filtro opcional por estado. */
+/**
+ * Ofertas para el panel admin/vendedor.
+ * Admin: ve todas. Vendedor: solo las que tienen su vendedor_id.
+ * Filtro opcional por estado.
+ */
 export async function fetchOfertas(estado?: OfertaRow["estado"] | ""): Promise<OfertaRow[]> {
+  const session = await getServerSession();
   const supabase = await createClient();
   let q = supabase.from("ofertas").select("*").order("created_at", { ascending: false });
+
+  if (session?.role === "vendedor" && session.vendedorId) {
+    q = q.eq("vendedor_id", session.vendedorId);
+  }
+
   if (estado) q = q.eq("estado", estado);
   const { data, error } = await q;
   if (error) throw new Error(error.message);

@@ -4,6 +4,7 @@ import { AppProvider } from "@/lib/context";
 import { CookieConsentBanner } from "@/components/CookieConsentBanner";
 import { Toaster } from "@/components/Toaster";
 import { WelcomeToast } from "@/components/WelcomeToast";
+import { StagingCoach } from "@/components/StagingCoach";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <CookieConsentBanner />
         <Toaster />
         <WelcomeToast />
+        <StagingCoach />
       </body>
     </html>
   );

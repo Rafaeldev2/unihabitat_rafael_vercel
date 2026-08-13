@@ -271,4 +271,48 @@ describe("createOfertaAdmin", () => {
       }),
     ).rejects.toThrow(/Activo no encontrado/);
   });
+
+  it("agente sin fila vendedores devuelve error explícito", async () => {
+    requireAdminOrVendor.mockResolvedValue({
+      role: "vendedor",
+      nombre: "Agente Sin Fila",
+      email: "agente@test",
+      vendedorId: undefined,
+    });
+    const sb = makeOfertaSupabaseMock({ asset: { id: "A1" } });
+    vi.doMock("@/lib/supabase/server", () => ({
+      createClient: vi.fn(async () => sb.client),
+      createServiceClient: vi.fn(async () => sb.client),
+    }));
+    const { createOfertaAdmin } = await import("@/app/actions/ofertas");
+
+    await expect(
+      createOfertaAdmin({
+        assetId: "A1",
+        propuestaEuros: 1000,
+      }),
+    ).rejects.toThrow(/no tiene una fila vendedores/i);
+  });
+
+  it("agente cuya fila vendedores no existe en DB devuelve error explícito", async () => {
+    requireAdminOrVendor.mockResolvedValue({
+      role: "vendedor",
+      nombre: "Agente Borrado",
+      email: "agente@test",
+      vendedorId: "V_NONEXISTENT",
+    });
+    const sb = makeOfertaSupabaseMock({ asset: { id: "A1" }, vendedor: null });
+    vi.doMock("@/lib/supabase/server", () => ({
+      createClient: vi.fn(async () => sb.client),
+      createServiceClient: vi.fn(async () => sb.client),
+    }));
+    const { createOfertaAdmin } = await import("@/app/actions/ofertas");
+
+    await expect(
+      createOfertaAdmin({
+        assetId: "A1",
+        propuestaEuros: 1000,
+      }),
+    ).rejects.toThrow(/fila vendedores.*no existe/i);
+  });
 });
