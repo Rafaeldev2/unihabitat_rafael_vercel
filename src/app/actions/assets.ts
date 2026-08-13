@@ -160,6 +160,63 @@ export async function fetchAssetById(id: string): Promise<Asset | null> {
   return asset;
 }
 
+/**
+ * Fetches sibling assets sharing the same activoId (ID1) for admin view.
+ * Returns all assets (not just public ones) linked via propiedades.activo_id.
+ * Excludes the current asset from the result.
+ */
+export async function fetchAssetsByActivoIdForAdmin(activoId: string, excludeId?: string): Promise<Asset[]> {
+  const key = activoId?.trim();
+  if (!key || key === "—") return [];
+  await requireAdminOrVendor();
+  const supabase = await createServiceClient();
+
+  const { data: propRows, error: propErr } = await supabase
+    .from("propiedades")
+    .select("inmueble_id")
+    .eq("activo_id", key);
+  if (propErr) throw new Error(propErr.message);
+
+  let inmuebleIds = [...new Set((propRows ?? []).map((r) => r.inmueble_id as string).filter(Boolean))];
+  if (excludeId) {
+    inmuebleIds = inmuebleIds.filter((id) => id !== excludeId);
+  }
+  if (inmuebleIds.length === 0) return [];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const assetRows: any[] = [];
+  for (let i = 0; i < inmuebleIds.length; i += POSTGREST_PAGE_SIZE) {
+    const slice = inmuebleIds.slice(i, i + POSTGREST_PAGE_SIZE);
+    const { data, error } = await supabase
+      .from("assets")
+      .select("*")
+      .in("id", slice);
+    if (error) throw new Error(error.message);
+    if (data) assetRows.push(...data);
+  }
+  const inmuebles = assetRows.map(rowToAsset);
+  if (inmuebles.length === 0) return inmuebles;
+
+  const ids = inmuebles.map((a) => a.id);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const propsCollected: any[] = [];
+  for (let i = 0; i < ids.length; i += POSTGREST_PAGE_SIZE) {
+    const slice = ids.slice(i, i + POSTGREST_PAGE_SIZE);
+    const { data, error } = await supabase.from("propiedades").select("*").in("inmueble_id", slice);
+    if (error) throw new Error(error.message);
+    if (data) propsCollected.push(...data);
+  }
+  const byInmueble = new Map<string, ReturnType<typeof rowToPropiedad>[]>();
+  for (const row of propsCollected) {
+    const p = rowToPropiedad(row);
+    const list = byInmueble.get(p.inmuebleId);
+    if (list) list.push(p);
+    else byInmueble.set(p.inmuebleId, [p]);
+  }
+  for (const a of inmuebles) a.propiedades = byInmueble.get(a.id) ?? [];
+  return inmuebles;
+}
+
 /** Resuelve ficha pública/privada por slug opaco (sin catastral en URL). */
 export async function fetchAssetByPublicSlug(slug: string): Promise<Asset | null> {
   const key = slug?.trim();

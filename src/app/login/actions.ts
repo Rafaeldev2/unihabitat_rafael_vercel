@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { upsertComprador, ensureCompradorForEmail } from "@/app/actions/compradores";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { isDevAuthEnabled, resolveRole, isDemoEmail } from "@/lib/auth-role";
 
 const cookieBase = {
   path: "/" as const,
@@ -17,6 +18,7 @@ const cookieBase = {
 // ── Demo / dev users (bypass de Supabase Auth) ──
 // Sirven para roleplay local sin necesidad de tener usuarios reales en
 // `auth.users`. Cualquier email fuera de esta lista pasa por Supabase Auth.
+// Only available when isDevAuthEnabled() returns true.
 const DEV_USERS: Record<string, { password: string; role: string; nombre: string }> = {
   "admin@propcrm.com": { password: "Admin1234!", role: "admin", nombre: "Administrador" },
   "cliente@propcrm.com": { password: "Cliente1234!", role: "cliente", nombre: "Cliente Demo" },
@@ -127,8 +129,8 @@ export async function signIn(formData: FormData) {
     return { error: "Introduce tu contraseña." };
   }
 
-  // 1) Cuentas demo: bypass total de Supabase Auth.
-  if (DEV_USERS[emailKey]) {
+  // 1) Cuentas demo: bypass total de Supabase Auth (solo en dev/staging).
+  if (isDevAuthEnabled() && DEV_USERS[emailKey]) {
     const devResult = await signInDevUser(emailKey, passwordKey, redirectTo);
     if (devResult.error) return devResult;
     redirect(withWelcome(destinationForRole(DEV_USERS[emailKey].role, redirectTo)));
@@ -201,7 +203,8 @@ async function trySupabaseSignIn(
     return { error: { error: "Email o contraseña incorrectos." } };
   }
 
-  role = (data.user?.user_metadata?.role as string | undefined) ?? "cliente";
+  const metadataRole = data.user?.user_metadata?.role as string | undefined;
+  role = resolveRole(metadataRole, data.user?.email);
 
   // Asegura que exista una fila de comprador para este usuario (idempotente).
   if (role === "cliente" && data.user?.email) {
@@ -265,8 +268,11 @@ export async function signUp(formData: FormData): Promise<{ error?: string }> {
   if (!email) return { error: "Introduce un email válido." };
   if (password.length < 6) return { error: "La contraseña debe tener al menos 6 caracteres." };
   if (!nombre) return { error: "Introduce tu nombre." };
-  if (DEV_USERS[email]) {
+  if (isDevAuthEnabled() && DEV_USERS[email]) {
     return { error: "Este email está reservado para una cuenta demo." };
+  }
+  if (isDemoEmail(email)) {
+    return { error: "No se puede registrar con un email @propcrm.com" };
   }
 
   const initials = nombre
@@ -427,5 +433,74 @@ export async function getSession() {
     return JSON.parse(raw);
   } catch {
     return null;
+  }
+}
+
+export async function requestPasswordReset(formData: FormData): Promise<{ error?: string; success?: boolean }> {
+  const emailRaw = formData.get("email");
+  const email = normalizeEmailKey(emailRaw);
+
+  if (!email) {
+    return { error: "Introduce un email válido." };
+  }
+
+  if (isDemoEmail(email)) {
+    return { error: "Las cuentas demo no pueden restablecer su contraseña." };
+  }
+
+  try {
+    const supabase = await createClient();
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_ORIGIN || "";
+    const redirectTo = appUrl ? `${appUrl}/login/reset` : undefined;
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo,
+    });
+
+    if (error) {
+      console.warn("[requestPasswordReset] Supabase error:", error.message);
+      if (/rate limit/i.test(error.message)) {
+        return { error: "Demasiados intentos. Espera unos minutos e inténtalo de nuevo." };
+      }
+      return { error: "No se pudo enviar el email de recuperación. Inténtalo más tarde." };
+    }
+
+    return { success: true };
+  } catch (e) {
+    console.error("[requestPasswordReset] Exception:", e);
+    return { error: "Error de conexión. Inténtalo más tarde." };
+  }
+}
+
+export async function updatePassword(formData: FormData): Promise<{ error?: string; success?: boolean }> {
+  const password = normalizePasswordInput(formData.get("password"));
+  const confirmPassword = normalizePasswordInput(formData.get("confirmPassword"));
+
+  if (!password || password.length < 6) {
+    return { error: "La contraseña debe tener al menos 6 caracteres." };
+  }
+
+  if (password !== confirmPassword) {
+    return { error: "Las contraseñas no coinciden." };
+  }
+
+  try {
+    const supabase = await createClient();
+
+    const { error } = await supabase.auth.updateUser({ password });
+
+    if (error) {
+      console.warn("[updatePassword] Supabase error:", error.message);
+      if (/same as the old password/i.test(error.message)) {
+        return { error: "La nueva contraseña debe ser diferente a la anterior." };
+      }
+      return { error: "No se pudo actualizar la contraseña. Inténtalo de nuevo." };
+    }
+
+    return { success: true };
+  } catch (e) {
+    console.error("[updatePassword] Exception:", e);
+    return { error: "Error de conexión. Inténtalo más tarde." };
   }
 }

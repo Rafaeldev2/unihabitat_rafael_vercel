@@ -44,7 +44,7 @@ export default function OfertasPage() {
 }
 
 function OfertasPageInner() {
-  const { assets, vendedores } = useApp();
+  const { assets, vendedores, session } = useApp();
   const searchParams = useSearchParams();
   const router = useRouter();
   const assetFilter = searchParams.get("asset") ?? "";
@@ -54,6 +54,9 @@ function OfertasPageInner() {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [compradores, setCompradores] = useState<Map<string, Comprador>>(new Map());
   const [assetsMap, setAssetsMap] = useState<Map<string, Asset>>(new Map());
+
+  const isAgente = session?.role === "vendedor";
+  const pageTitle = isAgente ? "Mis ofertas" : "Ofertas de Compradores";
 
   const vendedoresMap = useMemo(() => {
     const m = new Map<string, (typeof vendedores)[number]>();
@@ -130,7 +133,7 @@ function OfertasPageInner() {
     <>
       <div className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-border bg-white px-6">
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold text-navy">Ofertas de Compradores</h1>
+          <h1 className="text-lg font-semibold text-navy">{pageTitle}</h1>
           <span className="rounded-md bg-cream px-2.5 py-0.5 text-xs font-medium text-muted">
             {filteredOfertas.length} {filteredOfertas.length === 1 ? "oferta" : "ofertas"}
           </span>

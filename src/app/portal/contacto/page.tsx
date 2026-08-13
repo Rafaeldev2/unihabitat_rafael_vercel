@@ -1,24 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Send, CheckCircle2, Phone, Mail, MapPin, Loader2 } from "lucide-react";
 import { enviarContacto } from "@/app/actions/contacto";
 
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+
 export default function ContactoPage() {
-  const [form, setForm] = useState({ nombre: "", email: "", telefono: "", asunto: "", mensaje: "" });
+  const [form, setForm] = useState({ nombre: "", email: "", telefono: "", asunto: "", mensaje: "", honeypot: "" });
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [formTimestamp] = useState(() => Date.now());
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const turnstileRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!TURNSTILE_SITE_KEY || !turnstileRef.current) return;
+
+    const script = document.createElement("script");
+    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+
+    script.onload = () => {
+      if (typeof window !== "undefined" && (window as unknown as { turnstile?: { render: (el: HTMLElement, opts: object) => void } }).turnstile) {
+        (window as unknown as { turnstile: { render: (el: HTMLElement, opts: object) => void } }).turnstile.render(turnstileRef.current!, {
+          sitekey: TURNSTILE_SITE_KEY,
+          callback: (token: string) => setTurnstileToken(token),
+        });
+      }
+    };
+
+    return () => {
+      if (script.parentNode) script.parentNode.removeChild(script);
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setError("");
-    const result = await enviarContacto(form);
+    const result = await enviarContacto({
+      ...form,
+      formTimestamp,
+      turnstileToken: turnstileToken || undefined,
+    });
     setSubmitting(false);
     if (result.ok) {
       setSuccess(true);
-      setForm({ nombre: "", email: "", telefono: "", asunto: "", mensaje: "" });
+      setForm({ nombre: "", email: "", telefono: "", asunto: "", mensaje: "", honeypot: "" });
     } else {
       setError(result.error ?? "Error desconocido");
     }
@@ -54,6 +86,19 @@ export default function ContactoPage() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+              {/* Honeypot field - hidden from humans, bots will fill it */}
+              <div aria-hidden="true" style={{ position: "absolute", left: "-9999px", top: "-9999px" }}>
+                <label htmlFor="website">Website</label>
+                <input
+                  type="text"
+                  id="website"
+                  name="website"
+                  autoComplete="off"
+                  tabIndex={-1}
+                  value={form.honeypot}
+                  onChange={update("honeypot")}
+                />
+              </div>
               <div className="grid gap-5 sm:grid-cols-2">
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-navy">
@@ -129,6 +174,10 @@ export default function ContactoPage() {
 
               {error && (
                 <div className="rounded-lg bg-red/10 px-4 py-2.5 text-xs text-red">{error}</div>
+              )}
+
+              {TURNSTILE_SITE_KEY && (
+                <div ref={turnstileRef} className="cf-turnstile" />
               )}
 
               <button
