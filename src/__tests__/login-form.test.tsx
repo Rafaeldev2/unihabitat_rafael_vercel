@@ -5,6 +5,14 @@ import userEvent from "@testing-library/user-event";
 // Mock next/navigation
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams("redirect=/portal/privado"),
+  useRouter: () => ({ push: vi.fn() }),
+}));
+
+// Mock next/link
+vi.mock("next/link", () => ({
+  default: ({ children, href }: { children: React.ReactNode; href: string }) => (
+    <a href={href}>{children}</a>
+  ),
 }));
 
 // Mock server actions
@@ -13,6 +21,8 @@ const mockSignUp = vi.fn();
 vi.mock("@/app/login/actions", () => ({
   signIn: (...args: unknown[]) => mockSignIn(...args),
   signUp: (...args: unknown[]) => mockSignUp(...args),
+  requestPasswordReset: vi.fn(),
+  updatePassword: vi.fn(),
 }));
 
 import LoginPage from "@/app/login/page";
@@ -139,6 +149,7 @@ describe("LoginPage registration form", () => {
     await user.type(screen.getByPlaceholderText(/000 00 00 00/), "612345678");
     await user.type(screen.getByPlaceholderText("tu@email.com"), "juan@test.com");
     await user.type(screen.getByPlaceholderText("Mínimo 6 caracteres"), "secret123");
+    await user.type(screen.getByPlaceholderText("Repite la contraseña"), "secret123");
 
     // Submit
     await user.click(screen.getByText("Crear cuenta"));
@@ -160,6 +171,7 @@ describe("LoginPage registration form", () => {
     await user.type(screen.getByPlaceholderText("Tu nombre"), "Ana");
     await user.type(screen.getByPlaceholderText("tu@email.com"), "ana@test.com");
     await user.type(screen.getByPlaceholderText("Mínimo 6 caracteres"), "secret123");
+    await user.type(screen.getByPlaceholderText("Repite la contraseña"), "secret123");
 
     await user.click(screen.getByText("Crear cuenta"));
 
@@ -185,5 +197,28 @@ describe("LoginPage registration form", () => {
     // In login mode by default
     expect(screen.queryByText("Teléfono")).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/000 00 00 00/)).not.toBeInTheDocument();
+  });
+
+  it("shows forgot password link in login mode", async () => {
+    render(<LoginPage />);
+
+    // In login mode, should show forgot password link
+    expect(screen.getByText("¿Olvidaste tu contraseña?")).toBeInTheDocument();
+  });
+
+  it("forgot password link navigates to /login/reset", async () => {
+    render(<LoginPage />);
+
+    const link = screen.getByText("¿Olvidaste tu contraseña?");
+    expect(link).toHaveAttribute("href", "/login/reset");
+  });
+
+  it("does not show forgot password link in register mode", async () => {
+    const user = userEvent.setup();
+    render(<LoginPage />);
+
+    await user.click(screen.getByText("Registrarse"));
+
+    expect(screen.queryByText("¿Olvidaste tu contraseña?")).not.toBeInTheDocument();
   });
 });

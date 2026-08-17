@@ -13,6 +13,11 @@ import {
   Globe,
   AlertTriangle,
   ArrowRight,
+  Shield,
+  Users,
+  Link2,
+  Lock,
+  Mail,
 } from "lucide-react";
 import { isStagingGuideEnabled } from "@/lib/staging-guide";
 
@@ -24,9 +29,121 @@ type Step = {
   href: string;
   what: string[];
   howToTest: string[];
+  icon?: typeof Building2;
 };
 
-const STEPS: Step[] = [
+const AUGUST_2026_STEPS: Step[] = [
+  {
+    id: "aug26-ofertas-agente",
+    fase: "Agosto 2026",
+    title: "Ofertas del agente: filtro y título dinámico",
+    where: "Admin → Ofertas",
+    href: "/admin/ofertas",
+    icon: FileText,
+    what: [
+      "fetchOfertas filtra por vendedor_id cuando es agente. Admin ve todas.",
+      "Título «Mis ofertas» para agentes vs «Ofertas de Compradores» para admin.",
+      "createOfertaAdmin devuelve error explícito si el agente no tiene fila vendedores.",
+    ],
+    howToTest: [
+      "Login como agente → Ofertas → título «Mis ofertas», solo sus ofertas.",
+      "Login como admin → título «Ofertas de Compradores», ve todas.",
+      "Crear oferta como agente sin fila vendedores → error descriptivo.",
+    ],
+  },
+  {
+    id: "aug26-auth-role",
+    fase: "Agosto 2026",
+    title: "Resolución de rol corporativo (@unihabitat.net)",
+    where: "src/lib/auth-role.ts + middleware + login",
+    href: "/admin",
+    icon: Shield,
+    what: [
+      "auth-role.ts centraliza la resolución: DB/metadata → @unihabitat.net → cliente.",
+      "Demo @propcrm.com solo en dev (NODE_ENV !== production o ALLOW_DEV_AUTH).",
+      "Sin email hardcodeado admin@propcrm.com en paths de producción.",
+    ],
+    howToTest: [
+      "Email @unihabitat.net sin rol → resuelve admin.",
+      "En producción: login demo bloqueado (requiere Supabase real).",
+      "Ficha activo: currentUser usa sesión, no fallback hardcodeado.",
+    ],
+  },
+  {
+    id: "aug26-multi-asset",
+    fase: "Agosto 2026",
+    title: "Activos de la misma operación (activoId)",
+    where: "Admin → Activos → Detalle",
+    href: "/admin",
+    icon: Link2,
+    what: [
+      "fetchAssetsByActivoIdForAdmin busca hermanos por propiedades.activo_id.",
+      "Bloque «Misma operación» con enlaces a hermanos en la ficha del activo.",
+      "Excluye el activo actual; muestra población, provincia y tipo.",
+    ],
+    howToTest: [
+      "Abre un activo con activoId compartido → debe aparecer el bloque.",
+      "Clic en un hermano → navega a su ficha.",
+      "Activo sin activoId → no muestra el bloque.",
+    ],
+  },
+  {
+    id: "aug26-contacto-antibot",
+    fase: "Agosto 2026",
+    title: "Contacto: honeypot, time-trap y rate limit",
+    where: "Portal → Contacto",
+    href: "/portal/contacto",
+    icon: Shield,
+    what: [
+      "Honeypot: campo oculto «website» — si se rellena, se descarta silenciosamente.",
+      "Time-trap: formulario enviado en <2s se descarta silenciosamente.",
+      "Rate limit in-memory: 5 envíos por email/minuto.",
+      "Turnstile opcional si TURNSTILE_SECRET_KEY + NEXT_PUBLIC_TURNSTILE_SITE_KEY.",
+    ],
+    howToTest: [
+      "Rellena el campo website manualmente → retorna ok pero no envía.",
+      "Envía >5 veces rápido → mensaje de rate limit.",
+      "Con Turnstile configurado, aparece el widget.",
+    ],
+  },
+  {
+    id: "aug26-sidebar",
+    fase: "Agosto 2026",
+    title: "Sidebar admin: scroll sin tapar Salir",
+    where: "Admin (cualquier página)",
+    href: "/admin",
+    icon: Users,
+    what: [
+      "Nav tiene min-h-0 overflow-y-auto para scroll si hay muchos items.",
+      "Salir (form) es flex-shrink-0, siempre visible al fondo.",
+    ],
+    howToTest: [
+      "Reduce altura del navegador → nav hace scroll, Salir sigue visible.",
+    ],
+  },
+  {
+    id: "aug26-password-reset",
+    fase: "Agosto 2026",
+    title: "Recuperación de contraseña",
+    where: "Login → ¿Olvidaste tu contraseña?",
+    href: "/login",
+    icon: Lock,
+    what: [
+      "Enlace «¿Olvidaste tu contraseña?» en login (solo modo login).",
+      "requestPasswordReset en actions.ts usa Supabase resetPasswordForEmail.",
+      "Rechaza emails @propcrm.com (demo) con mensaje claro.",
+      "/login/reset: solicita email o cambia contraseña si hay token.",
+    ],
+    howToTest: [
+      "Login → clic «¿Olvidaste…» → pide email.",
+      "Email demo → error «Las cuentas demo no pueden…».",
+      "Email real → éxito, revisa bandeja (EMAIL_DRY_RUN en staging).",
+      "Clic en link del email → formulario para nueva contraseña.",
+    ],
+  },
+];
+
+const LEGACY_STEPS: Step[] = [
   {
     id: "f1-filtros",
     fase: "Fase 1",
@@ -174,9 +291,9 @@ export default function GuiaStagingPage() {
               Solo staging — no producción
             </p>
             <p className="mt-1 text-sm text-amber-900/90">
-              Esta guía describe las mejoras de Fases 1–3 y cómo probarlas en{" "}
+              Esta guía describe las mejoras y cómo probarlas en{" "}
               <strong>unihabitat-staging</strong>. No se muestra en el CRM de producción.
-              Login demo admin:{" "}
+              Login demo (solo staging):{" "}
               <code className="rounded bg-white/70 px-1">admin@propcrm.com</code> /{" "}
               <code className="rounded bg-white/70 px-1">Admin1234!</code>
             </p>
@@ -196,60 +313,131 @@ export default function GuiaStagingPage() {
         </p>
       </header>
 
-      <ol className="space-y-6">
-        {STEPS.map((step, index) => (
-          <li
-            key={step.id}
-            id={step.id}
-            className="rounded-2xl border border-border bg-white p-5 shadow-sm"
-          >
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-navy text-xs font-bold text-white">
-                {index + 1}
-              </span>
-              <span className="rounded-full bg-gold/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-gold">
-                {step.fase}
-              </span>
-              <span className="text-xs text-muted">{step.where}</span>
-            </div>
-            <h2 className="text-base font-semibold text-navy">{step.title}</h2>
+      {/* Agosto 2026 changes - newest first */}
+      <section className="mb-10">
+        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-navy">
+          <span className="rounded-full bg-gold/15 px-3 py-1 text-xs font-bold uppercase tracking-wider text-gold">
+            Agosto 2026
+          </span>
+          Qué hay de nuevo
+        </h2>
+        <ol className="space-y-6">
+          {AUGUST_2026_STEPS.map((step, index) => {
+            const StepIcon = step.icon || Building2;
+            return (
+              <li
+                key={step.id}
+                id={step.id}
+                className="rounded-2xl border border-border bg-white p-5 shadow-sm"
+              >
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gold text-xs font-bold text-white">
+                    {index + 1}
+                  </span>
+                  <StepIcon size={16} className="text-gold" />
+                  <span className="text-xs text-muted">{step.where}</span>
+                </div>
+                <h3 className="text-base font-semibold text-navy">{step.title}</h3>
 
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">
-                  <CheckCircle2 size={12} /> Qué hay de nuevo
-                </p>
-                <ul className="space-y-1.5 text-sm text-navy/90">
-                  {step.what.map((line) => (
-                    <li key={line} className="flex gap-2">
-                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gold" />
-                      <span>{line}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">
-                  <FlaskConical size={12} /> Cómo probarlo
-                </p>
-                <ol className="list-decimal space-y-1.5 pl-4 text-sm text-navy/90">
-                  {step.howToTest.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ol>
-              </div>
-            </div>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">
+                      <CheckCircle2 size={12} /> Qué hay de nuevo
+                    </p>
+                    <ul className="space-y-1.5 text-sm text-navy/90">
+                      {step.what.map((line) => (
+                        <li key={line} className="flex gap-2">
+                          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gold" />
+                          <span>{line}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">
+                      <FlaskConical size={12} /> Cómo probarlo
+                    </p>
+                    <ol className="list-decimal space-y-1.5 pl-4 text-sm text-navy/90">
+                      {step.howToTest.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ol>
+                  </div>
+                </div>
 
-            <Link
-              href={step.href}
-              className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-gold hover:underline"
+                <Link
+                  href={step.href}
+                  className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-gold hover:underline"
+                >
+                  Ir a {step.where.split("→").pop()?.trim() ?? "pantalla"}
+                  <ArrowRight size={14} />
+                </Link>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
+
+      {/* Legacy F1-F3 steps */}
+      <section>
+        <h2 className="mb-4 text-lg font-semibold text-navy">
+          Ya en staging (Fases 1–3)
+        </h2>
+        <ol className="space-y-6">
+          {LEGACY_STEPS.map((step, index) => (
+            <li
+              key={step.id}
+              id={step.id}
+              className="rounded-2xl border border-border bg-white p-5 shadow-sm"
             >
-              Ir a {step.where.split("→").pop()?.trim() ?? "pantalla"}
-              <ArrowRight size={14} />
-            </Link>
-          </li>
-        ))}
-      </ol>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-navy text-xs font-bold text-white">
+                  {index + 1}
+                </span>
+                <span className="rounded-full bg-navy/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-navy">
+                  {step.fase}
+                </span>
+                <span className="text-xs text-muted">{step.where}</span>
+              </div>
+              <h3 className="text-base font-semibold text-navy">{step.title}</h3>
+
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">
+                    <CheckCircle2 size={12} /> Qué hay de nuevo
+                  </p>
+                  <ul className="space-y-1.5 text-sm text-navy/90">
+                    {step.what.map((line) => (
+                      <li key={line} className="flex gap-2">
+                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-navy/30" />
+                        <span>{line}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">
+                    <FlaskConical size={12} /> Cómo probarlo
+                  </p>
+                  <ol className="list-decimal space-y-1.5 pl-4 text-sm text-navy/90">
+                    {step.howToTest.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ol>
+                </div>
+              </div>
+
+              <Link
+                href={step.href}
+                className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-gold hover:underline"
+              >
+                Ir a {step.where.split("→").pop()?.trim() ?? "pantalla"}
+                <ArrowRight size={14} />
+              </Link>
+            </li>
+          ))}
+        </ol>
+      </section>
 
       <section className="mt-10 rounded-2xl border border-border bg-white p-5">
         <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-navy">

@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { signIn, signUp } from "./actions";
 import { LogIn, UserPlus, AlertCircle, ChevronDown, Phone } from "lucide-react";
 import COUNTRY_CODES from "@/lib/country-codes";
@@ -212,7 +213,7 @@ function LoginForm() {
             />
           </div>
 
-          <div className={mode === "register" ? "mb-4" : "mb-6"}>
+          <div className={mode === "register" ? "mb-4" : "mb-2"}>
             <label className="mb-1.5 block text-xs font-medium text-white/60">Contraseña</label>
             <input
               name="password"
@@ -223,6 +224,17 @@ function LoginForm() {
               placeholder="Mínimo 6 caracteres"
             />
           </div>
+
+          {mode === "login" && (
+            <div className="mb-6 text-right">
+              <Link
+                href="/login/reset"
+                className="text-xs text-white/50 hover:text-gold transition-colors"
+              >
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </div>
+          )}
 
           {mode === "register" && (
             <div className="mb-6">

@@ -5,11 +5,11 @@ import { useApp } from "@/lib/context";
 import { isAdmin } from "@/lib/auth-helpers";
 import Link from "next/link";
 import type { Asset } from "@/lib/types";
-import { Home, FolderOpen, Briefcase, Users, Lock, ArrowLeft, Upload, Download, FileText, FileSpreadsheet, Image, MessageSquare, Save, Plus, Mail, X, Loader2, AlertCircle, CheckCircle2, CheckCircle, Building, ExternalLink, RefreshCw, UserCog, Send } from "lucide-react";
+import { Home, FolderOpen, Briefcase, Users, Lock, ArrowLeft, Upload, Download, FileText, FileSpreadsheet, Image, MessageSquare, Save, Plus, Mail, X, Loader2, AlertCircle, CheckCircle2, CheckCircle, Building, ExternalLink, RefreshCw, UserCog, Send, Link2 } from "lucide-react";
 import { uploadDocumento, fetchDocumentos, deleteDocumento, getDocumentUrl, type DocRow } from "@/app/actions/documentos";
 import { createNota, fetchNotas, type NotaRow } from "@/app/actions/notas";
 import { fetchCompradores } from "@/app/actions/compradores";
-import { fetchAssetByIdForAdmin, toggleAssetPub, updateAssetFields, updatePropiedadFields } from "@/app/actions/assets";
+import { fetchAssetByIdForAdmin, fetchAssetsByActivoIdForAdmin, toggleAssetPub, updateAssetFields, updatePropiedadFields } from "@/app/actions/assets";
 import { inviteCompradorToAsset, revokeCompradorFromAsset, fetchInvitedCompradores } from "@/app/actions/invitations";
 import { enviarSolicitudInformacion } from "@/app/actions/email-info-request";
 import { createOfertaAdmin } from "@/app/actions/ofertas";
@@ -70,18 +70,24 @@ export default function AssetDetailPage({ params }: { params: Promise<{ id: stri
   }, [loadRemote]);
 
   useEffect(() => {
+    if (session?.nombre && session?.email) {
+      setCurrentUser({ nombre: session.nombre, email: session.email });
+      return;
+    }
     const cookie = document.cookie.split("; ").find(c => c.startsWith("dev-auth="));
     if (cookie) {
       try {
         const data = JSON.parse(decodeURIComponent(cookie.split("=")[1]));
-        setCurrentUser({ nombre: data.nombre || "Admin", email: data.email || "admin@propcrm.com" });
+        if (data.nombre && data.email) {
+          setCurrentUser({ nombre: data.nombre, email: data.email });
+          return;
+        }
       } catch {
-        setCurrentUser({ nombre: "Admin", email: "admin@propcrm.com" });
+        /* ignore parse error */
       }
-    } else {
-      setCurrentUser({ nombre: "Admin", email: "admin@propcrm.com" });
     }
-  }, []);
+    setCurrentUser({ nombre: session?.nombre || "Usuario", email: session?.email || "" });
+  }, [session]);
 
   useEffect(() => {
     if (!userIsAdmin && tab > 1) setTab(0);
@@ -327,6 +333,8 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
   const [ofertaComentarios, setOfertaComentarios] = useState("");
   const [ofertaStatus, setOfertaStatus] = useState<"idle" | "sending" | "success" | "error">("idle");
   const [ofertaError, setOfertaError] = useState("");
+  const [siblingAssets, setSiblingAssets] = useState<Asset[]>([]);
+  const [loadingSiblings, setLoadingSiblings] = useState(false);
 
   useEffect(() => {
     setDescDraft(asset.desc && asset.desc !== "—" ? asset.desc : "");
@@ -344,6 +352,28 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
     })();
     return () => { cancelled = true; };
   }, [assetId]);
+
+  // Fetch sibling assets (same activoId / operación)
+  useEffect(() => {
+    const activoId = asset.propiedades[0]?.activoId;
+    if (!activoId || activoId === "—") {
+      setSiblingAssets([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingSiblings(true);
+    fetchAssetsByActivoIdForAdmin(activoId, assetId)
+      .then((siblings) => {
+        if (!cancelled) setSiblingAssets(siblings);
+      })
+      .catch(() => {
+        if (!cancelled) setSiblingAssets([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingSiblings(false);
+      });
+    return () => { cancelled = true; };
+  }, [asset.propiedades, assetId]);
 
   // La columna `referencia` guarda la RC limpia; el id es compuesto (id1__ref).
   const hasCatRef = !!asset.referencia && asset.referencia !== "—";
@@ -489,6 +519,37 @@ function TabCaracteristicas({ asset, assetId, currentUser, reloadAsset }: { asse
         <div className="flex flex-col gap-3">
           <EditableSection title="Datos Catastrales" assetId={assetId} fields={catastroFields} cols={4} onSaved={reloadAsset} />
           <EditableSection title="Localización" assetId={assetId} fields={locFields} cols={4} onSaved={reloadAsset} />
+          {(siblingAssets.length > 0 || loadingSiblings) && (
+            <div className="rounded-lg border border-border bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[1.5px] text-gold after:h-px after:flex-1 after:bg-border">
+                <Link2 size={13} /> Misma operación
+              </div>
+              {loadingSiblings ? (
+                <div className="flex items-center gap-2 text-xs text-muted">
+                  <Loader2 size={14} className="animate-spin" /> Buscando activos relacionados…
+                </div>
+              ) : (
+                <>
+                  <p className="mb-2 text-xs text-muted">
+                    Otros activos con el mismo ID de operación ({asset.propiedades[0]?.activoId}):
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {siblingAssets.map((s) => (
+                      <Link
+                        key={s.id}
+                        href={`/admin/assets/${encodeURIComponent(s.id)}`}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-cream px-2.5 py-1.5 text-xs font-medium text-navy hover:border-gold/40 hover:bg-gold/5"
+                      >
+                        <Building size={12} />
+                        {s.pob}, {s.prov}
+                        <span className="text-[10px] text-muted">({s.tip})</span>
+                      </Link>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex flex-col gap-3">
           <InteractiveMap
