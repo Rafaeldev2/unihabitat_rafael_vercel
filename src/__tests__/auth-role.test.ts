@@ -54,6 +54,13 @@ describe("auth-role", () => {
       expect(resolveRole("", "test@unihabitat.net")).toBe("admin");
     });
 
+    it("returns admin for @unihabitat.com email without metadata role", () => {
+      expect(resolveRole(undefined, "modesto.manzano@unihabitat.com")).toBe(
+        "admin",
+      );
+      expect(resolveRole(null, "USER@UNIHABITAT.COM")).toBe("admin");
+    });
+
     it("returns cliente for other emails without metadata role", () => {
       expect(resolveRole(undefined, "user@gmail.com")).toBe("cliente");
       expect(resolveRole(null, "test@propcrm.com")).toBe("cliente");
