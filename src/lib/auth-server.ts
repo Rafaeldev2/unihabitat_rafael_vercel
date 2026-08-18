@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import type { UserSession, SectionId } from "./permissions";
+import { defaultVendorPermissions } from "./permissions";
 import { isDevAuthEnabled, resolveRole } from "./auth-role";
 
 /**
@@ -90,15 +91,24 @@ export async function requireEditPermission(sectionId: SectionId): Promise<UserS
   const sb = await createServiceClient();
   const { data } = await sb
     .from("vendedor_permissions")
-    .select("can_edit")
-    .eq("vendedor_id", session.vendedorId)
-    .eq("section", sectionId)
-    .maybeSingle();
+    .select("section, can_edit")
+    .eq("vendedor_id", session.vendedorId);
 
-  if (!data?.can_edit) {
+  if (!vendorCanEdit(data ?? [], sectionId)) {
     throw new Error(`Sin permiso de edición en "${sectionId}"`);
   }
   return session;
+}
+
+/**
+ * Mismo criterio que `fetchVendorPermissions`: sin ninguna fila configurada
+ * mandan los defaults; en cuanto el admin guarda permisos, mandan sus filas.
+ */
+function vendorCanEdit(rows: { section: string; can_edit: boolean | null }[], sectionId: SectionId): boolean {
+  if (rows.length === 0) {
+    return defaultVendorPermissions().find((p) => p.section === sectionId)?.canEdit ?? false;
+  }
+  return Boolean(rows.find((r) => r.section === sectionId)?.can_edit);
 }
 
 /**

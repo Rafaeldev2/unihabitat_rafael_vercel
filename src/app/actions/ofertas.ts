@@ -1,9 +1,7 @@
 "use server";
 
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import { sendEmail } from "@/lib/email/send";
-import { EMAIL_SUPPORT } from "@/lib/email/resend";
-import { offerTemplate } from "@/lib/email/templates";
+import { notifyOfferRecipients } from "@/lib/ofertas/notify";
 import { getServerSession, requireAdminOrVendor } from "@/lib/auth-server";
 import { fetchCompradorByEmail } from "@/app/actions/compradores";
 
@@ -21,92 +19,8 @@ export interface OfertaRow {
   updated_at: string;
 }
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-async function notifyOfferRecipients(
-  ofertaId: string,
-  assetId: string,
-  compradorId: string | null,
-  propuestaEuros: number,
-  comentarios: string | null,
-  vendedorId?: string | null,
-): Promise<void> {
-  try {
-    const sb = await createServiceClient();
-    const [{ data: assetRow }, { data: compRow }, { data: vendRow }, { data: vaRows }] =
-      await Promise.all([
-        sb.from("assets")
-          .select("id, full_addr, addr, pob, prov, cp, tip, precio, owner_mail")
-          .eq("id", assetId)
-          .maybeSingle(),
-        compradorId
-          ? sb.from("compradores").select("nombre, email, tel").eq("id", compradorId).maybeSingle()
-          : Promise.resolve({ data: null }),
-        vendedorId
-          ? sb.from("vendedores").select("nombre, email").eq("id", vendedorId).maybeSingle()
-          : Promise.resolve({ data: null }),
-        sb.from("vendedor_assets").select("vendedor_id").eq("asset_id", assetId),
-      ]);
-
-    const vendorIds = (vaRows ?? []).map(r => r.vendedor_id as string).filter(Boolean);
-    let vendorEmails: string[] = [];
-    if (vendorIds.length > 0) {
-      const { data: vRows } = await sb
-        .from("vendedores")
-        .select("email")
-        .in("id", vendorIds);
-      vendorEmails = (vRows ?? [])
-        .map(r => (r.email as string | undefined)?.trim() ?? "")
-        .filter(e => EMAIL_RE.test(e));
-    }
-
-    const ownerMail = (assetRow?.owner_mail as string | undefined)?.trim() ?? "";
-    if (vendorEmails.length === 0 && EMAIL_RE.test(ownerMail)) {
-      vendorEmails = [ownerMail];
-    }
-
-    const recipients = vendorEmails.length > 0 ? vendorEmails : [EMAIL_SUPPORT];
-
-    const buyerEmail = (compRow?.email as string | undefined)?.trim()
-      ?? (vendRow?.email as string | undefined)?.trim()
-      ?? "";
-    const buyerNombre = (compRow?.nombre as string | undefined)
-      ?? (vendRow?.nombre as string | undefined)
-      ?? (vendedorId ? "Agente" : "Comprador");
-
-    const tpl = offerTemplate({
-      buyer: {
-        nombre: buyerNombre,
-        email: buyerEmail,
-        telefono: (compRow?.tel as string | undefined) || undefined,
-      },
-      asset: {
-        id: (assetRow?.id as string | undefined) ?? assetId,
-        fullAddr: (assetRow?.full_addr as string | undefined) ?? undefined,
-        addr: (assetRow?.addr as string | undefined) ?? undefined,
-        pob: (assetRow?.pob as string | undefined) ?? undefined,
-        prov: (assetRow?.prov as string | undefined) ?? undefined,
-        cp: (assetRow?.cp as string | undefined) ?? undefined,
-        tip: (assetRow?.tip as string | undefined) ?? undefined,
-        precio: (assetRow?.precio as number | null | undefined) ?? null,
-      },
-      propuestaEuros,
-      comentarios: comentarios || undefined,
-      ofertaId,
-    });
-
-    const subject = vendorEmails.length === 0 ? `${tpl.subject} [Sin vendedor asignado]` : tpl.subject;
-    await sendEmail({
-      to: recipients,
-      subject,
-      html: tpl.html,
-      text: tpl.text,
-      replyTo: EMAIL_RE.test(buyerEmail) ? buyerEmail : undefined,
-    });
-  } catch (err) {
-    console.error("[ofertas] email notification failed:", err);
-  }
-}
+const AGENTE_SIN_VINCULO =
+  "El agente no está vinculado a un registro de vendedores: su usuario no tiene una fila vendedores asociada. Contacte al administrador.";
 
 export async function createOferta(params: {
   compradorId: string;
@@ -129,14 +43,7 @@ export async function createOferta(params: {
   if (error) throw new Error(error.message);
 
   const oferta = data as OfertaRow;
-  await notifyOfferRecipients(
-    oferta.id,
-    oferta.asset_id,
-    oferta.comprador_id,
-    oferta.propuesta_euros,
-    oferta.comentarios,
-    oferta.vendedor_id,
-  );
+  await notifyOfferRecipients(oferta);
   return oferta;
 }
 
@@ -176,7 +83,7 @@ export async function createOfertaAdmin(params: {
 
   if (session.role === "vendedor") {
     if (!session.vendedorId) {
-      throw new Error("El agente no tiene una fila vendedores asociada. Contacte al administrador.");
+      throw new Error(AGENTE_SIN_VINCULO);
     }
     vendedorId = session.vendedorId;
     const { data: vendRow, error: vendErr } = await supabase
@@ -215,14 +122,7 @@ export async function createOfertaAdmin(params: {
   if (error) throw new Error(error.message);
 
   const oferta = data as OfertaRow;
-  await notifyOfferRecipients(
-    oferta.id,
-    oferta.asset_id,
-    oferta.comprador_id,
-    oferta.propuesta_euros,
-    oferta.comentarios,
-    oferta.vendedor_id,
-  );
+  await notifyOfferRecipients(oferta);
   return oferta;
 }
 
@@ -265,13 +165,14 @@ export async function fetchOfertasPendientes(): Promise<OfertaRow[]> {
  * Filtro opcional por estado.
  */
 export async function fetchOfertas(estado?: OfertaRow["estado"] | ""): Promise<OfertaRow[]> {
-  const session = await getServerSession();
+  const session = await requireAdminOrVendor();
+  // Sin vínculo no hay ámbito que aplicar: fallar cerrado antes de consultar.
+  const esAgente = session.role === "vendedor";
+  if (esAgente && !session.vendedorId) throw new Error(AGENTE_SIN_VINCULO);
+
   const supabase = await createClient();
   let q = supabase.from("ofertas").select("*").order("created_at", { ascending: false });
-
-  if (session?.role === "vendedor" && session.vendedorId) {
-    q = q.eq("vendedor_id", session.vendedorId);
-  }
+  if (esAgente) q = q.eq("vendedor_id", session.vendedorId);
 
   if (estado) q = q.eq("estado", estado);
   const { data, error } = await q;
