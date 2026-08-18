@@ -138,7 +138,8 @@ describe("upsertAssets — preserva pub/lat/lng existentes ante incoming vacío"
         data: [{ public_slug: existing.public_slug }],
         error: null,
       }));
-      builder.order = vi.fn(async () => ({ data: [], error: null }));
+      // La paginación encadena `.order(...)` antes de `.range(...)`.
+      builder.order = vi.fn(() => builder);
       return builder;
     };
 

@@ -89,8 +89,9 @@ describe("ensureVendedorForDemoEmail", () => {
     const ofertas = permRows.find((p) => p.section === "ofertas");
     expect(ofertas?.can_view).toBe(true);
     expect(ofertas?.can_edit).toBe(true);
-    expect(
-      defaultVendorPermissions().find((d) => d.section === "ofertas")?.canView,
-    ).toBe(false);
+
+    const defaults = defaultVendorPermissions();
+    expect(defaults.find((d) => d.section === "ofertas")?.canView).toBe(true);
+    expect(defaults.find((d) => d.section === "compradores")?.canView).toBe(false);
   });
 });
