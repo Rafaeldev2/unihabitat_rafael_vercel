@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import type { UserSession, SectionId } from "./permissions";
+import { defaultVendorPermissions } from "./permissions";
 import { isDevAuthEnabled, resolveRole } from "./auth-role";
 
 /**
@@ -37,18 +38,10 @@ export async function getServerSession(): Promise<UserSession | null> {
       user.email ||
       "Usuario";
 
-    let vendedorId: string | undefined;
-    if (role === "vendedor" && user.email) {
-      const { createServiceClient } = await import("./supabase/server");
-      const sb = await createServiceClient();
-      const { data: vRow } = await sb
-        .from("vendedores")
-        .select("id")
-        .or(`user_id.eq.${user.id},email.ilike.${user.email}`)
-        .limit(1)
-        .maybeSingle();
-      vendedorId = (vRow?.id as string | undefined) ?? undefined;
-    }
+    const vendedorId =
+      role === "vendedor" && user.email
+        ? await findVendedorId(user.id, user.email)
+        : undefined;
 
     return {
       email: user.email ?? "",
@@ -59,6 +52,26 @@ export async function getServerSession(): Promise<UserSession | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Enlaza la sesión con su fila `vendedores`. Sin este id el agente queda fuera
+ * de su propio ámbito, así que se reintenta por email cuando la instalación no
+ * tiene la columna `user_id`.
+ */
+async function findVendedorId(userId: string, email: string): Promise<string | undefined> {
+  const { createServiceClient } = await import("./supabase/server");
+  const sb = await createServiceClient();
+
+  const byLink = await sb
+    .from("vendedores").select("id")
+    .or(`user_id.eq.${userId},email.ilike.${email}`)
+    .limit(1).maybeSingle();
+  if (!byLink.error) return (byLink.data?.id as string | undefined) ?? undefined;
+
+  const byEmail = await sb
+    .from("vendedores").select("id").ilike("email", email).limit(1).maybeSingle();
+  return (byEmail.data?.id as string | undefined) ?? undefined;
 }
 
 export async function requireAdmin(): Promise<UserSession> {
@@ -90,15 +103,24 @@ export async function requireEditPermission(sectionId: SectionId): Promise<UserS
   const sb = await createServiceClient();
   const { data } = await sb
     .from("vendedor_permissions")
-    .select("can_edit")
-    .eq("vendedor_id", session.vendedorId)
-    .eq("section", sectionId)
-    .maybeSingle();
+    .select("section, can_edit")
+    .eq("vendedor_id", session.vendedorId);
 
-  if (!data?.can_edit) {
+  if (!vendorCanEdit(data ?? [], sectionId)) {
     throw new Error(`Sin permiso de edición en "${sectionId}"`);
   }
   return session;
+}
+
+/**
+ * Mismo criterio que `fetchVendorPermissions`: sin ninguna fila configurada
+ * mandan los defaults; en cuanto el admin guarda permisos, mandan sus filas.
+ */
+function vendorCanEdit(rows: { section: string; can_edit: boolean | null }[], sectionId: SectionId): boolean {
+  if (rows.length === 0) {
+    return defaultVendorPermissions().find((p) => p.section === sectionId)?.canEdit ?? false;
+  }
+  return Boolean(rows.find((r) => r.section === sectionId)?.can_edit);
 }
 
 /**

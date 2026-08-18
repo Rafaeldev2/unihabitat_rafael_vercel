@@ -33,10 +33,15 @@ export function hrefToSection(pathname: string): SectionId | "config" | null {
   return null;
 }
 
+/** Secciones que un agente ve sin configuración explícita en `vendedor_permissions`. */
+const VENDOR_DEFAULT_VIEW = new Set<SectionId>(["activos", "ofertas"]);
+/** Un agente registra sus propias ofertas, así que nace con edición sobre ellas. */
+const VENDOR_DEFAULT_EDIT = new Set<SectionId>(["ofertas"]);
+
 export function defaultVendorPermissions(): VendorPermission[] {
   return ADMIN_SECTIONS.map((s) => ({
     section: s.id,
-    canView: s.id === "activos",
-    canEdit: false,
+    canView: VENDOR_DEFAULT_VIEW.has(s.id),
+    canEdit: VENDOR_DEFAULT_EDIT.has(s.id),
   }));
 }
